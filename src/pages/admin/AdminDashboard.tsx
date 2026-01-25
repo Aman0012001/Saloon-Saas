@@ -20,7 +20,7 @@ import { Badge } from "@/components/ui/badge";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { AdminLayout } from "@/components/admin/AdminLayout";
 import { useSuperAdmin } from "@/hooks/useSuperAdmin";
-import { supabase } from "@/integrations/supabase/client";
+import api from "@/services/api";
 import { format } from "date-fns";
 
 interface RecentSalon {
@@ -46,94 +46,36 @@ export default function AdminDashboard() {
   const [recentBookings, setRecentBookings] = useState<RecentBooking[]>([]);
   const [loading, setLoading] = useState(true);
 
+  const fetchRecentData = async () => {
+    setLoading(true);
+    try {
+      // Fetch recent salons and bookings via the new API service
+      const salonsPromise = api.admin.getAllSalons();
+      const bookingsPromise = api.admin.getAllBookings();
+
+      const [allSalons, allBookings] = await Promise.all([salonsPromise, bookingsPromise]);
+
+      // Get top 5 recent ones
+      setRecentSalons(allSalons.slice(0, 5));
+      setRecentBookings(allBookings.slice(0, 5));
+
+    } catch (error) {
+      console.error('Error fetching recent data:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
   useEffect(() => {
-    const fetchRecentData = async () => {
-      try {
-        // Fetch recent salons
-        const { data: salonsData } = await supabase
-          .from('salons')
-          .select('id, name, city, approval_status, created_at')
-          .order('created_at', { ascending: false })
-          .limit(5);
-
-        setRecentSalons(salonsData || []);
-
-        // Fetch recent bookings with salon and service names
-        const { data: bookingsData } = await supabase
-          .from('bookings')
-          .select(`
-            id,
-            booking_date,
-            booking_time,
-            status,
-            salon_id,
-            service_id
-          `)
-          .order('created_at', { ascending: false })
-          .limit(5);
-
-        if (bookingsData) {
-          // Get salon and service names
-          const salonIds = [...new Set(bookingsData.map(b => b.salon_id).filter(Boolean))];
-          const serviceIds = [...new Set(bookingsData.map(b => b.service_id))];
-
-          const [salonsResult, servicesResult] = await Promise.all([
-            salonIds.length > 0 
-              ? supabase.from('salons').select('id, name').in('id', salonIds)
-              : { data: [] },
-            supabase.from('services').select('id, name').in('id', serviceIds),
-          ]);
-
-          const salonsMap = new Map((salonsResult.data || []).map(s => [s.id, s.name]));
-          const servicesMap = new Map((servicesResult.data || []).map(s => [s.id, s.name]));
-
-          const enrichedBookings = bookingsData.map(b => ({
-            ...b,
-            salon_name: b.salon_id ? salonsMap.get(b.salon_id) : undefined,
-            service_name: servicesMap.get(b.service_id),
-          }));
-
-          setRecentBookings(enrichedBookings);
-        }
-      } catch (error) {
-        console.error('Error fetching recent data:', error);
-      } finally {
-        setLoading(false);
-      }
-    };
-
     fetchRecentData();
 
-    // Set up realtime subscription for bookings
-    const bookingsChannel = supabase
-      .channel('admin-bookings')
-      .on(
-        'postgres_changes',
-        { event: '*', schema: 'public', table: 'bookings' },
-        () => {
-          fetchRecentData();
-          refreshStats();
-        }
-      )
-      .subscribe();
+    // Use polling instead of real-time for PHP backend
+    const interval = setInterval(() => {
+      fetchRecentData();
+      refreshStats();
+    }, 60000); // Every minute
 
-    // Set up realtime subscription for salons
-    const salonsChannel = supabase
-      .channel('admin-salons')
-      .on(
-        'postgres_changes',
-        { event: '*', schema: 'public', table: 'salons' },
-        () => {
-          fetchRecentData();
-          refreshStats();
-        }
-      )
-      .subscribe();
-
-    return () => {
-      supabase.removeChannel(bookingsChannel);
-      supabase.removeChannel(salonsChannel);
-    };
+    return () => clearInterval(interval);
   }, [refreshStats]);
 
   const getStatusBadge = (status: string) => {

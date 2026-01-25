@@ -52,6 +52,7 @@ import TestAdminLogin from "./pages/TestAdminLogin";
 import DebugSupabase from "./pages/DebugSupabase";
 import CreateAdminCredentials from "./pages/CreateAdminCredentials";
 import DirectAdminAccess from "./pages/DirectAdminAccess";
+import SupabaseDebug from "./pages/SupabaseDebug";
 
 const queryClient = new QueryClient();
 
@@ -79,6 +80,7 @@ const App = () => (
                 <Route path="/admin-access-full" element={<AdminAccess />} />
                 <Route path="/test-admin" element={<TestAdminLogin />} />
                 <Route path="/debug-supabase" element={<DebugSupabase />} />
+                <Route path="/supabase-debug" element={<SupabaseDebug />} />
                 <Route path="/create-admin" element={<CreateAdminCredentials />} />
                 <Route path="/direct-admin" element={<DirectAdminAccess />} />
                 <Route path="/login" element={<Login />} />

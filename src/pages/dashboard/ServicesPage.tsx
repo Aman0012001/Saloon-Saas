@@ -33,13 +33,6 @@ import {
   DialogFooter,
 } from "@/components/ui/dialog";
 import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
-import {
   Select,
   SelectContent,
   SelectItem,
@@ -51,7 +44,7 @@ import { DashboardLayout } from "@/components/dashboard/DashboardLayout";
 import { ResponsiveDashboardLayout } from "@/components/dashboard/ResponsiveDashboardLayout";
 import { useSalon } from "@/hooks/useSalon";
 import { useAuth } from "@/hooks/useAuth";
-import { supabase } from "@/integrations/supabase/client";
+import api from "@/services/api";
 import { useToast } from "@/hooks/use-toast";
 
 interface Service {
@@ -100,20 +93,13 @@ export default function ServicesPage() {
 
     setLoading(true);
     try {
-      const { data, error } = await supabase
-        .from("services")
-        .select("*")
-        .eq("salon_id", currentSalon.id)
-        .order("category", { ascending: true })
-        .order("name", { ascending: true });
-
-      if (error) throw error;
+      const data = await api.services.getBySalon(currentSalon.id);
       setServices(data || []);
     } catch (error) {
       console.error("Error fetching services:", error);
       toast({
         title: "Error",
-        description: "Failed to load services",
+        description: "Failed to load services from local database",
         variant: "destructive",
       });
     } finally {
@@ -166,17 +152,10 @@ export default function ServicesPage() {
       };
 
       if (editingService) {
-        const { error } = await supabase
-          .from("services")
-          .update(serviceData)
-          .eq("id", editingService.id);
-
-        if (error) throw error;
+        await api.services.update(editingService.id, serviceData);
         toast({ title: "Success", description: "Service updated successfully" });
       } else {
-        const { error } = await supabase.from("services").insert(serviceData);
-
-        if (error) throw error;
+        await api.services.create(serviceData);
         toast({ title: "Success", description: "Service created successfully" });
       }
 
@@ -187,7 +166,7 @@ export default function ServicesPage() {
       console.error("Error saving service:", error);
       toast({
         title: "Error",
-        description: error.message || "Failed to save service",
+        description: error.message || "Failed to save service locally",
         variant: "destructive",
       });
     } finally {
@@ -197,16 +176,14 @@ export default function ServicesPage() {
 
   const deleteService = async (serviceId: string) => {
     try {
-      const { error } = await supabase.from("services").delete().eq("id", serviceId);
-
-      if (error) throw error;
-      toast({ title: "Success", description: "Service deleted" });
+      await api.services.delete(serviceId);
+      toast({ title: "Success", description: "Service deleted from local database" });
       fetchServices();
     } catch (error) {
       console.error("Error deleting service:", error);
       toast({
         title: "Error",
-        description: "Failed to delete service",
+        description: "Failed to delete service locally",
         variant: "destructive",
       });
     }
@@ -214,15 +191,10 @@ export default function ServicesPage() {
 
   const toggleServiceStatus = async (serviceId: string, isActive: boolean) => {
     try {
-      const { error } = await supabase
-        .from("services")
-        .update({ is_active: isActive })
-        .eq("id", serviceId);
-
-      if (error) throw error;
+      await api.services.update(serviceId, { is_active: isActive });
       fetchServices();
     } catch (error) {
-      console.error("Error updating service:", error);
+      console.error("Error updating service status:", error);
     }
   };
 

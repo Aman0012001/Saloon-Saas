@@ -4,8 +4,9 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
-import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
+import { useAuth } from "@/hooks/useAuth";
+import api from "@/services/api";
 import { Eye, EyeOff, Loader2 } from "lucide-react";
 import logo from "@/assets/logo.png";
 
@@ -16,10 +17,11 @@ const Login = () => {
   const [loading, setLoading] = useState(false);
   const navigate = useNavigate();
   const { toast } = useToast();
+  const { refreshUser } = useAuth();
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
-    
+
     if (!email.trim() || !password.trim()) {
       toast({
         title: "Error",
@@ -30,26 +32,25 @@ const Login = () => {
     }
 
     setLoading(true);
-    
-    const { error } = await supabase.auth.signInWithPassword({
-      email: email.trim(),
-      password,
-    });
 
-    setLoading(false);
+    try {
+      await api.auth.login(email.trim(), password);
+      await refreshUser();
 
-    if (error) {
-      toast({
-        title: "Login Failed",
-        description: error.message,
-        variant: "destructive",
-      });
-    } else {
       toast({
         title: "Welcome Back!",
         description: "You have successfully logged in",
       });
       navigate("/");
+    } catch (error: any) {
+      console.error("Login error:", error);
+      toast({
+        title: "Login Failed",
+        description: error.message || "Invalid credentials",
+        variant: "destructive",
+      });
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -116,8 +117,8 @@ const Login = () => {
             </p>
             <div className="text-center">
               <p className="text-xs text-muted-foreground mb-2">Are you a salon owner?</p>
-              <Link 
-                to="/salon-owner/login" 
+              <Link
+                to="/salon-owner/login"
                 className="text-accent hover:underline font-medium text-sm"
               >
                 Salon Owner Login →

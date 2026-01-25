@@ -1,8 +1,7 @@
 import { useState, useEffect, createContext, useContext, ReactNode } from "react";
-import { supabase } from "@/integrations/supabase/client";
+import api from "@/services/api";
 import { useAuth } from "@/hooks/useAuth";
 import { useToast } from "@/hooks/use-toast";
-import type { Json } from "@/integrations/supabase/types";
 
 interface Salon {
   id: string;
@@ -18,10 +17,12 @@ interface Salon {
   gst_number: string | null;
   logo_url: string | null;
   cover_image_url: string | null;
-  business_hours: Json;
-  tax_settings: Json;
-  notification_settings: Json;
+  business_hours: any;
+  tax_settings: any;
+  notification_settings: any;
   is_active: boolean | null;
+  approval_status: 'pending' | 'approved' | 'rejected' | null;
+  rejection_reason: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -86,50 +87,31 @@ export const SalonProvider = ({ children }: { children: ReactNode }) => {
       return;
     }
 
-    // Safety timeout
-    const timeout = setTimeout(() => {
-      setLoading(false);
-    }, 5000);
-
     try {
-      // Fetch user's roles
-      const { data: rolesData, error: rolesError } = await supabase
-        .from('user_roles')
-        .select('*')
-        .eq('user_id', user.id);
+      // 1. Fetch user's salons and roles directly from the new API
+      const mySalons = await api.salons.getMySalons();
 
-      if (rolesError) throw rolesError;
+      // The backend returns salons with roles attached in mySalons query
+      // or we can fetch roles separately. Let's assume roles are needed.
+      const rolesData = await api.userRoles.getByUser(user.id);
 
-      if (!rolesData || rolesData.length === 0) {
-        setSalons([]);
-        setCurrentSalon(null);
-        setUserRole(null);
-        setLoading(false);
-        clearTimeout(timeout);
-        return;
-      }
+      const formattedSalons: Salon[] = mySalons.map((s: any) => ({
+        ...s,
+        approval_status: s.approval_status as 'pending' | 'approved' | 'rejected' | null
+      }));
 
-      // Fetch salons for user's roles
-      const salonIds = rolesData.map(r => r.salon_id);
-      const { data: salonsData, error: salonsError } = await supabase
-        .from('salons')
-        .select('*')
-        .in('id', salonIds);
+      setSalons(formattedSalons);
 
-      if (salonsError) throw salonsError;
-
-      setSalons(salonsData || []);
-
-      // Set current salon from localStorage or first salon
+      // 2. Set current salon from localStorage or first salon
       const savedSalonId = localStorage.getItem('currentSalonId');
-      const savedSalon = salonsData?.find(s => s.id === savedSalonId);
-      const initialSalon = savedSalon || salonsData?.[0] || null;
+      const savedSalon = formattedSalons.find(s => s.id === savedSalonId);
+      const initialSalon = savedSalon || formattedSalons[0] || null;
 
       setCurrentSalon(initialSalon);
 
-      // Set user role for current salon
+      // 3. Set user role for current salon
       if (initialSalon) {
-        const role = rolesData.find(r => r.salon_id === initialSalon.id);
+        const role = rolesData.find((r: any) => r.salon_id === initialSalon.id);
         setUserRole(role || null);
       }
     } catch (error) {
@@ -141,12 +123,10 @@ export const SalonProvider = ({ children }: { children: ReactNode }) => {
       });
     } finally {
       setLoading(false);
-      clearTimeout(timeout);
     }
   };
 
   const refreshSalons = async () => {
-    setLoading(true);
     await fetchSalons();
   };
 
@@ -160,71 +140,26 @@ export const SalonProvider = ({ children }: { children: ReactNode }) => {
       return null;
     }
 
-    const attemptCreate = async (slug: string, isRetry = false): Promise<Salon | null> => {
-      try {
-        const newSalonId = crypto.randomUUID();
+    try {
+      const newSalon = await api.salons.create(data);
 
-        // 1. Create the salon
-        const { error: salonError } = await supabase
-          .from('salons')
-          .insert({
-            id: newSalonId,
-            name: data.name,
-            slug: slug,
-            description: data.description || null,
-            address: data.address || null,
-            city: data.city || null,
-            state: data.state || null,
-            pincode: data.pincode || null,
-            phone: data.phone || null,
-            email: data.email || null,
-            logo_url: data.logo_url || null,
-            cover_image_url: data.cover_image_url || null,
-            is_active: false,
-          });
+      toast({
+        title: "Salon Submitted Successfully!",
+        description: "Your salon is pending admin approval. You'll be notified once it's reviewed.",
+      });
 
-        if (salonError) throw salonError;
+      await refreshSalons();
+      return newSalon as Salon;
 
-        // 2. The database trigger 'on_salon_created' automatically creates the owner role
-        // So we don't need to manually insert it here.
-
-        toast({
-          title: "Success",
-          description: isRetry
-            ? "Salon created successfully! (URL was auto-adjusted)"
-            : "Salon created successfully!",
-        });
-
-        await refreshSalons();
-
-        return {
-          id: newSalonId,
-          name: data.name,
-          slug: slug,
-          created_at: new Date().toISOString(),
-          updated_at: new Date().toISOString(),
-          ...data
-        } as Salon;
-
-      } catch (error: any) {
-        // Handle duplicate slug error
-        if (!isRetry && error.message?.includes('salons_slug_key')) {
-          console.log('Slug taken, retrying with unique suffix...');
-          const uniqueSuffix = Math.floor(1000 + Math.random() * 9000); // 4 digit random
-          return attemptCreate(`${data.slug}-${uniqueSuffix}`, true);
-        }
-
-        console.error('Error creating salon:', error);
-        toast({
-          title: "Error",
-          description: error.message || "Failed to create salon",
-          variant: "destructive",
-        });
-        return null;
-      }
-    };
-
-    return attemptCreate(data.slug);
+    } catch (error: any) {
+      console.error('Error creating salon:', error);
+      toast({
+        title: "Error",
+        description: error.message || "Failed to create salon",
+        variant: "destructive",
+      });
+      return null;
+    }
   };
 
   const handleSetCurrentSalon = (salon: Salon | null) => {
@@ -232,15 +167,10 @@ export const SalonProvider = ({ children }: { children: ReactNode }) => {
     if (salon) {
       localStorage.setItem('currentSalonId', salon.id);
       // Update user role for new salon
-      supabase
-        .from('user_roles')
-        .select('*')
-        .eq('user_id', user?.id)
-        .eq('salon_id', salon.id)
-        .maybeSingle()
-        .then(({ data }) => {
-          setUserRole(data || null);
-        });
+      api.userRoles.getByUser(user?.id || '').then((roles) => {
+        const role = roles.find((r: any) => r.salon_id === salon.id);
+        setUserRole(role || null);
+      });
     } else {
       localStorage.removeItem('currentSalonId');
       setUserRole(null);

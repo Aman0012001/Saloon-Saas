@@ -12,8 +12,10 @@ import { Card, CardContent, CardFooter, CardHeader } from "@/components/ui/card"
 import Navbar from "@/components/Navbar";
 import Footer from "@/components/Footer";
 import { motion, AnimatePresence } from "framer-motion";
-import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
+import api from "@/services/api";
+
+const categories = ["All", "Hair", "Skin", "Spa", "Makeup", "Nails", "Men"];
 
 // Mock Data for Salons (Enhanced for Premium Look)
 const mockSalons = [
@@ -58,8 +60,6 @@ const mockSalons = [
   }
 ];
 
-const categories = ["All", "Hair", "Skin", "Spa", "Makeup", "Nails", "Men"];
-
 export default function SalonListing() {
   const navigate = useNavigate();
   const { user } = useAuth();
@@ -69,53 +69,49 @@ export default function SalonListing() {
   const [visitedSalonIds, setVisitedSalonIds] = useState<string[]>([]);
   const [loading, setLoading] = useState(true);
 
-  useEffect(() => {
-    const fetchSalons = async () => {
-      try {
-        const salonQuery = supabase
-          .from('salons')
-          .select('*')
-          .eq('is_active', true);
+  const fetchSalons = async () => {
+    try {
+      setLoading(true);
+      // Fetch all approved active salons
+      const data = await api.salons.getAll();
 
-        let visitedIds: string[] = [];
+      let visitedIds: string[] = [];
 
-        if (user) {
-          const { data: bookings } = await supabase
-            .from('bookings')
-            .select('salon_id')
-            .eq('user_id', user.id);
-
+      if (user) {
+        try {
+          const bookings = await api.bookings.getAll({ user_id: user.id });
           if (bookings) {
-            visitedIds = [...new Set(bookings.map(b => b.salon_id))];
+            visitedIds = [...new Set(bookings.map((b: any) => b.salon_id))] as string[];
             setVisitedSalonIds(visitedIds);
           }
+        } catch (e) {
+          console.error("Error fetching user bookings:", e);
         }
-
-        const { data, error } = await salonQuery;
-        if (error) throw error;
-
-        const formattedSalons = (data || []).map(salon => ({
-          id: salon.id,
-          name: salon.name,
-          image: salon.cover_image_url || salon.logo_url || "https://images.unsplash.com/photo-1521590832896-76c0f2956662?w=800&auto=format&fit=crop&q=60",
-          rating: Number((4.5 + Math.random() * 0.5).toFixed(1)),
-          reviews: Math.floor(Math.random() * 200) + 10,
-          address: salon.address || "Location unavailable",
-          distance: (Math.random() * 5).toFixed(1) + " km",
-          categories: ["Beauty", "Personal Care"],
-          status: "Open Now",
-          priceRange: "₹₹",
-          isFeatured: Math.random() > 0.7
-        }));
-
-        setRealSalons(formattedSalons);
-      } catch (error) {
-        console.error("Error fetching salons:", error);
-      } finally {
-        setLoading(false);
       }
-    };
 
+      const formattedSalons = (data || []).map((salon: any) => ({
+        id: salon.id,
+        name: salon.name,
+        image: salon.cover_image_url || salon.logo_url || "https://images.unsplash.com/photo-1521590832896-76c0f2956662?w=800&auto=format&fit=crop&q=60",
+        rating: Number((4.5 + Math.random() * 0.5).toFixed(1)),
+        reviews: Math.floor(Math.random() * 200) + 10,
+        address: salon.address || "Location unavailable",
+        distance: (Math.random() * 5).toFixed(1) + " km",
+        categories: ["Beauty", "Personal Care"],
+        status: "Open Now",
+        priceRange: "₹₹",
+        isFeatured: Math.random() > 0.7
+      }));
+
+      setRealSalons(formattedSalons);
+    } catch (error) {
+      console.error("Error fetching salons:", error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
     fetchSalons();
   }, [user]);
 
@@ -163,8 +159,8 @@ export default function SalonListing() {
                   size="sm"
                   onClick={() => setActiveCategory(cat)}
                   className={`rounded-full px-7 py-5 text-sm font-black transition-all duration-300 ${activeCategory === cat
-                      ? 'bg-accent text-white border-0 shadow-xl shadow-accent/25 scale-105'
-                      : 'bg-white border-slate-200 text-slate-500 hover:border-accent/40 hover:text-accent'
+                    ? 'bg-accent text-white border-0 shadow-xl shadow-accent/25 scale-105'
+                    : 'bg-white border-slate-200 text-slate-500 hover:border-accent/40 hover:text-accent'
                     }`}
                 >
                   {cat}
@@ -248,12 +244,12 @@ export default function SalonListing() {
                             <h3 className="text-2xl font-black text-slate-900 group-hover:text-accent transition-colors leading-tight">
                               {salon.name}
                             </h3>
-                            <p className="text-slate-500 text-sm font-medium flex items-center gap-1.5 mt-2">
-                              <div className="w-6 h-6 bg-slate-100 rounded-lg flex items-center justify-center">
+                            <div className="text-slate-500 text-sm font-medium flex items-center gap-1.5 mt-2">
+                              <div className="w-6 h-6 bg-slate-100 rounded-lg flex items-center justify-center shrink-0">
                                 <MapPin className="w-3.5 h-3.5 text-slate-400" />
                               </div>
-                              {salon.address}
-                            </p>
+                              <span className="truncate">{salon.address}</span>
+                            </div>
                           </div>
                           <div className="text-right">
                             <div className="flex items-center justify-center bg-emerald-50 text-emerald-600 font-black px-3 py-2 rounded-2xl border border-emerald-100 shadow-sm">
@@ -266,7 +262,7 @@ export default function SalonListing() {
 
                       <CardContent className="px-6 py-4 flex-grow">
                         <div className="flex gap-2 flex-wrap">
-                          {salon.categories.map((cat, i) => (
+                          {salon.categories.map((cat: string, i: number) => (
                             <Badge key={i} className="text-[10px] font-black uppercase tracking-widest bg-slate-100 text-slate-500 hover:bg-accent/10 hover:text-accent transition-colors border-0 px-3 py-1 rounded-lg">
                               {cat}
                             </Badge>

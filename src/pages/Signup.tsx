@@ -4,8 +4,9 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
-import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
+import { useAuth } from "@/hooks/useAuth";
+import api from "@/services/api";
 import { Eye, EyeOff, Loader2 } from "lucide-react";
 import logo from "@/assets/logo.png";
 
@@ -19,10 +20,11 @@ const Signup = () => {
   const [loading, setLoading] = useState(false);
   const navigate = useNavigate();
   const { toast } = useToast();
+  const { refreshUser } = useAuth();
 
   const handleSignup = async (e: React.FormEvent) => {
     e.preventDefault();
-    
+
     if (!fullName.trim() || !email.trim() || !password.trim()) {
       toast({
         title: "Error",
@@ -51,33 +53,25 @@ const Signup = () => {
     }
 
     setLoading(true);
-    
-    const { error } = await supabase.auth.signUp({
-      email: email.trim(),
-      password,
-      options: {
-        emailRedirectTo: window.location.origin,
-        data: {
-          full_name: fullName.trim(),
-          phone: phone.trim(),
-        },
-      },
-    });
 
-    setLoading(false);
+    try {
+      await api.auth.signup(email.trim(), password, fullName.trim());
+      await refreshUser();
 
-    if (error) {
-      toast({
-        title: "Signup Failed",
-        description: error.message,
-        variant: "destructive",
-      });
-    } else {
       toast({
         title: "Account Created!",
-        description: "Welcome to our salon",
+        description: "Welcome to our salon platform",
       });
       navigate("/");
+    } catch (error: any) {
+      console.error("Signup error:", error);
+      toast({
+        title: "Signup Failed",
+        description: error.message || "Could not create account",
+        variant: "destructive",
+      });
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -176,8 +170,8 @@ const Signup = () => {
             </p>
             <div className="text-center">
               <p className="text-xs text-muted-foreground mb-2">Want to manage a salon?</p>
-              <Link 
-                to="/salon-owner/login" 
+              <Link
+                to="/salon-owner/login"
                 className="text-accent hover:underline font-medium text-sm"
               >
                 Salon Owner Login →

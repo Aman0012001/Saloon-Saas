@@ -165,8 +165,8 @@ export default function CreateSalon() {
             </CardTitle>
             <CardDescription className="text-slate-500 text-base md:text-lg font-medium max-w-md mx-auto mt-2">
               {salons.length === 0
-                ? "Experience NoamSkin's premium features free for 14 days. Scale your beauty business with ease."
-                : "Expand your business by adding another location to your professional network."
+                ? "Submit your salon for approval and experience NoamSkin's premium features. Your salon will be reviewed by our team before going live."
+                : "Expand your business by adding another location. Each salon requires admin approval before activation."
               }
             </CardDescription>
           </CardHeader>

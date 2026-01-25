@@ -14,6 +14,7 @@ import {
   Phone,
   Mail,
   Clock,
+  RefreshCw,
 } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -46,7 +47,8 @@ import { Label } from "@/components/ui/label";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { AdminLayout } from "@/components/admin/AdminLayout";
 import { useSuperAdmin } from "@/hooks/useSuperAdmin";
-import { supabase } from "@/integrations/supabase/client";
+import { useToast } from "@/hooks/use-toast";
+import api from "@/services/api";
 import { format } from "date-fns";
 
 interface Salon {
@@ -70,12 +72,13 @@ interface Salon {
 export default function AdminSalons() {
   const [searchParams, setSearchParams] = useSearchParams();
   const { approveSalon, rejectSalon, blockSalon, unblockSalon } = useSuperAdmin();
-  
+  const { toast } = useToast();
+
   const [salons, setSalons] = useState<Salon[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState(searchParams.get("status") || "all");
-  
+
   const [selectedSalon, setSelectedSalon] = useState<Salon | null>(null);
   const [showRejectDialog, setShowRejectDialog] = useState(false);
   const [showBlockDialog, setShowBlockDialog] = useState(false);
@@ -85,56 +88,25 @@ export default function AdminSalons() {
 
   const fetchSalons = async () => {
     setLoading(true);
+    console.log('🔄 Fetching salons from local database...');
     try {
-      const { data: salonsData, error } = await supabase
-        .from('salons')
-        .select('*')
-        .order('created_at', { ascending: false });
+      const salonsData = await api.admin.getAllSalons();
+      console.log(`✅ Fetched ${salonsData?.length || 0} salons from database`);
 
-      if (error) throw error;
+      const formattedSalons: Salon[] = salonsData.map((s: any) => ({
+        ...s,
+        owner_name: s.owner_name || 'Unknown',
+        booking_count: s.booking_count || 0,
+      }));
 
-      // Fetch owner names and booking counts
-      const salonIds = salonsData?.map(s => s.id) || [];
-      
-      const [rolesResult, bookingsResult] = await Promise.all([
-        supabase
-          .from('user_roles')
-          .select('salon_id, user_id')
-          .in('salon_id', salonIds)
-          .eq('role', 'owner'),
-        supabase
-          .from('bookings')
-          .select('salon_id')
-          .in('salon_id', salonIds),
-      ]);
-
-      // Get owner profiles
-      const ownerIds = rolesResult.data?.map(r => r.user_id) || [];
-      const { data: profilesData } = await supabase
-        .from('profiles')
-        .select('user_id, full_name')
-        .in('user_id', ownerIds);
-
-      const profilesMap = new Map(profilesData?.map(p => [p.user_id, p.full_name]));
-      const rolesMap = new Map(rolesResult.data?.map(r => [r.salon_id, r.user_id]));
-      
-      // Count bookings per salon
-      const bookingCounts = new Map<string, number>();
-      bookingsResult.data?.forEach(b => {
-        if (b.salon_id) {
-          bookingCounts.set(b.salon_id, (bookingCounts.get(b.salon_id) || 0) + 1);
-        }
-      });
-
-      const enrichedSalons = salonsData?.map(salon => ({
-        ...salon,
-        owner_name: profilesMap.get(rolesMap.get(salon.id) || '') || 'Unknown',
-        booking_count: bookingCounts.get(salon.id) || 0,
-      })) || [];
-
-      setSalons(enrichedSalons);
+      setSalons(formattedSalons);
     } catch (error) {
-      console.error('Error fetching salons:', error);
+      console.error('❌ Error fetching salons:', error);
+      toast({
+        title: "Error",
+        description: "Failed to load salons from local backend.",
+        variant: "destructive",
+      });
     } finally {
       setLoading(false);
     }
@@ -142,6 +114,8 @@ export default function AdminSalons() {
 
   useEffect(() => {
     fetchSalons();
+    const interval = setInterval(fetchSalons, 30000); // Poll every 30s
+    return () => clearInterval(interval);
   }, []);
 
   const handleApprove = async (salon: Salon) => {
@@ -155,7 +129,7 @@ export default function AdminSalons() {
 
   const handleReject = async () => {
     if (!selectedSalon || !actionReason) return;
-    
+
     setActionLoading(true);
     const success = await rejectSalon(selectedSalon.id, actionReason);
     if (success) {
@@ -169,7 +143,7 @@ export default function AdminSalons() {
 
   const handleBlock = async () => {
     if (!selectedSalon || !actionReason) return;
-    
+
     setActionLoading(true);
     const success = await blockSalon(selectedSalon.id, actionReason);
     if (success) {
@@ -210,13 +184,13 @@ export default function AdminSalons() {
     const matchesSearch = salon.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
       salon.city?.toLowerCase().includes(searchQuery.toLowerCase()) ||
       salon.owner_name?.toLowerCase().includes(searchQuery.toLowerCase());
-    
+
     if (statusFilter === "all") return matchesSearch;
     if (statusFilter === "pending") return matchesSearch && salon.approval_status === "pending";
     if (statusFilter === "approved") return matchesSearch && salon.approval_status === "approved";
     if (statusFilter === "rejected") return matchesSearch && salon.approval_status === "rejected";
     if (statusFilter === "blocked") return matchesSearch && !salon.is_active;
-    
+
     return matchesSearch;
   });
 
@@ -238,12 +212,24 @@ export default function AdminSalons() {
                 </div>
               </div>
             </div>
-            <div className="text-right">
-              <div className="text-3xl font-bold">{salons.length}</div>
-              <div className="text-gray-300">Total Salons</div>
+            <div className="text-right flex items-center gap-4">
+              <Button
+                onClick={fetchSalons}
+                disabled={loading}
+                variant="outline"
+                size="icon"
+                className="h-12 w-12 rounded-xl border-white/20 bg-white/10 hover:bg-white/20 text-white"
+                title="Refresh salons"
+              >
+                <RefreshCw className={`h-5 w-5 ${loading ? 'animate-spin' : ''}`} />
+              </Button>
+              <div>
+                <div className="text-3xl font-bold">{salons.length}</div>
+                <div className="text-gray-300">Total Salons</div>
+              </div>
             </div>
           </div>
-          
+
           {/* Floating Elements */}
           <div className="absolute top-4 right-4 h-32 w-32 rounded-full bg-white/10 blur-3xl"></div>
           <div className="absolute bottom-4 left-4 h-24 w-24 rounded-full bg-emerald-400/20 blur-2xl"></div>
@@ -422,7 +408,7 @@ export default function AdminSalons() {
                           )}
                           <DropdownMenuSeparator className="bg-gray-700" />
                           {salon.is_active ? (
-                            <DropdownMenuItem 
+                            <DropdownMenuItem
                               className="text-red-400 hover:bg-gray-700"
                               onClick={() => {
                                 setSelectedSalon(salon);
@@ -515,8 +501,8 @@ export default function AdminSalons() {
             <Button variant="outline" onClick={() => setShowRejectDialog(false)} className="border-gray-600 text-gray-300 hover:bg-gray-700">
               Cancel
             </Button>
-            <Button 
-              variant="destructive" 
+            <Button
+              variant="destructive"
               onClick={handleReject}
               disabled={!actionReason || actionLoading}
               className="bg-red-600 hover:bg-red-700"
@@ -551,8 +537,8 @@ export default function AdminSalons() {
             <Button variant="outline" onClick={() => setShowBlockDialog(false)} className="border-gray-600 text-gray-300 hover:bg-gray-700">
               Cancel
             </Button>
-            <Button 
-              variant="destructive" 
+            <Button
+              variant="destructive"
               onClick={handleBlock}
               disabled={!actionReason || actionLoading}
               className="bg-red-600 hover:bg-red-700"

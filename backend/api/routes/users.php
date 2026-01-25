@@ -1,0 +1,76 @@
+<?php
+// User/Profile routes
+
+// GET /api/users/me - Get current user profile
+if ($method === 'GET' && $uriParts[1] === 'me') {
+    $userData = Auth::getUserFromToken();
+    if (!$userData) {
+        sendResponse(['error' => 'Unauthorized'], 401);
+    }
+
+    $stmt = $db->prepare("
+        SELECT u.id, u.email, u.email_verified, p.full_name, p.phone, p.avatar_url, p.user_type
+        FROM users u
+        LEFT JOIN profiles p ON u.id = p.user_id
+        WHERE u.id = ?
+    ");
+    $stmt->execute([$userData['user_id']]);
+    $user = $stmt->fetch();
+
+    sendResponse(['user' => $user]);
+}
+
+// PUT /api/users/me - Update current user profile
+if ($method === 'PUT' && $uriParts[1] === 'me') {
+    $userData = Auth::getUserFromToken();
+    if (!$userData) {
+        sendResponse(['error' => 'Unauthorized'], 401);
+    }
+
+    $data = getRequestBody();
+
+    $stmt = $db->prepare("
+        UPDATE profiles SET
+            full_name = ?, phone = ?, avatar_url = ?
+        WHERE user_id = ?
+    ");
+    $stmt->execute([
+        $data['full_name'] ?? null,
+        $data['phone'] ?? null,
+        $data['avatar_url'] ?? null,
+        $userData['user_id']
+    ]);
+
+    $stmt = $db->prepare("
+        SELECT u.id, u.email, p.full_name, p.phone, p.avatar_url, p.user_type
+        FROM users u
+        LEFT JOIN profiles p ON u.id = p.user_id
+        WHERE u.id = ?
+    ");
+    $stmt->execute([$userData['user_id']]);
+    $user = $stmt->fetch();
+
+    sendResponse(['user' => $user]);
+}
+
+// GET /api/profiles/:userId - Get user profile by ID
+if ($method === 'GET' && count($uriParts) === 2) {
+    $userId = $uriParts[1];
+
+    $stmt = $db->prepare("
+        SELECT u.id, u.email, p.full_name, p.phone, p.avatar_url
+        FROM users u
+        LEFT JOIN profiles p ON u.id = p.user_id
+        WHERE u.id = ?
+    ");
+    $stmt->execute([$userId]);
+    $user = $stmt->fetch();
+
+    if (!$user) {
+        sendResponse(['error' => 'User not found'], 404);
+    }
+
+    sendResponse(['user' => $user]);
+}
+
+sendResponse(['error' => 'User route not found'], 404);

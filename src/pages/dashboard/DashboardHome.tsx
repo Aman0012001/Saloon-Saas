@@ -571,6 +571,60 @@ export default function DashboardHome() {
           )}
         </div>
 
+        {/* Pending Approval Banner */}
+        {currentSalon.approval_status === 'pending' && (
+          <Card className="border-0 shadow-lg bg-gradient-to-r from-amber-50 to-orange-50 border-l-4 border-l-amber-500">
+            <CardContent className="p-6">
+              <div className="flex items-start gap-4">
+                <div className="w-12 h-12 bg-amber-100 rounded-full flex items-center justify-center flex-shrink-0">
+                  <AlertCircle className="w-6 h-6 text-amber-600" />
+                </div>
+                <div className="flex-1">
+                  <h3 className="font-bold text-lg text-amber-900 mb-2">Salon Pending Approval</h3>
+                  <p className="text-amber-800 mb-3">
+                    Your salon "{currentSalon.name}" is currently under review by our admin team.
+                    You'll be notified once it's approved and activated. This usually takes 24-48 hours.
+                  </p>
+                  <div className="flex items-center gap-2 text-sm text-amber-700">
+                    <Clock className="w-4 h-4" />
+                    <span>Submitted: {format(new Date(currentSalon.created_at), 'PPP')}</span>
+                  </div>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        )}
+
+        {/* Rejected Salon Banner */}
+        {currentSalon.approval_status === 'rejected' && (
+          <Card className="border-0 shadow-lg bg-gradient-to-r from-red-50 to-rose-50 border-l-4 border-l-red-500">
+            <CardContent className="p-6">
+              <div className="flex items-start gap-4">
+                <div className="w-12 h-12 bg-red-100 rounded-full flex items-center justify-center flex-shrink-0">
+                  <XCircle className="w-6 h-6 text-red-600" />
+                </div>
+                <div className="flex-1">
+                  <h3 className="font-bold text-lg text-red-900 mb-2">Salon Application Rejected</h3>
+                  <p className="text-red-800 mb-3">
+                    Unfortunately, your salon application was not approved.
+                    {currentSalon.rejection_reason && (
+                      <span className="block mt-2 font-medium">Reason: {currentSalon.rejection_reason}</span>
+                    )}
+                  </p>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => navigate('/dashboard/settings')}
+                    className="border-red-300 text-red-700 hover:bg-red-100"
+                  >
+                    Update Salon Information
+                  </Button>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        )}
+
         {/* Stats Grid */}
         <div className={`grid grid-cols-2 ${isMobile ? 'lg:grid-cols-4 gap-4' : 'sm:grid-cols-2 lg:grid-cols-4 gap-6'}`}>
           {statCards.map((stat, index) => (

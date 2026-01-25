@@ -1,61 +1,62 @@
 import { useState, useEffect, createContext, useContext, ReactNode } from "react";
-import { User, Session } from "@supabase/supabase-js";
-import { supabase } from "@/integrations/supabase/client";
+import api from "@/services/api";
+
+export interface User {
+  id: string;
+  email: string;
+  full_name?: string;
+  user_type?: 'customer' | 'salon_owner' | 'admin';
+}
 
 interface AuthContextType {
   user: User | null;
-  session: Session | null;
   loading: boolean;
   signOut: () => Promise<void>;
+  refreshUser: () => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const [user, setUser] = useState<User | null>(null);
-  const [session, setSession] = useState<Session | null>(null);
   const [loading, setLoading] = useState(true);
 
+  const fetchUser = async () => {
+    const token = localStorage.getItem('auth_token');
+    if (!token) {
+      setUser(null);
+      setLoading(false);
+      return;
+    }
+
+    try {
+      const data = await api.auth.getCurrentUser();
+      setUser(data.user);
+    } catch (error) {
+      console.error("Auth initialization error:", error);
+      localStorage.removeItem('auth_token');
+      setUser(null);
+    } finally {
+      setLoading(false);
+    }
+  };
+
   useEffect(() => {
-    // Set up auth state listener FIRST
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(
-      (event, session) => {
-        setSession(session);
-        setUser(session?.user ?? null);
-        setLoading(false);
-      }
-    );
-
-    // Safety timeout to prevent infinite loading
-    const timeout = setTimeout(() => {
-      setLoading(false);
-    }, 5000);
-
-    // THEN check current session
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      setSession(session);
-      setUser(session?.user ?? null);
-      setLoading(false);
-      clearTimeout(timeout);
-    }).catch(() => {
-      setLoading(false);
-      clearTimeout(timeout);
-    });
-
-    return () => {
-      subscription.unsubscribe();
-      clearTimeout(timeout);
-    };
+    fetchUser();
   }, []);
 
   const signOut = async () => {
-    await supabase.auth.signOut();
+    try {
+      await api.auth.logout();
+    } catch (e) {
+      console.error("Logout error:", e);
+    }
+    localStorage.removeItem('auth_token');
     setUser(null);
-    setSession(null);
   };
 
   return (
-    <AuthContext.Provider value={{ user, session, loading, signOut }}>
+    <AuthContext.Provider value={{ user, loading, signOut, refreshUser: fetchUser }}>
       {children}
     </AuthContext.Provider>
   );
