@@ -20,7 +20,7 @@ import { DashboardLayout } from "@/components/dashboard/DashboardLayout";
 import { ResponsiveDashboardLayout } from "@/components/dashboard/ResponsiveDashboardLayout";
 import { useSalon } from "@/hooks/useSalon";
 import { useAuth } from "@/hooks/useAuth";
-import { supabase } from "@/integrations/supabase/client";
+import api from "@/services/api";
 import { useToast } from "@/hooks/use-toast";
 
 const DAYS = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"];
@@ -76,19 +76,27 @@ export default function SettingsPage() {
       });
 
       // Initialize business hours
-      const hours = (currentSalon.business_hours as Record<string, { open: string; close: string; closed: boolean }>) || {};
+      let hours = currentSalon.business_hours;
+      if (typeof hours === 'string') {
+        try { hours = JSON.parse(hours); } catch (e) { hours = {}; }
+      }
+
       const defaultHours: Record<string, { open: string; close: string; closed: boolean }> = {};
       DAYS.forEach((day) => {
-        defaultHours[day] = hours[day] || { open: "09:00", close: "20:00", closed: false };
+        defaultHours[day] = (hours as any)?.[day] || { open: "09:00", close: "20:00", closed: false };
       });
       setBusinessHours(defaultHours);
 
       // Initialize notifications
-      const notifSettings = (currentSalon.notification_settings as Record<string, boolean>) || {};
+      let notifSettings = currentSalon.notification_settings;
+      if (typeof notifSettings === 'string') {
+        try { notifSettings = JSON.parse(notifSettings); } catch (e) { notifSettings = {}; }
+      }
+
       setNotifications({
-        email_bookings: notifSettings.email_bookings ?? true,
-        email_reminders: notifSettings.email_reminders ?? true,
-        sms_confirmations: notifSettings.sms_confirmations ?? false,
+        email_bookings: (notifSettings as any)?.email_bookings ?? true,
+        email_reminders: (notifSettings as any)?.email_reminders ?? true,
+        sms_confirmations: (notifSettings as any)?.sms_confirmations ?? false,
       });
     }
   }, [currentSalon]);
@@ -98,30 +106,25 @@ export default function SettingsPage() {
 
     setSaving(true);
     try {
-      const { error } = await supabase
-        .from("salons")
-        .update({
-          name: formData.name,
-          description: formData.description || null,
-          address: formData.address || null,
-          city: formData.city || null,
-          state: formData.state || null,
-          pincode: formData.pincode || null,
-          phone: formData.phone || null,
-          email: formData.email || null,
-          gst_number: formData.gst_number || null,
-        })
-        .eq("id", currentSalon.id);
+      await api.salons.update(currentSalon.id, {
+        name: formData.name,
+        description: formData.description || null,
+        address: formData.address || null,
+        city: formData.city || null,
+        state: formData.state || null,
+        pincode: formData.pincode || null,
+        phone: formData.phone || null,
+        email: formData.email || null,
+        gst_number: formData.gst_number || null,
+      });
 
-      if (error) throw error;
-
-      toast({ title: "Success", description: "Salon profile updated" });
+      toast({ title: "Success", description: "Salon profile updated locally" });
       refreshSalons();
     } catch (error: any) {
-      console.error("Error saving profile:", error);
+      console.error("Error saving salon profile:", error);
       toast({
         title: "Error",
-        description: error.message || "Failed to save profile",
+        description: error.message || "Failed to update profile locally",
         variant: "destructive",
       });
     } finally {
@@ -134,20 +137,17 @@ export default function SettingsPage() {
 
     setSaving(true);
     try {
-      const { error } = await supabase
-        .from("salons")
-        .update({ business_hours: businessHours })
-        .eq("id", currentSalon.id);
+      await api.salons.update(currentSalon.id, {
+        business_hours: JSON.stringify(businessHours)
+      });
 
-      if (error) throw error;
-
-      toast({ title: "Success", description: "Business hours updated" });
+      toast({ title: "Success", description: "Business hours updated locally" });
       refreshSalons();
     } catch (error: any) {
-      console.error("Error saving business hours:", error);
+      console.error("Error saving hours:", error);
       toast({
         title: "Error",
-        description: error.message || "Failed to save business hours",
+        description: error.message || "Failed to save hours locally",
         variant: "destructive",
       });
     } finally {
@@ -160,20 +160,17 @@ export default function SettingsPage() {
 
     setSaving(true);
     try {
-      const { error } = await supabase
-        .from("salons")
-        .update({ notification_settings: notifications })
-        .eq("id", currentSalon.id);
+      await api.salons.update(currentSalon.id, {
+        notification_settings: JSON.stringify(notifications)
+      });
 
-      if (error) throw error;
-
-      toast({ title: "Success", description: "Notification settings updated" });
+      toast({ title: "Success", description: "Notification settings updated locally" });
       refreshSalons();
     } catch (error: any) {
       console.error("Error saving notifications:", error);
       toast({
         title: "Error",
-        description: error.message || "Failed to save notification settings",
+        description: error.message || "Failed to update notification settings",
         variant: "destructive",
       });
     } finally {
@@ -191,301 +188,218 @@ export default function SettingsPage() {
     );
   }
 
-  if (!isOwner) {
-    return null;
-  }
+  if (!isOwner) return null;
 
   return (
     <ResponsiveDashboardLayout
       showBackButton={true}
     >
       <div className="space-y-6">
-        {/* Header */}
         <div>
-          <h1 className="text-2xl font-bold text-foreground">Settings</h1>
-          <p className="text-muted-foreground">
-            Manage your salon profile and preferences
+          <h1 className="text-3xl font-black text-foreground tracking-tight">Salon Settings</h1>
+          <p className="text-muted-foreground font-medium">
+            Manage your salon's configuration in the local database
           </p>
         </div>
 
         <Tabs defaultValue="profile" className="space-y-6">
-          <TabsList>
-            <TabsTrigger value="profile" className="gap-2">
+          <TabsList className="bg-secondary/50 p-1 rounded-2xl">
+            <TabsTrigger value="profile" className="gap-2 rounded-xl h-10 data-[state=active]:bg-white data-[state=active]:shadow-sm">
               <Store className="w-4 h-4" />
               Profile
             </TabsTrigger>
-            <TabsTrigger value="hours" className="gap-2">
+            <TabsTrigger value="hours" className="gap-2 rounded-xl h-10 data-[state=active]:bg-white data-[state=active]:shadow-sm">
               <Clock className="w-4 h-4" />
               Hours
             </TabsTrigger>
-            <TabsTrigger value="notifications" className="gap-2">
+            <TabsTrigger value="notifications" className="gap-2 rounded-xl h-10 data-[state=active]:bg-white data-[state=active]:shadow-sm">
               <Bell className="w-4 h-4" />
               Notifications
             </TabsTrigger>
           </TabsList>
 
-          {/* Profile Tab */}
           <TabsContent value="profile">
-            <Card className="border-border">
+            <Card className="border-none shadow-sm bg-white rounded-[2rem]">
               <CardHeader>
-                <CardTitle>Salon Profile</CardTitle>
-                <CardDescription>
-                  Update your salon's basic information
+                <CardTitle className="text-xl font-bold">Business Information</CardTitle>
+                <CardDescription className="font-medium">
+                  Public details visible to customers on the listing page
                 </CardDescription>
               </CardHeader>
               <CardContent className="space-y-6">
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div className="space-y-2">
-                    <Label htmlFor="name">Salon Name</Label>
+                    <Label htmlFor="name" className="text-xs font-black uppercase tracking-widest text-muted-foreground ml-1">Salon Name</Label>
                     <Input
                       id="name"
                       value={formData.name}
-                      onChange={(e) =>
-                        setFormData({ ...formData, name: e.target.value })
-                      }
+                      onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+                      className="h-12 bg-secondary/30 border-none rounded-xl"
                     />
                   </div>
                   <div className="space-y-2">
-                    <Label htmlFor="phone">Phone</Label>
+                    <Label htmlFor="phone" className="text-xs font-black uppercase tracking-widest text-muted-foreground ml-1">Phone</Label>
                     <Input
                       id="phone"
                       value={formData.phone}
-                      onChange={(e) =>
-                        setFormData({ ...formData, phone: e.target.value })
-                      }
+                      onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
+                      className="h-12 bg-secondary/30 border-none rounded-xl"
                     />
                   </div>
                 </div>
                 <div className="space-y-2">
-                  <Label htmlFor="description">Description</Label>
+                  <Label htmlFor="description" className="text-xs font-black uppercase tracking-widest text-muted-foreground ml-1">Description</Label>
                   <Textarea
                     id="description"
                     value={formData.description}
-                    onChange={(e) =>
-                      setFormData({ ...formData, description: e.target.value })
-                    }
+                    onChange={(e) => setFormData({ ...formData, description: e.target.value })}
                     rows={3}
+                    className="bg-secondary/30 border-none rounded-xl p-4 min-h-[100px]"
                   />
                 </div>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div className="space-y-2">
-                    <Label htmlFor="email">Email</Label>
+                    <Label htmlFor="email" className="text-xs font-black uppercase tracking-widest text-muted-foreground ml-1">Public Email</Label>
                     <Input
                       id="email"
                       type="email"
                       value={formData.email}
-                      onChange={(e) =>
-                        setFormData({ ...formData, email: e.target.value })
-                      }
+                      onChange={(e) => setFormData({ ...formData, email: e.target.value })}
+                      className="h-12 bg-secondary/30 border-none rounded-xl"
                     />
                   </div>
                   <div className="space-y-2">
-                    <Label htmlFor="gst">GST Number</Label>
+                    <Label htmlFor="gst" className="text-xs font-black uppercase tracking-widest text-muted-foreground ml-1">GST Number</Label>
                     <Input
                       id="gst"
                       value={formData.gst_number}
-                      onChange={(e) =>
-                        setFormData({ ...formData, gst_number: e.target.value })
-                      }
+                      onChange={(e) => setFormData({ ...formData, gst_number: e.target.value })}
+                      className="h-12 bg-secondary/30 border-none rounded-xl font-bold"
                     />
                   </div>
                 </div>
                 <div className="space-y-2">
-                  <Label htmlFor="address">Address</Label>
+                  <Label htmlFor="address" className="text-xs font-black uppercase tracking-widest text-muted-foreground ml-1">Detailed Address</Label>
                   <Input
                     id="address"
                     value={formData.address}
-                    onChange={(e) =>
-                      setFormData({ ...formData, address: e.target.value })
-                    }
+                    onChange={(e) => setFormData({ ...formData, address: e.target.value })}
+                    className="h-12 bg-secondary/30 border-none rounded-xl"
                   />
                 </div>
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                  <div className="space-y-2">
-                    <Label htmlFor="city">City</Label>
-                    <Input
-                      id="city"
-                      value={formData.city}
-                      onChange={(e) =>
-                        setFormData({ ...formData, city: e.target.value })
-                      }
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="state">State</Label>
-                    <Input
-                      id="state"
-                      value={formData.state}
-                      onChange={(e) =>
-                        setFormData({ ...formData, state: e.target.value })
-                      }
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="pincode">PIN Code</Label>
-                    <Input
-                      id="pincode"
-                      value={formData.pincode}
-                      onChange={(e) =>
-                        setFormData({ ...formData, pincode: e.target.value })
-                      }
-                    />
-                  </div>
+                  <Input
+                    placeholder="City"
+                    value={formData.city}
+                    onChange={(e) => setFormData({ ...formData, city: e.target.value })}
+                    className="h-12 bg-secondary/30 border-none rounded-xl"
+                  />
+                  <Input
+                    placeholder="State"
+                    value={formData.state}
+                    onChange={(e) => setFormData({ ...formData, state: e.target.value })}
+                    className="h-12 bg-secondary/30 border-none rounded-xl"
+                  />
+                  <Input
+                    placeholder="PIN Code"
+                    value={formData.pincode}
+                    onChange={(e) => setFormData({ ...formData, pincode: e.target.value })}
+                    className="h-12 bg-secondary/30 border-none rounded-xl"
+                  />
                 </div>
                 <Button
                   onClick={handleSaveProfile}
                   disabled={saving}
-                  className="bg-accent hover:bg-accent/90"
+                  className="bg-accent hover:bg-accent/90 text-white font-black px-8 h-12 rounded-xl shadow-lg shadow-accent/20"
                 >
-                  {saving ? (
-                    <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                  ) : (
-                    <Save className="w-4 h-4 mr-2" />
-                  )}
-                  Save Changes
+                  {saving ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Save className="w-4 h-4 mr-2" />}
+                  Save All Changes
                 </Button>
               </CardContent>
             </Card>
           </TabsContent>
 
-          {/* Business Hours Tab */}
           <TabsContent value="hours">
-            <Card className="border-border">
+            <Card className="border-none shadow-sm bg-white rounded-[2rem]">
               <CardHeader>
-                <CardTitle>Business Hours</CardTitle>
-                <CardDescription>
-                  Set your salon's operating hours for each day
-                </CardDescription>
+                <CardTitle className="text-xl font-bold">Opening Hours</CardTitle>
+                <CardDescription className="font-medium">Define your weekly operational schedule</CardDescription>
               </CardHeader>
-              <CardContent className="space-y-4">
+              <CardContent className="space-y-3">
                 {DAYS.map((day) => (
-                  <div
-                    key={day}
-                    className="flex flex-col md:flex-row md:items-center gap-4 p-4 rounded-lg bg-secondary/50"
-                  >
-                    <div className="w-28 font-medium">{day}</div>
-                    <div className="flex items-center gap-2">
-                      <Switch
-                        checked={!businessHours[day]?.closed}
-                        onCheckedChange={(checked) =>
-                          setBusinessHours({
+                  <div key={day} className="flex flex-col md:flex-row md:items-center justify-between gap-4 p-5 rounded-2xl bg-secondary/20 transition-all hover:bg-secondary/30">
+                    <div className="w-32 font-black text-slate-700">{day}</div>
+                    <div className="flex items-center gap-6 flex-1 justify-end">
+                      <div className="flex items-center gap-3">
+                        <span className="text-xs font-bold text-muted-foreground">{businessHours[day]?.closed ? "CLOSED" : "OPEN"}</span>
+                        <Switch
+                          checked={!businessHours[day]?.closed}
+                          onCheckedChange={(checked) => setBusinessHours({
                             ...businessHours,
-                            [day]: { ...businessHours[day], closed: !checked },
-                          })
-                        }
-                      />
-                      <span className="text-sm text-muted-foreground">
-                        {businessHours[day]?.closed ? "Closed" : "Open"}
-                      </span>
-                    </div>
-                    {!businessHours[day]?.closed && (
-                      <div className="flex items-center gap-2">
-                        <Input
-                          type="time"
-                          value={businessHours[day]?.open || "09:00"}
-                          onChange={(e) =>
-                            setBusinessHours({
-                              ...businessHours,
-                              [day]: { ...businessHours[day], open: e.target.value },
-                            })
-                          }
-                          className="w-32"
-                        />
-                        <span className="text-muted-foreground">to</span>
-                        <Input
-                          type="time"
-                          value={businessHours[day]?.close || "20:00"}
-                          onChange={(e) =>
-                            setBusinessHours({
-                              ...businessHours,
-                              [day]: { ...businessHours[day], close: e.target.value },
-                            })
-                          }
-                          className="w-32"
+                            [day]: { ...businessHours[day], closed: !checked }
+                          })}
                         />
                       </div>
-                    )}
+                      {!businessHours[day]?.closed && (
+                        <div className="flex items-center gap-2">
+                          <Input
+                            type="time"
+                            value={businessHours[day]?.open || "09:00"}
+                            onChange={(e) => setBusinessHours({
+                              ...businessHours,
+                              [day]: { ...businessHours[day], open: e.target.value }
+                            })}
+                            className="w-32 bg-white border-none h-10 rounded-lg font-bold"
+                          />
+                          <span className="text-xs font-black text-muted-foreground">TO</span>
+                          <Input
+                            type="time"
+                            value={businessHours[day]?.close || "20:00"}
+                            onChange={(e) => setBusinessHours({
+                              ...businessHours,
+                              [day]: { ...businessHours[day], close: e.target.value }
+                            })}
+                            className="w-32 bg-white border-none h-10 rounded-lg font-bold"
+                          />
+                        </div>
+                      )}
+                    </div>
                   </div>
                 ))}
-                <Button
-                  onClick={handleSaveBusinessHours}
-                  disabled={saving}
-                  className="bg-accent hover:bg-accent/90 mt-4"
-                >
-                  {saving ? (
-                    <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                  ) : (
-                    <Save className="w-4 h-4 mr-2" />
-                  )}
-                  Save Hours
-                </Button>
+                <div className="pt-6">
+                  <Button onClick={handleSaveBusinessHours} disabled={saving} className="bg-accent text-white font-black px-8 h-12 rounded-xl shadow-lg shadow-accent/20">
+                    {saving ? "Saving..." : "Update Business Hours"}
+                  </Button>
+                </div>
               </CardContent>
             </Card>
           </TabsContent>
 
-          {/* Notifications Tab */}
           <TabsContent value="notifications">
-            <Card className="border-border">
+            <Card className="border-none shadow-sm bg-white rounded-[2rem]">
               <CardHeader>
-                <CardTitle>Notification Settings</CardTitle>
-                <CardDescription>
-                  Configure how you receive notifications
-                </CardDescription>
+                <CardTitle className="text-xl font-bold">Communication Settings</CardTitle>
+                <CardDescription className="font-medium">How we alert you and your clients</CardDescription>
               </CardHeader>
-              <CardContent className="space-y-6">
-                <div className="flex items-center justify-between p-4 rounded-lg bg-secondary/50">
-                  <div>
-                    <p className="font-medium">Email for New Bookings</p>
-                    <p className="text-sm text-muted-foreground">
-                      Receive email when a new booking is made
-                    </p>
+              <CardContent className="space-y-4">
+                {[
+                  { id: 'email_bookings', label: 'Email for New Bookings', desc: 'Get an alert for every new appointment', checked: notifications.email_bookings },
+                  { id: 'email_reminders', label: 'Client Email Reminders', desc: 'Automated reminders 24h before visits', checked: notifications.email_reminders },
+                  { id: 'sms_confirmations', label: 'SMS Confirmations', desc: 'Direct text alerts (Local SMS charges apply)', checked: notifications.sms_confirmations },
+                ].map(item => (
+                  <div key={item.id} className="flex items-center justify-between p-6 rounded-2xl bg-secondary/10 border border-slate-50">
+                    <div className="space-y-1">
+                      <p className="font-bold text-slate-900">{item.label}</p>
+                      <p className="text-xs text-muted-foreground font-medium">{item.desc}</p>
+                    </div>
+                    <Switch
+                      checked={item.checked}
+                      onCheckedChange={(checked) => setNotifications({ ...notifications, [item.id]: checked })}
+                    />
                   </div>
-                  <Switch
-                    checked={notifications.email_bookings}
-                    onCheckedChange={(checked) =>
-                      setNotifications({ ...notifications, email_bookings: checked })
-                    }
-                  />
-                </div>
-                <div className="flex items-center justify-between p-4 rounded-lg bg-secondary/50">
-                  <div>
-                    <p className="font-medium">Email Reminders</p>
-                    <p className="text-sm text-muted-foreground">
-                      Send reminder emails to customers before appointments
-                    </p>
-                  </div>
-                  <Switch
-                    checked={notifications.email_reminders}
-                    onCheckedChange={(checked) =>
-                      setNotifications({ ...notifications, email_reminders: checked })
-                    }
-                  />
-                </div>
-                <div className="flex items-center justify-between p-4 rounded-lg bg-secondary/50">
-                  <div>
-                    <p className="font-medium">SMS Confirmations</p>
-                    <p className="text-sm text-muted-foreground">
-                      Send SMS confirmations to customers (additional charges apply)
-                    </p>
-                  </div>
-                  <Switch
-                    checked={notifications.sms_confirmations}
-                    onCheckedChange={(checked) =>
-                      setNotifications({ ...notifications, sms_confirmations: checked })
-                    }
-                  />
-                </div>
-                <Button
-                  onClick={handleSaveNotifications}
-                  disabled={saving}
-                  className="bg-accent hover:bg-accent/90"
-                >
-                  {saving ? (
-                    <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                  ) : (
-                    <Save className="w-4 h-4 mr-2" />
-                  )}
-                  Save Settings
+                ))}
+                <Button onClick={handleSaveNotifications} disabled={saving} className="bg-accent text-white font-black px-8 h-12 rounded-xl mt-4 shadow-lg shadow-accent/20">
+                  {saving ? "Saving..." : "Update Preferences"}
                 </Button>
               </CardContent>
             </Card>

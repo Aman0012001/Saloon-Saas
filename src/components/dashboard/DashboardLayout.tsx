@@ -33,7 +33,9 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { useSalon } from "@/hooks/useSalon";
 import { useAuth } from "@/hooks/useAuth";
+import { Separator } from "@/components/ui/separator";
 import { cn } from "@/lib/utils";
+import { SalonNotificationSystem } from "./SalonNotificationSystem";
 
 interface DashboardLayoutProps {
   children: ReactNode;
@@ -148,7 +150,7 @@ export const DashboardLayout = ({ children }: DashboardLayoutProps) => {
       {/* Sidebar */}
       <aside
         className={cn(
-          "fixed lg:sticky lg:top-0 inset-y-0 left-0 z-50 w-72 h-screen bg-white/95 backdrop-blur-xl border-r border-border/50 transform transition-all duration-300 ease-in-out lg:transform-none shadow-2xl lg:shadow-none",
+          "fixed lg:sticky lg:top-0 inset-y-0 left-0 z-50 w-72 h-screen bg-white shadow-[0_0_20px_rgba(0,0,0,0.05)] border-r border-border/50 transform transition-all duration-300 ease-in-out lg:transform-none shadow-2xl lg:shadow-none",
           sidebarOpen ? "translate-x-0" : "-translate-x-full lg:translate-x-0"
         )}
       >
@@ -254,20 +256,20 @@ export const DashboardLayout = ({ children }: DashboardLayoutProps) => {
                     isActive ? "text-white" : "text-muted-foreground group-hover:text-foreground",
                     "group-hover:scale-110"
                   )} />
-                    <div className="flex-1 flex flex-col">
-                      <span className={cn(
-                        "font-medium leading-none",
-                        isActive ? "text-white" : "text-foreground"
-                      )}>
-                        {item.label}
-                      </span>
-                      <span className={cn(
-                        "text-[10px] mt-1 line-clamp-1",
-                        isActive ? "text-white/80" : "text-muted-foreground"
-                      )}>
-                        {item.description}
-                      </span>
-                    </div>
+                  <div className="flex-1 flex flex-col">
+                    <span className={cn(
+                      "font-medium leading-none",
+                      isActive ? "text-white" : "text-foreground"
+                    )}>
+                      {item.label}
+                    </span>
+                    <span className={cn(
+                      "text-[10px] mt-1 line-clamp-1",
+                      isActive ? "text-white/80" : "text-muted-foreground"
+                    )}>
+                      {item.description}
+                    </span>
+                  </div>
                   {isActive && (
                     <div className="absolute right-2 w-2 h-2 bg-white rounded-full" />
                   )}
@@ -328,47 +330,84 @@ export const DashboardLayout = ({ children }: DashboardLayoutProps) => {
       {/* Main Content */}
       <div className="flex-1 flex flex-col min-h-screen">
         {/* Top Bar */}
-        <header className="sticky top-0 z-30 bg-white/80 backdrop-blur-xl border-b border-border/50 px-6 h-16 flex items-center gap-4 shadow-sm">
-          <Button
-            variant="ghost"
-            size="icon"
-            className="lg:hidden hover:bg-secondary/50"
-            onClick={() => setSidebarOpen(true)}
-          >
-            <Menu className="w-5 h-5" />
-          </Button>
+        <header className="sticky top-0 z-40 bg-white/80 backdrop-blur-xl border-b border-border/50 px-8 h-20 flex items-center justify-between shadow-sm">
+          {/* Left: Mobile Menu & Logo */}
+          <div className="flex-1 flex items-center gap-4">
+            <div className="flex items-center gap-3 lg:hidden">
+              <Button
+                variant="ghost"
+                size="icon"
+                className="hover:bg-secondary/50 rounded-xl"
+                onClick={() => setSidebarOpen(true)}
+              >
+                <Menu className="w-5 h-5 text-foreground" />
+              </Button>
+              <div className="flex items-center gap-2">
+                <div className="w-8 h-8 bg-gradient-to-br from-accent to-accent/80 rounded-lg flex items-center justify-center shadow-md">
+                  <Scissors className="w-4 h-4 text-white" />
+                </div>
+                <span className="font-bold text-lg text-foreground tracking-tight">NoamSkin</span>
+              </div>
+            </div>
 
-          {/* Search Bar */}
-          <div className="flex-1 max-w-md">
-            <div className="relative">
-              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-              <Input
-                placeholder="Search customers, appointments..."
-                className="pl-10 bg-secondary/30 border-border/50 focus:bg-white transition-colors"
-              />
+            {/* Desktop Page Info or Breadcrumb could go here */}
+            <div className="hidden lg:flex items-center gap-2 text-sm font-medium text-muted-foreground">
+              <Store className="w-4 h-4" />
+              <span>{currentSalon?.name || "No Salon Selected"}</span>
             </div>
           </div>
 
-          {/* Top Bar Actions */}
-          <div className="flex items-center gap-2">
-            <Button
-              variant="ghost"
-              size="icon"
-              className="relative hover:bg-secondary/50"
-            >
-              <Bell className="w-5 h-5" />
-              <Badge className="absolute -top-1 -right-1 w-5 h-5 p-0 text-xs bg-destructive">
-                3
-              </Badge>
-            </Button>
+          {/* Center: Search Bar */}
+          <div className="flex-1 max-w-xl group">
+            <div className="relative">
+              <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
+                <Search className="w-4 h-4 text-muted-foreground group-focus-within:text-accent transition-colors" />
+              </div>
+              <Input
+                placeholder="Search customers, appointments, reports..."
+                className="pl-11 pr-4 py-6 bg-secondary/20 border-border/30 rounded-2xl focus:bg-white focus:ring-4 focus:ring-accent/5 focus:border-accent/30 transition-all duration-300 text-sm font-medium placeholder:text-muted-foreground/60 w-full shadow-inner"
+              />
+              <div className="absolute inset-y-0 right-4 flex items-center gap-2 pointer-events-none opacity-0 group-focus-within:opacity-100 transition-opacity">
+                <span className="text-[10px] font-bold text-muted-foreground bg-secondary/50 px-1.5 py-0.5 rounded border border-border/50">⌘K</span>
+              </div>
+            </div>
+          </div>
 
+          {/* Right: Actions */}
+          <div className="flex-1 flex items-center justify-end gap-4">
+            <div className="hidden md:flex items-center gap-2">
+              <Button
+                variant="outline"
+                size="sm"
+                className="h-10 px-4 rounded-xl border-border/50 bg-white/50 hover:bg-white hover:border-accent/30 hover:shadow-lg transition-all"
+                onClick={() => navigate("/dashboard/appointments")}
+              >
+                <Plus className="w-4 h-4 mr-2 text-accent" />
+                <span className="font-bold text-xs uppercase tracking-wider text-foreground">Quick Add</span>
+              </Button>
+            </div>
 
+            <Separator orientation="vertical" className="h-6 bg-border/50 hidden md:block" />
+
+            <div className="flex items-center gap-3">
+              <SalonNotificationSystem />
+
+              <div className="h-11 w-11 rounded-xl overflow-hidden border-2 border-border/30 hover:border-accent/50 transition-colors cursor-pointer lg:hidden" onClick={() => navigate("/dashboard/settings")}>
+                <Avatar className="h-full w-full">
+                  <AvatarFallback className="bg-accent/10 text-accent text-xs font-bold">
+                    {user?.email ? getInitials(user.email) : "U"}
+                  </AvatarFallback>
+                </Avatar>
+              </div>
+            </div>
           </div>
         </header>
 
         {/* Page Content */}
-        <main className="flex-1 p-6 lg:p-8 bg-gradient-to-br from-background via-background to-secondary/10">
-          {children}
+        <main className="flex-1 p-6 lg:p-10 bg-[#f8fafc]">
+          <div className="max-w-[1600px] mx-auto">
+            {children}
+          </div>
         </main>
       </div>
     </div>

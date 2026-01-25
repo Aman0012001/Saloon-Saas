@@ -13,6 +13,7 @@ DROP TABLE IF EXISTS platform_admins;
 DROP TABLE IF EXISTS bookings;
 DROP TABLE IF EXISTS services;
 DROP TABLE IF EXISTS user_roles;
+DROP TABLE IF EXISTS staff_profiles;
 DROP TABLE IF EXISTS salons;
 DROP TABLE IF EXISTS profiles;
 DROP TABLE IF EXISTS users;
@@ -110,6 +111,26 @@ CREATE TABLE services (
     FOREIGN KEY (salon_id) REFERENCES salons(id) ON DELETE CASCADE,
     INDEX idx_salon_id (salon_id),
     INDEX idx_category (category),
+    INDEX idx_is_active (is_active)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- Staff Profiles table
+CREATE TABLE staff_profiles (
+    id VARCHAR(36) PRIMARY KEY DEFAULT (UUID()),
+    user_id VARCHAR(36),
+    salon_id VARCHAR(36) NOT NULL,
+    display_name VARCHAR(255) NOT NULL,
+    email VARCHAR(255),
+    phone VARCHAR(20),
+    avatar_url TEXT,
+    specializations JSON,
+    commission_percentage DECIMAL(5,2) DEFAULT 0,
+    is_active BOOLEAN DEFAULT TRUE,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE SET NULL,
+    FOREIGN KEY (salon_id) REFERENCES salons(id) ON DELETE CASCADE,
+    INDEX idx_salon_id (salon_id),
     INDEX idx_is_active (is_active)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
@@ -250,7 +271,7 @@ CREATE TABLE platform_payments (
     salon_id VARCHAR(36) NOT NULL,
     subscription_id VARCHAR(36),
     amount DECIMAL(10,2) NOT NULL,
-    currency VARCHAR(3) DEFAULT 'INR',
+    currency VARCHAR(3) DEFAULT 'USD',
     status ENUM('pending', 'completed', 'failed', 'refunded') DEFAULT 'pending',
     payment_method VARCHAR(100),
     payment_gateway VARCHAR(100),
@@ -270,9 +291,9 @@ CREATE TABLE platform_payments (
 INSERT INTO subscription_plans (name, slug, description, price_monthly, price_yearly, max_staff, max_services, max_bookings_per_month, features, sort_order, is_featured)
 VALUES
     ('Free Trial', 'free-trial', '14-day trial with basic features', 0, 0, 2, 10, 50, '["Basic booking", "Email notifications", "1 staff member"]', 0, FALSE),
-    ('Starter', 'starter', 'Perfect for small salons', 499, 4999, 3, 20, 200, '["Unlimited bookings", "Email & SMS notifications", "3 staff members", "Basic reports"]', 1, FALSE),
-    ('Professional', 'professional', 'For growing businesses', 999, 9999, 10, 50, NULL, '["Everything in Starter", "10 staff members", "Advanced reports", "Customer loyalty", "Inventory management"]', 2, TRUE),
-    ('Enterprise', 'enterprise', 'For large salon chains', 2499, 24999, NULL, NULL, NULL, '["Everything in Professional", "Unlimited staff", "Multi-location", "API access", "Priority support", "Custom branding"]', 3, FALSE);
+    ('Starter', 'starter', 'Perfect for small salons', 9, 89, 3, 20, 200, '["Unlimited bookings", "Email & SMS notifications", "3 staff members", "Basic reports"]', 1, FALSE),
+    ('Professional', 'professional', 'For growing businesses', 29, 289, 10, 50, NULL, '["Everything in Starter", "10 staff members", "Advanced reports", "Customer loyalty", "Inventory management"]', 2, TRUE),
+    ('Enterprise', 'enterprise', 'For large salon chains', 89, 889, NULL, NULL, NULL, '["Everything in Professional", "Unlimited staff", "Multi-location", "API access", "Priority support", "Custom branding"]', 3, FALSE);
 
 -- Insert default platform settings
 INSERT INTO platform_settings (setting_key, setting_value, description)
@@ -281,5 +302,5 @@ VALUES
     ('platform_commission', '10', 'Platform commission percentage'),
     ('trial_days', '14', 'Default trial period in days'),
     ('support_email', '"support@noamskin.com"', 'Support email address'),
-    ('currency', '"INR"', 'Default currency'),
+    ('currency', '"USD"', 'Default currency'),
     ('auto_approve_salons', 'false', 'Automatically approve new salon registrations');

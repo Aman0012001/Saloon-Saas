@@ -3,15 +3,39 @@
 
 // GET /api/salons - List all active salons
 if ($method === 'GET' && count($uriParts) === 1) {
+    try {
+        $stmt = $db->prepare("
+            SELECT id, name, slug, description, address, city, state, pincode, 
+                   phone, email, logo_url, cover_image_url, is_active
+            FROM salons
+            WHERE is_active = 1
+            ORDER BY created_at DESC
+        ");
+        $stmt->execute();
+        $salons = $stmt->fetchAll();
+        sendResponse(['salons' => $salons]);
+    } catch (PDOException $e) {
+        sendResponse(['error' => 'Query failed: ' . $e->getMessage()], 500);
+    }
+}
+
+// GET /api/salons/my - Get user's salons
+if ($method === 'GET' && $uriParts[1] === 'my') {
+    $userData = Auth::getUserFromToken();
+    if (!$userData) {
+        sendResponse(['error' => 'Unauthorized'], 401);
+    }
+
     $stmt = $db->prepare("
-        SELECT id, name, slug, description, address, city, state, pincode, 
-               phone, email, logo_url, cover_image_url, is_active
-        FROM salons
-        WHERE is_active = 1 AND approval_status = 'approved'
-        ORDER BY created_at DESC
+        SELECT s.*, ur.role
+        FROM salons s
+        INNER JOIN user_roles ur ON s.id = ur.salon_id
+        WHERE ur.user_id = ?
+        ORDER BY s.created_at DESC
     ");
-    $stmt->execute();
+    $stmt->execute([$userData['user_id']]);
     $salons = $stmt->fetchAll();
+
     sendResponse(['salons' => $salons]);
 }
 
@@ -39,13 +63,13 @@ if ($method === 'POST' && count($uriParts) === 1) {
     }
 
     $data = getRequestBody();
-    $salonId = bin2hex(random_bytes(16));
+    $salonId = Auth::generateUuid();
 
     $db->beginTransaction();
     try {
         $stmt = $db->prepare("
-            INSERT INTO salons (id, name, slug, description, address, city, state, pincode, phone, email, logo_url, cover_image_url)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            INSERT INTO salons (id, name, slug, description, address, city, state, pincode, phone, email, logo_url, cover_image_url, approval_status)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'approved')
         ");
         $stmt->execute([
             $salonId,
@@ -63,8 +87,9 @@ if ($method === 'POST' && count($uriParts) === 1) {
         ]);
 
         // Create owner role
-        $stmt = $db->prepare("INSERT INTO user_roles (user_id, salon_id, role) VALUES (?, ?, 'owner')");
-        $stmt->execute([$userData['user_id'], $salonId]);
+        $roleId = Auth::generateUuid();
+        $stmt = $db->prepare("INSERT INTO user_roles (id, user_id, salon_id, role) VALUES (?, ?, ?, 'owner')");
+        $stmt->execute([$roleId, $userData['user_id'], $salonId]);
 
         $db->commit();
 
@@ -123,24 +148,6 @@ if ($method === 'PUT' && count($uriParts) === 2) {
     sendResponse(['salon' => $salon]);
 }
 
-// GET /api/salons/my - Get user's salons
-if ($method === 'GET' && $uriParts[1] === 'my') {
-    $userData = Auth::getUserFromToken();
-    if (!$userData) {
-        sendResponse(['error' => 'Unauthorized'], 401);
-    }
 
-    $stmt = $db->prepare("
-        SELECT s.*, ur.role
-        FROM salons s
-        INNER JOIN user_roles ur ON s.id = ur.salon_id
-        WHERE ur.user_id = ?
-        ORDER BY s.created_at DESC
-    ");
-    $stmt->execute([$userData['user_id']]);
-    $salons = $stmt->fetchAll();
-
-    sendResponse(['salons' => $salons]);
-}
 
 sendResponse(['error' => 'Salon route not found'], 404);

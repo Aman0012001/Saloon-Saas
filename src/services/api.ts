@@ -1,7 +1,7 @@
 // API Service for PHP/MySQL Backend
 // This replaces Supabase client calls
 
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost/backend/api';
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || `http://localhost:8000/backend/api`;
 
 // Helper function to get auth token
 const getAuthToken = (): string | null => {
@@ -20,27 +20,36 @@ const fetchWithAuth = async (url: string, options: RequestInit = {}) => {
         headers['Authorization'] = `Bearer ${token}`;
     }
 
-    const response = await fetch(`${API_BASE_URL}${url}`, {
-        ...options,
-        headers,
-    });
+    console.log(`[API Fetch] ${options.method || 'GET'} ${API_BASE_URL}${url}`);
 
-    if (!response.ok) {
-        const error = await response.json().catch(() => ({ error: 'Request failed' }));
-        throw new Error(error.error || `HTTP ${response.status}`);
+    try {
+        const response = await fetch(`${API_BASE_URL}${url}`, {
+            ...options,
+            headers,
+        });
+
+        if (!response.ok) {
+            const error = await response.json().catch(() => ({ error: 'Request failed' }));
+            console.error(`[API Error] Status: ${response.status}`, error);
+            throw new Error(error.error || `HTTP ${response.status}`);
+        }
+
+        const json = await response.json();
+        return json.data !== undefined ? json.data : json;
+    } catch (err: any) {
+        console.error(`[API Network Error] ${err.message}`);
+        throw err;
     }
-
-    return response.json();
 };
 
 // Authentication API
 export const authAPI = {
-    async signup(email: string, password: string, full_name: string) {
+    async signup(email: string, password: string, full_name: string, extraData: any = {}) {
         const data = await fetchWithAuth('/auth/signup', {
             method: 'POST',
-            body: JSON.stringify({ email, password, full_name }),
+            body: JSON.stringify({ email, password, full_name, ...extraData }),
         });
-        if (data.token) {
+        if (data && data.token) {
             localStorage.setItem('auth_token', data.token);
         }
         return data;
@@ -51,19 +60,19 @@ export const authAPI = {
             method: 'POST',
             body: JSON.stringify({ email, password }),
         });
-        if (data.token) {
+        if (data && data.token) {
             localStorage.setItem('auth_token', data.token);
         }
         return data;
     },
 
     async logout() {
-        await fetchWithAuth('/auth/logout', { method: 'POST' });
+        // Optional: notify backend
         localStorage.removeItem('auth_token');
     },
 
     async getCurrentUser() {
-        return fetchWithAuth('/auth/me');
+        return await fetchWithAuth('/auth/me');
     },
 };
 
@@ -71,17 +80,17 @@ export const authAPI = {
 export const salonsAPI = {
     async getAll() {
         const data = await fetchWithAuth('/salons');
-        return data.data || [];
+        return data?.salons || data || [];
     },
 
     async getById(id: string) {
         const data = await fetchWithAuth(`/salons/${id}`);
-        return data.data;
+        return data?.salon || data;
     },
 
     async getMySalons() {
         const data = await fetchWithAuth('/salons/my');
-        return data.data || [];
+        return data?.salons || data || [];
     },
 
     async create(salonData: any) {
@@ -89,7 +98,7 @@ export const salonsAPI = {
             method: 'POST',
             body: JSON.stringify(salonData),
         });
-        return data.data;
+        return data?.salon || data;
     },
 
     async update(id: string, salonData: any) {
@@ -97,36 +106,40 @@ export const salonsAPI = {
             method: 'PUT',
             body: JSON.stringify(salonData),
         });
-        return data.data;
+        return data?.salon || data;
     },
 };
 
 // Services API
 export const servicesAPI = {
-    async getBySalon(salonId: string) {
-        const data = await fetchWithAuth(`/services?salon_id=${salonId}`);
-        return data.data || [];
+    async getAll() {
+        const data = await fetchWithAuth('/services');
+        return data?.services || data || [];
+    },
+
+    async getBySalon(salonId: string, includeInactive: boolean = false) {
+        const url = `/services?salon_id=${salonId}${includeInactive ? '&include_inactive=1' : ''}`;
+        const data = await fetchWithAuth(url);
+        return data?.services || data || [];
     },
 
     async getById(id: string) {
         const data = await fetchWithAuth(`/services/${id}`);
-        return data.data;
+        return data?.service || data;
     },
 
     async create(serviceData: any) {
-        const data = await fetchWithAuth('/services', {
+        return await fetchWithAuth('/services', {
             method: 'POST',
             body: JSON.stringify(serviceData),
         });
-        return data.data;
     },
 
     async update(id: string, serviceData: any) {
-        const data = await fetchWithAuth(`/services/${id}`, {
+        return await fetchWithAuth(`/services/${id}`, {
             method: 'PUT',
             body: JSON.stringify(serviceData),
         });
-        return data.data;
     },
 
     async delete(id: string) {
@@ -136,31 +149,92 @@ export const servicesAPI = {
 
 // Bookings API
 export const bookingsAPI = {
-    async getAll(filters?: { user_id?: string; salon_id?: string }) {
+    async getAll(filters?: { user_id?: string; salon_id?: string; date?: string; start_date?: string; end_date?: string }) {
         const params = new URLSearchParams(filters as any);
         const data = await fetchWithAuth(`/bookings?${params}`);
-        return data.data || [];
+        return data?.bookings || data || [];
     },
 
     async getById(id: string) {
         const data = await fetchWithAuth(`/bookings/${id}`);
-        return data.data;
+        return data?.booking || data;
     },
 
     async create(bookingData: any) {
-        const data = await fetchWithAuth('/bookings', {
+        return await fetchWithAuth('/bookings', {
             method: 'POST',
             body: JSON.stringify(bookingData),
         });
-        return data.data;
     },
 
     async updateStatus(id: string, status: string) {
-        const data = await fetchWithAuth(`/bookings/${id}`, {
+        return await fetchWithAuth(`/bookings/${id}`, {
             method: 'PUT',
             body: JSON.stringify({ status }),
         });
-        return data.data;
+    },
+
+    async update(id: string, bookingData: any) {
+        return await fetchWithAuth(`/bookings/${id}`, {
+            method: 'PUT',
+            body: JSON.stringify(bookingData),
+        });
+    }
+};
+
+// Admin API
+export const adminAPI = {
+    async getStats() {
+        return await fetchWithAuth('/admin/stats');
+    },
+
+    async getAllSalons() {
+        const data = await fetchWithAuth('/admin/salons');
+        return data?.salons || data || [];
+    },
+
+    async approveSalon(salonId: string) {
+        return await fetchWithAuth(`/admin/salons/${salonId}/approve`, {
+            method: 'PUT',
+        });
+    },
+
+    async rejectSalon(salonId: string, reason: string) {
+        return await fetchWithAuth(`/admin/salons/${salonId}/reject`, {
+            method: 'PUT',
+            body: JSON.stringify({ reason }),
+        });
+    },
+
+    async getAllBookings() {
+        const data = await fetchWithAuth('/admin/bookings');
+        return data?.bookings || data || [];
+    },
+
+    async getAllUsers() {
+        const data = await fetchWithAuth('/admin/users');
+        return data?.users || data || [];
+    },
+
+    async getReports(range: string = '30') {
+        const data = await fetchWithAuth(`/admin/reports?range=${range}`);
+        return data?.reports || data || [];
+    },
+
+    async getAllPayments() {
+        const data = await fetchWithAuth('/admin/payments');
+        return data?.payments || data || [];
+    },
+
+    async getSettings() {
+        return await fetchWithAuth('/admin/settings');
+    },
+
+    async updateSettings(settings: any) {
+        return await fetchWithAuth('/admin/settings', {
+            method: 'PUT',
+            body: JSON.stringify(settings),
+        });
     },
 };
 
@@ -168,55 +242,12 @@ export const bookingsAPI = {
 export const userRolesAPI = {
     async getByUser(userId: string) {
         const data = await fetchWithAuth(`/users/roles?user_id=${userId}`);
-        return data.data || [];
+        return data?.roles || data || [];
     },
 
     async getBySalon(salonId: string) {
         const data = await fetchWithAuth(`/users/roles?salon_id=${salonId}`);
-        return data.data || [];
-    },
-};
-
-// Admin API
-export const adminAPI = {
-    async getStats() {
-        const data = await fetchWithAuth('/admin/stats');
-        return data.data;
-    },
-
-    async getAllSalons() {
-        const data = await fetchWithAuth('/admin/salons');
-        return data.data || [];
-    },
-
-    async approveSalon(salonId: string) {
-        const data = await fetchWithAuth(`/admin/salons/${salonId}/approve`, {
-            method: 'PUT',
-        });
-        return data.data;
-    },
-
-    async rejectSalon(salonId: string, reason: string) {
-        const data = await fetchWithAuth(`/admin/salons/${salonId}/reject`, {
-            method: 'PUT',
-            body: JSON.stringify({ reason }),
-        });
-        return data.data;
-    },
-
-    async getAllBookings() {
-        const data = await fetchWithAuth('/admin/bookings');
-        return data.data || [];
-    },
-
-    async getAllUsers() {
-        const data = await fetchWithAuth('/admin/users');
-        return data.data || [];
-    },
-
-    async getAllPayments() {
-        const data = await fetchWithAuth('/admin/payments');
-        return data.data || [];
+        return data?.roles || data || [];
     },
 };
 
@@ -224,12 +255,12 @@ export const adminAPI = {
 export const subscriptionsAPI = {
     async getPlans() {
         const data = await fetchWithAuth('/subscriptions/plans');
-        return data.data || [];
+        return data?.plans || data || [];
     },
 
     async getMySalonSubscriptions(salonId: string) {
         const data = await fetchWithAuth(`/subscriptions/my?salon_id=${salonId}`);
-        return data.data || [];
+        return data?.subscriptions || data || [];
     },
 };
 
@@ -237,7 +268,7 @@ export const subscriptionsAPI = {
 export const profilesAPI = {
     async getMe() {
         const data = await fetchWithAuth('/users/me');
-        return data.data;
+        return data?.user || data;
     },
 
     async updateMe(profileData: any) {
@@ -245,12 +276,60 @@ export const profilesAPI = {
             method: 'PUT',
             body: JSON.stringify(profileData),
         });
-        return data.data;
+        return data?.user || data;
     },
 
     async getById(userId: string) {
         const data = await fetchWithAuth(`/profiles/${userId}`);
-        return data.data;
+        return data?.profile || data;
+    },
+};
+
+// Staff Profiles API
+export const staffProfilesAPI = {
+    async getBySalon(salonId: string) {
+        const data = await fetchWithAuth(`/staff?salon_id=${salonId}`);
+        return data?.staff || data || [];
+    },
+
+    async create(staffData: any) {
+        return await fetchWithAuth('/staff', {
+            method: 'POST',
+            body: JSON.stringify(staffData),
+        });
+    },
+
+    async update(id: string, staffData: any) {
+        return await fetchWithAuth(`/staff/${id}`, {
+            method: 'PUT',
+            body: JSON.stringify(staffData),
+        });
+    },
+
+    async delete(id: string) {
+        await fetchWithAuth(`/staff/${id}`, { method: 'DELETE' });
+    },
+};
+
+// Notifications API
+export const notificationsAPI = {
+    async getAll(filters?: { salon_id?: string; unread_only?: string }) {
+        const params = new URLSearchParams(filters as any);
+        const data = await fetchWithAuth(`/notifications?${params}`);
+        return data?.notifications || data || [];
+    },
+
+    async markAsRead(id: string) {
+        return await fetchWithAuth(`/notifications/${id}/read`, {
+            method: 'PUT',
+        });
+    },
+
+    async markAllAsRead(salonId?: string) {
+        const url = `/notifications/read-all${salonId ? `?salon_id=${salonId}` : ''}`;
+        return await fetchWithAuth(url, {
+            method: 'PUT',
+        });
     },
 };
 
@@ -260,10 +339,12 @@ export const api = {
     salons: salonsAPI,
     services: servicesAPI,
     bookings: bookingsAPI,
+    staff: staffProfilesAPI,
     userRoles: userRolesAPI,
     admin: adminAPI,
     subscriptions: subscriptionsAPI,
     profiles: profilesAPI,
+    notifications: notificationsAPI,
 };
 
 export default api;

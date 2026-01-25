@@ -1,8 +1,23 @@
 <?php
-require_once 'config.php';
+require_once __DIR__ . '/config.php';
 
 class Auth
 {
+    public static function generateUuid()
+    {
+        return sprintf(
+            '%04x%04x-%04x-%04x-%04x-%04x%04x%04x',
+            mt_rand(0, 0xffff),
+            mt_rand(0, 0xffff),
+            mt_rand(0, 0xffff),
+            mt_rand(0, 0x0fff) | 0x4000,
+            mt_rand(0, 0x3fff) | 0x8000,
+            mt_rand(0, 0xffff),
+            mt_rand(0, 0xffff),
+            mt_rand(0, 0xffff)
+        );
+    }
+
 
     public static function hashPassword($password)
     {
@@ -63,12 +78,30 @@ class Auth
 
     public static function getUserFromToken()
     {
-        $headers = getallheaders();
         $token = null;
+        $headers = [];
 
-        if (isset($headers['Authorization'])) {
-            $authHeader = $headers['Authorization'];
-            $token = str_replace('Bearer ', '', $authHeader);
+        if (function_exists('getallheaders')) {
+            $headers = getallheaders();
+        } elseif (function_exists('apache_request_headers')) {
+            $headers = apache_request_headers();
+        }
+
+        // Search for Authorization header (case-insensitive)
+        foreach ($headers as $key => $value) {
+            if (strtolower($key) === 'authorization') {
+                $token = str_replace(['Bearer ', 'bearer '], '', $value);
+                break;
+            }
+        }
+
+        // Fallback to server variables
+        if (!$token) {
+            if (isset($_SERVER['HTTP_AUTHORIZATION'])) {
+                $token = str_replace(['Bearer ', 'bearer '], '', $_SERVER['HTTP_AUTHORIZATION']);
+            } elseif (isset($_SERVER['REDIRECT_HTTP_AUTHORIZATION'])) {
+                $token = str_replace(['Bearer ', 'bearer '], '', $_SERVER['REDIRECT_HTTP_AUTHORIZATION']);
+            }
         }
 
         return self::verifyToken($token);

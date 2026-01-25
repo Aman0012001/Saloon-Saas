@@ -6,6 +6,8 @@ import {
   Building2,
   Users,
   Download,
+  Activity,
+  Zap,
 } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -16,10 +18,9 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { AdminLayout } from "@/components/admin/AdminLayout";
-import { supabase } from "@/integrations/supabase/client";
-import { format, subDays, startOfMonth, endOfMonth, eachDayOfInterval } from "date-fns";
+import api from "@/services/api";
+import { format } from "date-fns";
 import {
   BarChart,
   Bar,
@@ -28,149 +29,27 @@ import {
   CartesianGrid,
   Tooltip,
   ResponsiveContainer,
-  LineChart,
-  Line,
   PieChart,
   Pie,
   Cell,
+  AreaChart,
+  Area,
 } from "recharts";
 
-interface DailyBooking {
-  date: string;
-  count: number;
-}
-
-interface TopSalon {
-  id: string;
-  name: string;
-  bookings: number;
-}
-
-interface TopService {
-  name: string;
-  bookings: number;
-}
+const COLORS = ["#3b82f6", "#10b981", "#f59e0b", "#ef4444", "#8b5cf6"];
 
 export default function AdminReports() {
   const [loading, setLoading] = useState(true);
   const [dateRange, setDateRange] = useState("30");
-  const [dailyBookings, setDailyBookings] = useState<DailyBooking[]>([]);
-  const [topSalons, setTopSalons] = useState<TopSalon[]>([]);
-  const [topServices, setTopServices] = useState<TopService[]>([]);
-  const [stats, setStats] = useState({
-    totalBookings: 0,
-    completedBookings: 0,
-    cancelledBookings: 0,
-    avgBookingsPerDay: 0,
-  });
+  const [reportData, setReportData] = useState<any>(null);
 
   const fetchReportData = async () => {
-    setLoading(true);
-    const days = parseInt(dateRange);
-    const startDate = format(subDays(new Date(), days), 'yyyy-MM-dd');
-
     try {
-      // Fetch bookings for the period
-      const { data: bookingsData } = await supabase
-        .from('bookings')
-        .select('id, booking_date, status, salon_id, service_id, created_at')
-        .gte('created_at', startDate);
-
-      if (!bookingsData) {
-        setLoading(false);
-        return;
-      }
-
-      // Calculate daily bookings
-      const dailyCounts = new Map<string, number>();
-      const interval = eachDayOfInterval({
-        start: subDays(new Date(), days),
-        end: new Date(),
-      });
-      
-      interval.forEach(date => {
-        dailyCounts.set(format(date, 'yyyy-MM-dd'), 0);
-      });
-
-      bookingsData.forEach(b => {
-        const date = format(new Date(b.created_at), 'yyyy-MM-dd');
-        if (dailyCounts.has(date)) {
-          dailyCounts.set(date, (dailyCounts.get(date) || 0) + 1);
-        }
-      });
-
-      setDailyBookings(
-        Array.from(dailyCounts.entries()).map(([date, count]) => ({
-          date: format(new Date(date), 'MMM d'),
-          count,
-        }))
-      );
-
-      // Calculate stats
-      const completed = bookingsData.filter(b => b.status === 'completed').length;
-      const cancelled = bookingsData.filter(b => b.status === 'cancelled').length;
-
-      setStats({
-        totalBookings: bookingsData.length,
-        completedBookings: completed,
-        cancelledBookings: cancelled,
-        avgBookingsPerDay: Math.round(bookingsData.length / days),
-      });
-
-      // Top salons
-      const salonCounts = new Map<string, number>();
-      bookingsData.forEach(b => {
-        if (b.salon_id) {
-          salonCounts.set(b.salon_id, (salonCounts.get(b.salon_id) || 0) + 1);
-        }
-      });
-
-      const topSalonIds = Array.from(salonCounts.entries())
-        .sort((a, b) => b[1] - a[1])
-        .slice(0, 5);
-
-      if (topSalonIds.length > 0) {
-        const { data: salonsData } = await supabase
-          .from('salons')
-          .select('id, name')
-          .in('id', topSalonIds.map(s => s[0]));
-
-        const salonsMap = new Map((salonsData || []).map(s => [s.id, s.name]));
-        setTopSalons(
-          topSalonIds.map(([id, count]) => ({
-            id,
-            name: salonsMap.get(id) || 'Unknown',
-            bookings: count,
-          }))
-        );
-      }
-
-      // Top services
-      const serviceCounts = new Map<string, number>();
-      bookingsData.forEach(b => {
-        serviceCounts.set(b.service_id, (serviceCounts.get(b.service_id) || 0) + 1);
-      });
-
-      const topServiceIds = Array.from(serviceCounts.entries())
-        .sort((a, b) => b[1] - a[1])
-        .slice(0, 5);
-
-      if (topServiceIds.length > 0) {
-        const { data: servicesData } = await supabase
-          .from('services')
-          .select('id, name')
-          .in('id', topServiceIds.map(s => s[0]));
-
-        const servicesMap = new Map((servicesData || []).map(s => [s.id, s.name]));
-        setTopServices(
-          topServiceIds.map(([id, count]) => ({
-            name: servicesMap.get(id) || 'Unknown',
-            bookings: count,
-          }))
-        );
-      }
+      setLoading(true);
+      const data = await api.admin.getReports(dateRange);
+      setReportData(data);
     } catch (error) {
-      console.error('Error fetching report data:', error);
+      console.error('Local report sync failed:', error);
     } finally {
       setLoading(false);
     }
@@ -180,238 +59,125 @@ export default function AdminReports() {
     fetchReportData();
   }, [dateRange]);
 
-  const COLORS = ['#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6'];
+  if (loading || !reportData) {
+    return (
+      <AdminLayout>
+        <div className="flex items-center justify-center h-screen">
+          <Activity className="w-12 h-12 text-accent animate-pulse" />
+        </div>
+      </AdminLayout>
+    );
+  }
 
   return (
     <AdminLayout>
-      <div className="space-y-6 bg-gray-900 text-white min-h-screen">
-        {/* Header - Dark Theme */}
-        <div className="relative overflow-hidden rounded-2xl bg-gradient-to-br from-gray-800 via-gray-700 to-black p-8 text-white">
-          <div className="absolute inset-0 bg-black/40"></div>
-          <div className="relative z-10 flex flex-col md:flex-row md:items-center md:justify-between gap-4">
-            <div>
-              <div className="flex items-center gap-3 mb-2">
-                <div className="h-12 w-12 rounded-xl bg-white/20 backdrop-blur-sm flex items-center justify-center">
-                  <BarChart3 className="h-6 w-6" />
-                </div>
-                <div>
-                  <h1 className="text-4xl font-bold">Reports & Analytics</h1>
-                  <p className="text-gray-300 text-lg">Platform performance insights</p>
-                </div>
+      <div className="space-y-8">
+        <div className="bg-slate-900 rounded-[2.5rem] p-10 text-white shadow-2xl relative overflow-hidden">
+          <div className="absolute top-0 right-0 w-80 h-80 bg-accent/20 blur-[120px] rounded-full" />
+          <div className="relative z-10 flex flex-col md:flex-row items-center justify-between gap-6">
+            <div className="flex items-center gap-5">
+              <div className="h-16 w-16 bg-white/10 backdrop-blur-md rounded-2xl flex items-center justify-center border border-white/10 text-accent">
+                <BarChart3 className="h-8 h-8" />
+              </div>
+              <div>
+                <h1 className="text-4xl font-black tracking-tight">Intelligence Nexus</h1>
+                <p className="text-slate-400 font-bold uppercase tracking-widest text-[10px]">Aggregated Local Performance Data</p>
               </div>
             </div>
-            <div className="flex items-center gap-4">
+            <div className="flex gap-4">
               <Select value={dateRange} onValueChange={setDateRange}>
-                <SelectTrigger className="w-[180px] bg-gray-700 border-gray-600 text-white hover:bg-gray-600">
+                <SelectTrigger className="w-48 bg-white/10 border-white/10 text-white font-bold h-12 rounded-xl">
                   <SelectValue />
                 </SelectTrigger>
-                <SelectContent className="bg-gray-800 border-gray-700">
-                  <SelectItem value="7" className="text-white hover:bg-gray-700 focus:bg-gray-700">Last 7 days</SelectItem>
-                  <SelectItem value="30" className="text-white hover:bg-gray-700 focus:bg-gray-700">Last 30 days</SelectItem>
-                  <SelectItem value="90" className="text-white hover:bg-gray-700 focus:bg-gray-700">Last 90 days</SelectItem>
+                <SelectContent>
+                  <SelectItem value="7">Last 168 Hours</SelectItem>
+                  <SelectItem value="30">Lunar Cycle (30d)</SelectItem>
+                  <SelectItem value="90">Quarterly View</SelectItem>
                 </SelectContent>
               </Select>
-              <Button variant="outline" className="border-gray-600 text-gray-300 hover:bg-gray-700">
-                <Download className="h-4 w-4 mr-2" />
-                Export
+              <Button className="bg-accent text-white font-black rounded-xl h-12 px-8 shadow-lg shadow-accent/20">
+                <Download className="w-4 h-4 mr-2" /> DATA EXPORT
               </Button>
             </div>
           </div>
-          
-          {/* Floating Elements */}
-          <div className="absolute top-4 right-4 h-32 w-32 rounded-full bg-white/10 blur-3xl"></div>
-          <div className="absolute bottom-4 left-4 h-24 w-24 rounded-full bg-blue-400/20 blur-2xl"></div>
         </div>
 
-        {/* Stats - Dark Theme */}
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-          <Card className="border-0 shadow-lg bg-gradient-to-br from-gray-800 to-gray-900 border border-gray-700">
-            <CardContent className="p-6">
-              <div className="flex items-center justify-between">
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
+          {[
+            { label: "Gross Volume", value: reportData.total_revenue ?? 0, icon: TrendingUp, color: "text-emerald-500", bg: "bg-emerald-50" },
+            { label: "Successful Bookings", value: reportData.total_bookings ?? 0, icon: Zap, color: "text-blue-500", bg: "bg-blue-50" },
+            { label: "Cancellation Rate", value: (reportData.cancellation_rate ?? 0) + "%", icon: Activity, color: "text-red-500", bg: "bg-red-50" },
+            { label: "New Clients", value: reportData.new_users ?? 0, icon: Users, color: "text-amber-500", bg: "bg-amber-50" },
+          ].map((stat, i) => (
+            <Card key={i} className="border-none shadow-sm bg-white rounded-3xl p-6 group hover:shadow-xl transition-all">
+              <div className="flex justify-between items-start">
                 <div>
-                  <p className="text-sm text-gray-400">Total Bookings</p>
-                  <p className="text-3xl font-bold text-white">{stats.totalBookings}</p>
+                  <p className="text-[10px] font-black uppercase text-slate-400 tracking-widest leading-none">{stat.label}</p>
+                  <p className="text-3xl font-black text-slate-900 mt-3">{stat.value}</p>
                 </div>
-                <Calendar className="h-8 w-8 text-blue-400 opacity-50" />
+                <div className={`w-12 h-12 rounded-xl ${stat.bg} ${stat.color} flex items-center justify-center group-hover:scale-110 transition-transform`}>
+                  <stat.icon className="w-6 h-6" />
+                </div>
               </div>
-            </CardContent>
-          </Card>
-          <Card className="border-0 shadow-lg bg-gradient-to-br from-gray-800 to-gray-900 border border-gray-700">
-            <CardContent className="p-6">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-sm text-gray-400">Completed</p>
-                  <p className="text-3xl font-bold text-white">{stats.completedBookings}</p>
-                </div>
-                <TrendingUp className="h-8 w-8 text-green-400 opacity-50" />
-              </div>
-            </CardContent>
-          </Card>
-          <Card className="border-0 shadow-lg bg-gradient-to-br from-gray-800 to-gray-900 border border-gray-700">
-            <CardContent className="p-6">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-sm text-gray-400">Cancelled</p>
-                  <p className="text-3xl font-bold text-white">{stats.cancelledBookings}</p>
-                </div>
-                <BarChart3 className="h-8 w-8 text-red-400 opacity-50" />
-              </div>
-            </CardContent>
-          </Card>
-          <Card className="border-0 shadow-lg bg-gradient-to-br from-gray-800 to-gray-900 border border-gray-700">
-            <CardContent className="p-6">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-sm text-gray-400">Avg/Day</p>
-                  <p className="text-3xl font-bold text-white">{stats.avgBookingsPerDay}</p>
-                </div>
-                <Calendar className="h-8 w-8 text-gray-400 opacity-50" />
-              </div>
-            </CardContent>
-          </Card>
-        </div>
-
-        {loading ? (
-          <div className="flex items-center justify-center h-64">
-            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
-          </div>
-        ) : (
-          <>
-            {/* Bookings Chart - Dark Theme */}
-            <Card className="border-0 shadow-lg bg-gray-800 border border-gray-700">
-              <CardHeader className="bg-gray-700 rounded-t-lg border-b border-gray-600">
-                <CardTitle className="text-white">Booking Trends</CardTitle>
-                <CardDescription className="text-gray-400">Daily booking volume over the selected period</CardDescription>
-              </CardHeader>
-              <CardContent className="p-6">
-                <div className="h-[300px]">
-                  <ResponsiveContainer width="100%" height="100%">
-                    <BarChart data={dailyBookings}>
-                      <CartesianGrid strokeDasharray="3 3" className="stroke-gray-600" />
-                      <XAxis 
-                        dataKey="date" 
-                        className="text-xs"
-                        tick={{ fill: '#9ca3af' }}
-                      />
-                      <YAxis 
-                        className="text-xs"
-                        tick={{ fill: '#9ca3af' }}
-                      />
-                      <Tooltip 
-                        contentStyle={{ 
-                          backgroundColor: '#1f2937',
-                          border: '1px solid #374151',
-                          borderRadius: '8px',
-                          color: '#f9fafb'
-                        }}
-                      />
-                      <Bar 
-                        dataKey="count" 
-                        fill="#3b82f6" 
-                        radius={[4, 4, 0, 0]}
-                      />
-                    </BarChart>
-                  </ResponsiveContainer>
-                </div>
-              </CardContent>
             </Card>
+          ))}
+        </div>
 
-            {/* Top Performers - Dark Theme */}
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              {/* Top Salons */}
-              <Card className="border-0 shadow-lg bg-gray-800 border border-gray-700">
-                <CardHeader className="bg-gray-700 rounded-t-lg border-b border-gray-600">
-                  <CardTitle className="text-white">Top Performing Salons</CardTitle>
-                  <CardDescription className="text-gray-400">By booking volume</CardDescription>
-                </CardHeader>
-                <CardContent className="p-6">
-                  {topSalons.length === 0 ? (
-                    <p className="text-center text-gray-400 py-8">No data available</p>
-                  ) : (
-                    <div className="space-y-4">
-                      {topSalons.map((salon, i) => (
-                        <div key={salon.id} className="flex items-center gap-4">
-                          <div 
-                            className="w-8 h-8 rounded-full flex items-center justify-center text-sm font-bold text-white"
-                            style={{ backgroundColor: COLORS[i % COLORS.length] }}
-                          >
-                            {i + 1}
-                          </div>
-                          <div className="flex-1">
-                            <p className="font-medium text-white">{salon.name}</p>
-                            <p className="text-sm text-gray-400">{salon.bookings} bookings</p>
-                          </div>
-                          <div className="w-24 h-2 rounded-full bg-gray-700 overflow-hidden">
-                            <div 
-                              className="h-full rounded-full"
-                              style={{ 
-                                width: `${(salon.bookings / (topSalons[0]?.bookings || 1)) * 100}%`,
-                                backgroundColor: COLORS[i % COLORS.length],
-                              }}
-                            />
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                </CardContent>
-              </Card>
-
-              {/* Top Services */}
-              <Card className="border-0 shadow-lg bg-gray-800 border border-gray-700">
-                <CardHeader className="bg-gray-700 rounded-t-lg border-b border-gray-600">
-                  <CardTitle className="text-white">Most Booked Services</CardTitle>
-                  <CardDescription className="text-gray-400">Popular services across the platform</CardDescription>
-                </CardHeader>
-                <CardContent className="p-6">
-                  {topServices.length === 0 ? (
-                    <p className="text-center text-gray-400 py-8">No data available</p>
-                  ) : (
-                    <div className="h-[250px]">
-                      <ResponsiveContainer width="100%" height="100%">
-                        <PieChart>
-                          <Pie
-                            data={topServices}
-                            cx="50%"
-                            cy="50%"
-                            innerRadius={60}
-                            outerRadius={80}
-                            paddingAngle={5}
-                            dataKey="bookings"
-                          >
-                            {topServices.map((entry, index) => (
-                              <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
-                            ))}
-                          </Pie>
-                          <Tooltip 
-                            contentStyle={{ 
-                              backgroundColor: '#1f2937',
-                              border: '1px solid #374151',
-                              borderRadius: '8px',
-                              color: '#f9fafb'
-                            }}
-                          />
-                        </PieChart>
-                      </ResponsiveContainer>
-                    </div>
-                  )}
-                  <div className="mt-4 space-y-2">
-                    {topServices.map((service, i) => (
-                      <div key={service.name} className="flex items-center gap-2 text-sm">
-                        <div 
-                          className="w-3 h-3 rounded-full"
-                          style={{ backgroundColor: COLORS[i % COLORS.length] }}
-                        />
-                        <span className="flex-1 text-white">{service.name}</span>
-                        <span className="text-gray-400">{service.bookings}</span>
-                      </div>
-                    ))}
-                  </div>
-                </CardContent>
-              </Card>
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+          <Card className="lg:col-span-2 border-none shadow-sm bg-white rounded-[2.5rem] p-8">
+            <div className="flex justify-between items-center mb-8">
+              <div>
+                <h3 className="text-xl font-black text-slate-900 tracking-tight leading-none">Revenue Trajectory</h3>
+                <p className="text-xs font-bold text-slate-400 uppercase tracking-widest mt-2">Historical income data</p>
+              </div>
             </div>
-          </>
-        )}
+            <div className="h-[350px]">
+              <ResponsiveContainer width="100%" height="100%">
+                <AreaChart data={reportData.revenue_history || []}>
+                  <defs>
+                    <linearGradient id="colorRev" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="5%" stopColor="#3b82f6" stopOpacity={0.1} />
+                      <stop offset="95%" stopColor="#3b82f6" stopOpacity={0} />
+                    </linearGradient>
+                  </defs>
+                  <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
+                  <XAxis dataKey="date" axisLine={false} tickLine={false} tick={{ fill: '#94a3b8', fontSize: 11, fontWeight: 700 }} dy={15} />
+                  <YAxis axisLine={false} tickLine={false} tick={{ fill: '#94a3b8', fontSize: 11, fontWeight: 700 }} dx={-15} />
+                  <Tooltip contentStyle={{ borderRadius: '20px', border: 'none', boxShadow: '0 10px 40px rgba(0,0,0,0.05)' }} />
+                  <Area type="monotone" dataKey="value" stroke="#3b82f6" strokeWidth={4} fillOpacity={1} fill="url(#colorRev)" />
+                </AreaChart>
+              </ResponsiveContainer>
+            </div>
+          </Card>
+
+          <Card className="border-none shadow-sm bg-white rounded-[2.5rem] p-8">
+            <h3 className="text-xl font-black text-slate-900 tracking-tight leading-none">Market Share</h3>
+            <p className="text-xs font-bold text-slate-400 uppercase tracking-widest mt-2 mb-8">Saloon Distribution</p>
+            <div className="h-[300px]">
+              <ResponsiveContainer width="100%" height="100%">
+                <PieChart>
+                  <Pie data={reportData.top_salons || []} dataKey="count" nameKey="name" cx="50%" cy="50%" innerRadius={60} outerRadius={85} paddingAngle={8}>
+                    {(reportData.top_salons || []).map((_: any, i: number) => (
+                      <Cell key={i} fill={COLORS[i % COLORS.length]} />
+                    ))}
+                  </Pie>
+                  <Tooltip />
+                </PieChart>
+              </ResponsiveContainer>
+            </div>
+            <div className="space-y-4 mt-4">
+              {(reportData.top_salons || []).map((s: any, i: number) => (
+                <div key={i} className="flex items-center justify-between">
+                  <div className="flex items-center gap-3">
+                    <div className="w-2 h-2 rounded-full" style={{ backgroundColor: COLORS[i % COLORS.length] }} />
+                    <p className="text-sm font-bold text-slate-700">{s.name}</p>
+                  </div>
+                  <p className="text-xs font-black text-slate-400">{s.count ?? 0} Transactions</p>
+                </div>
+              ))}
+            </div>
+          </Card>
+        </div>
       </div>
     </AdminLayout>
   );

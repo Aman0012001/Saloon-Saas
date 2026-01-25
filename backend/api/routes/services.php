@@ -4,18 +4,34 @@
 // GET /api/services?salon_id=xxx - Get services by salon
 if ($method === 'GET' && count($uriParts) === 1) {
     $salonId = $_GET['salon_id'] ?? null;
+    $includeInactive = isset($_GET['include_inactive']) && $_GET['include_inactive'] == '1';
 
-    if (!$salonId) {
-        sendResponse(['error' => 'salon_id is required'], 400);
+    if ($salonId) {
+        $query = "SELECT * FROM services WHERE salon_id = ?";
+        if (!$includeInactive) {
+            $query .= " AND is_active = 1";
+        }
+        $query .= " ORDER BY category, name";
+
+        $stmt = $db->prepare($query);
+        $stmt->execute([$salonId]);
+        $services = $stmt->fetchAll();
+    } else {
+        // Global fetch - for "All Services" page if no salon specified
+        // Only show active services from active salons
+        // We use RAND() to show 'mixed' services across different categories and salons
+        $stmt = $db->prepare("
+            SELECT s.*, sln.name as salon_name, sln.city as salon_city, p.full_name as owner_name
+            FROM services s
+            JOIN salons sln ON s.salon_id = sln.id
+            LEFT JOIN user_roles ur ON sln.id = ur.salon_id AND ur.role = 'owner'
+            LEFT JOIN profiles p ON ur.user_id = p.user_id
+            WHERE s.is_active = 1 AND sln.is_active = 1
+            ORDER BY RAND()
+        ");
+        $stmt->execute();
+        $services = $stmt->fetchAll();
     }
-
-    $stmt = $db->prepare("
-        SELECT * FROM services
-        WHERE salon_id = ? AND is_active = 1
-        ORDER BY category, name
-    ");
-    $stmt->execute([$salonId]);
-    $services = $stmt->fetchAll();
 
     sendResponse(['services' => $services]);
 }
@@ -51,7 +67,7 @@ if ($method === 'POST' && count($uriParts) === 1) {
         sendResponse(['error' => 'Forbidden'], 403);
     }
 
-    $serviceId = bin2hex(random_bytes(16));
+    $serviceId = Auth::generateUuid();
     $stmt = $db->prepare("
         INSERT INTO services (id, salon_id, name, description, price, duration_minutes, category, image_url)
         VALUES (?, ?, ?, ?, ?, ?, ?, ?)

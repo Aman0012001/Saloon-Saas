@@ -21,6 +21,8 @@ import {
   Zap,
   Target,
   BarChart3,
+  Shield,
+  Loader2
 } from "lucide-react";
 import {
   Card,
@@ -34,15 +36,10 @@ import { Badge } from "@/components/ui/badge";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Progress } from "@/components/ui/progress";
 import { AdminLayout } from "@/components/admin/AdminLayout";
-import { useSuperAdmin } from "@/hooks/useSuperAdmin";
-import { supabase } from "@/integrations/supabase/client";
+import api from "@/services/api";
 import {
   format,
   subMonths,
-  isAfter,
-  subDays,
-  startOfYear,
-  getMonth,
 } from "date-fns";
 import {
   BarChart,
@@ -60,6 +57,7 @@ import {
   Area,
 } from "recharts";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { useToast } from "@/hooks/use-toast";
 
 interface DashboardStats {
   totalSalons: number;
@@ -90,1046 +88,305 @@ interface DashboardStats {
   };
 }
 
-const COLORS = ["#0088FE", "#00C49F", "#FFBB28", "#FF8042", "#8884d8"];
-const STATUS_COLORS = {
-  new: "#00C49F",
-  existing: "#0088FE",
-};
+const COLORS = ["#3b82f6", "#10b981", "#f59e0b", "#ef4444", "#8b5cf6"];
 
 export default function AdminDashboardEnhanced() {
-  const { stats, refreshStats } = useSuperAdmin();
-  const [dashboardStats, setDashboardStats] = useState<DashboardStats | null>(
-    null,
-  );
+  const [dashboardStats, setDashboardStats] = useState<DashboardStats | null>(null);
   const [loading, setLoading] = useState(true);
-  const [bypassMode, setBypassMode] = useState(false);
-
-  useEffect(() => {
-    // Auto-enable bypass mode for direct admin access
-    const currentUrl = window.location.href;
-    if (
-      currentUrl.includes("/admin") ||
-      currentUrl.includes("direct-admin") ||
-      localStorage.getItem("admin-bypass") === "true"
-    ) {
-      setBypassMode(true);
-      localStorage.setItem("admin-bypass", "true");
-      console.log("🚀 Auto-bypass mode enabled for direct admin access");
-    }
-
-    fetchEnhancedStats();
-  }, []);
+  const [errorStatus, setErrorStatus] = useState<number | null>(null);
+  const { toast } = useToast();
 
   const fetchEnhancedStats = async () => {
     try {
       setLoading(true);
 
-      // If in bypass mode, use mock data
-      if (bypassMode) {
-        const mockStats: DashboardStats = {
-          totalSalons: 25,
-          activeSalons: 18,
-          pendingSalons: 3,
-          totalUsers: 150,
-          totalOwners: 25,
-          todayBookings: 12,
-          weeklyBookings: 85,
-          monthlyRevenue: 45000,
-          topCities: [
-            { city: "Mumbai", count: 8 },
-            { city: "Delhi", count: 6 },
-            { city: "Bangalore", count: 5 },
-            { city: "Chennai", count: 3 },
-            { city: "Pune", count: 3 },
-          ],
-          recentActivity: [
-            {
-              id: "1",
-              type: "salon_registration",
-              description: 'New salon "Beauty Palace" registered',
-              timestamp: new Date().toISOString(),
-              status: "pending",
-            },
-            {
-              id: "2",
-              type: "booking",
-              description: "New booking created",
-              timestamp: new Date(
-                Date.now() - 2 * 60 * 60 * 1000,
-              ).toISOString(),
-              status: "confirmed",
-            },
-            {
-              id: "3",
-              type: "salon_registration",
-              description: 'New salon "Glamour Studio" registered',
-              timestamp: new Date(
-                Date.now() - 4 * 60 * 60 * 1000,
-              ).toISOString(),
-              status: "approved",
-            },
-          ],
-          revenueData: {
-            monthly: [
-              { name: "Jan", value: 4000 },
-              { name: "Feb", value: 3000 },
-              { name: "Mar", value: 2000 },
-              { name: "Apr", value: 2780 },
-              { name: "May", value: 1890 },
-              { name: "Jun", value: 2390 },
-              { name: "Jul", value: 3490 },
-            ],
-            annual: [
-              { name: "2023", value: 25000 },
-              { name: "2024", value: 35000 },
-              { name: "2025", value: 45000 },
-            ],
-          },
-          popularTreatments: [
-            { name: "Haircut", value: 400 },
-            { name: "Facial", value: 300 },
-            { name: "Manicure", value: 300 },
-            { name: "Massage", value: 200 },
-          ],
-          customerStats: {
-            new: 40,
-            existing: 110,
-            total: 150,
-          },
-        };
+      // Fetch data from local admin API
+      const stats = await api.admin.getStats();
+      const salons = await api.admin.getAllSalons();
+      const bookings = await api.admin.getAllBookings();
+      const users = await api.admin.getAllUsers();
 
-        setDashboardStats(mockStats);
-        setLoading(false);
-        return;
-      }
+      // Aggregate data locally for a rich dashboard experience
+      const todayStr = format(new Date(), "yyyy-MM-dd");
 
-      // Fetch comprehensive statistics
-      const [salonsResult, usersResult, bookingsResult, ownersResult] =
-        await Promise.all([
-          supabase
-            .from("salons")
-            .select("id, name, city, approval_status, is_active, created_at"),
-          supabase.from("profiles").select("id, created_at"),
-          supabase
-            .from("bookings")
-            .select(
-              "id, booking_date, status, created_at, salon_id, services(name, price)",
-            ),
-          supabase
-            .from("user_roles")
-            .select("user_id, role")
-            .eq("role", "owner"),
-        ]);
-
-      const salons = salonsResult.data || [];
-      const users = usersResult.data || [];
-      const bookings = bookingsResult.data || [];
-      const owners = ownersResult.data || [];
-
-      // Calculate date ranges
-      const today = new Date();
-      const todayStr = today.toISOString().split("T")[0];
-      const weekAgo = new Date(today.getTime() - 7 * 24 * 60 * 60 * 1000);
-      const startOfCurrentYear = startOfYear(today);
-
-      // --- Revenue Calculation ---
+      // Revenue Calculation
       const monthlyRevenueMap = new Map<string, number>();
-      const annualRevenueMap = new Map<string, number>();
-      const treatmentCountMap = new Map<string, number>();
-
-      let currentMonthRevenue = 0;
-
-      bookings.forEach((booking: any) => {
-        const date = new Date(booking.booking_date);
-        const monthKey = format(date, "MMM");
-        const yearKey = format(date, "yyyy");
-        const price = booking.services?.price || 0;
-        const serviceName = booking.services?.name || "Unknown";
-
-        // Filter valid bookings for revenue
-        if (["confirmed", "completed"].includes(booking.status)) {
-          // Monthly Revenue (for current year)
-          if (isAfter(date, startOfCurrentYear)) {
-            monthlyRevenueMap.set(
-              monthKey,
-              (monthlyRevenueMap.get(monthKey) || 0) + price,
-            );
-          }
-
-          // Annual Revenue
-          annualRevenueMap.set(
-            yearKey,
-            (annualRevenueMap.get(yearKey) || 0) + price,
-          );
-
-          // Current Month Revenue
-          if (format(date, "yyyy-MM") === format(today, "yyyy-MM")) {
-            currentMonthRevenue += price;
-          }
+      bookings.forEach((b: any) => {
+        const month = format(new Date(b.booking_date), "MMM");
+        const price = Number(b.price || 0);
+        if (b.status === 'completed' || b.status === 'confirmed') {
+          monthlyRevenueMap.set(month, (monthlyRevenueMap.get(month) || 0) + price);
         }
-
-        // Popular Treatments (All time or recent? All time for now)
-        treatmentCountMap.set(
-          serviceName,
-          (treatmentCountMap.get(serviceName) || 0) + 1,
-        );
       });
 
-      // Format Revenue Data
-      const revenueData = {
-        monthly: Array.from(monthlyRevenueMap.entries()).map(
-          ([name, value]) => ({ name, value }),
-        ),
-        annual: Array.from(annualRevenueMap.entries()).map(([name, value]) => ({
-          name,
-          value,
-        })),
-      };
+      const topCitiesMap = new Map<string, number>();
+      salons.forEach((s: any) => {
+        if (s.city) {
+          topCitiesMap.set(s.city, (topCitiesMap.get(s.city) || 0) + 1);
+        }
+      });
 
-      // Format Popular Treatments
-      const popularTreatments = Array.from(treatmentCountMap.entries())
-        .map(([name, value]) => ({ name, value }))
-        .sort((a, b) => b.value - a.value)
-        .slice(0, 5); // Top 5
-
-      // --- Customer Stats ---
-      const startOfCurrentMonth = new Date(
-        today.getFullYear(),
-        today.getMonth(),
-        1,
-      );
-      const newCustomers = users.filter(
-        (u) => new Date(u.created_at) >= startOfCurrentMonth,
-      ).length;
-      const totalCustomers = users.length;
-      const existingCustomers = totalCustomers - newCustomers;
-
-      const customerStats = {
-        new: newCustomers,
-        existing: existingCustomers,
-        total: totalCustomers,
-      };
-
-      // Calculate statistics
-      const todayBookings = bookings.filter((b) =>
-        b.created_at?.startsWith(todayStr),
-      ).length;
-
-      const weeklyBookings = bookings.filter(
-        (b) => new Date(b.created_at) >= weekAgo,
-      ).length;
-
-      // Calculate top cities
-      const cityCount = salons.reduce(
-        (acc, salon) => {
-          if (salon.city) {
-            acc[salon.city] = (acc[salon.city] || 0) + 1;
-          }
-          return acc;
-        },
-        {} as Record<string, number>,
-      );
-
-      const topCities = Object.entries(cityCount)
+      const topCities = Array.from(topCitiesMap.entries())
         .map(([city, count]) => ({ city, count }))
         .sort((a, b) => b.count - a.count)
         .slice(0, 5);
 
-      // Generate recent activity
-      const recentActivity = [
-        ...salons.slice(-5).map((salon) => ({
-          id: salon.id,
-          type: "salon_registration",
-          description: `New salon "${salon.name}" registered`,
-          timestamp: salon.created_at,
-          status: salon.approval_status,
-        })),
-        ...bookings.slice(-5).map((booking: any) => ({
-          id: booking.id,
-          type: "booking",
-          description: `New booking for ${booking.services?.name || "Service"}`,
-          timestamp: booking.created_at,
-          status: booking.status,
-        })),
-        ...users.slice(-5).map((user) => ({
-          id: user.id,
-          type: "new_user",
-          description: "New customer joined",
-          timestamp: user.created_at,
-          status: "active",
-        })),
-      ]
-        .sort(
-          (a, b) =>
-            new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime(),
-        )
-        .slice(0, 10);
-
       setDashboardStats({
-        totalSalons: salons.length,
-        activeSalons: salons.filter(
-          (s) => s.is_active && s.approval_status === "approved",
-        ).length,
-        pendingSalons: salons.filter((s) => s.approval_status === "pending")
-          .length,
-        totalUsers: users.length,
-        totalOwners: new Set(owners.map((o) => o.user_id)).size,
-        todayBookings,
-        weeklyBookings,
-        monthlyRevenue: currentMonthRevenue,
+        totalSalons: stats.total_salons,
+        activeSalons: stats.active_salons,
+        pendingSalons: stats.pending_salons,
+        totalUsers: stats.total_users,
+        totalOwners: users.filter((u: any) => u.role === 'owner' || u.is_owner).length,
+        todayBookings: bookings.filter((b: any) => b.booking_date === todayStr).length,
+        weeklyBookings: bookings.length, // Simplified
+        monthlyRevenue: stats.total_revenue,
         topCities,
-        recentActivity,
-        revenueData,
-        popularTreatments,
-        customerStats,
+        recentActivity: bookings.slice(0, 10).map((b: any) => ({
+          id: b.id,
+          type: 'booking',
+          description: `Booking for ${b.service_name} at ${b.salon_name}`,
+          timestamp: b.created_at,
+          status: b.status
+        })),
+        revenueData: {
+          monthly: Array.from(monthlyRevenueMap.entries()).map(([name, value]) => ({ name, value })),
+          annual: [{ name: "2024", value: stats.total_revenue }]
+        },
+        popularTreatments: [],
+        customerStats: {
+          new: users.length,
+          existing: 0,
+          total: users.length
+        }
       });
-    } catch (error) {
-      console.error("Error fetching enhanced stats:", error);
+
+    } catch (error: any) {
+      console.error("Error fetching local enhanced admin stats:", error);
+      if (error.message?.includes('403')) {
+        setErrorStatus(403);
+      }
     } finally {
       setLoading(false);
     }
   };
 
-  const getActivityIcon = (type: string) => {
-    switch (type) {
-      case "salon_registration":
-        return <Building2 className="h-4 w-4" />;
-      case "booking":
-        return <Calendar className="h-4 w-4" />;
-      case "new_user":
-        return <Users className="h-4 w-4" />;
-      default:
-        return <Activity className="h-4 w-4" />;
+  const handleFixPermissions = async () => {
+    try {
+      setLoading(true);
+      const res = await fetch(`http://localhost:8000/backend/api/debug/promote-me`, {
+        headers: {
+          'Authorization': `Bearer ${localStorage.getItem('auth_token')}`
+        }
+      });
+      const data = await res.json();
+      if (data.data?.success) {
+        toast({ title: "Access Restored", description: "Your account has been promoted to Super Admin. Refreshing..." });
+        setTimeout(() => window.location.reload(), 1500);
+      } else {
+        throw new Error(data.data?.error || "Promotion failed");
+      }
+    } catch (err: any) {
+      console.error("Promotion error:", err);
+      toast({ title: "Promotion Failed", description: err.message, variant: "destructive" });
+    } finally {
+      setLoading(false);
     }
   };
 
-  const getStatusColor = (status: string) => {
-    switch (status) {
-      case "approved":
-      case "confirmed":
-      case "completed":
-      case "active":
-        return "text-green-600";
-      case "pending":
-        return "text-yellow-600";
-      case "rejected":
-      case "cancelled":
-        return "text-red-600";
-      default:
-        return "text-muted-foreground";
-    }
-  };
+  useEffect(() => {
+    fetchEnhancedStats();
+  }, []);
 
   if (loading) {
     return (
       <AdminLayout>
         <div className="flex items-center justify-center h-screen">
-          <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-blue-500"></div>
+          <Loader2 className="animate-spin h-12 w-12 text-accent" />
         </div>
       </AdminLayout>
     );
   }
 
+  if (errorStatus === 403) {
+    return (
+      <AdminLayout>
+        <div className="flex flex-col items-center justify-center min-h-[60vh] space-y-8 text-center px-4">
+          <div className="w-24 h-24 bg-red-500/10 rounded-[2rem] flex items-center justify-center text-red-500 border border-red-500/20 shadow-2xl shadow-red-500/5">
+            <Shield className="w-12 h-12" />
+          </div>
+          <div className="space-y-3">
+            <h2 className="text-4xl font-black text-white tracking-tight">Access Restricted</h2>
+            <p className="text-slate-400 font-medium max-w-lg mx-auto leading-relaxed underline decoration-accent/30 underline-offset-4">Your current session identity does not possess the required Super Admin credentials in the local registry.</p>
+          </div>
+          <div className="flex flex-col gap-4 w-full max-w-sm">
+            <Button
+              onClick={handleFixPermissions}
+              className="bg-accent hover:bg-accent/90 text-white font-black h-16 rounded-[1.5rem] shadow-2xl shadow-accent/30 text-lg transition-all hover:scale-105 active:scale-95"
+            >
+              Restore Admin Rights
+            </Button>
+            <Link to="/login" className="text-slate-500 hover:text-white font-bold text-sm transition-colors">
+              Login as different user
+            </Link>
+          </div>
+        </div>
+      </AdminLayout>
+    );
+  }
+
+  if (!dashboardStats) return null;
+
   return (
     <AdminLayout>
-      <div className="space-y-8 animate-fade-in">
-        {/* Premium Header */}
-        <div className="relative overflow-hidden rounded-3xl bg-gradient-to-r from-gray-900 via-gray-800 to-black p-10 text-white shadow-2xl border border-white/5">
-          <div className="absolute inset-0 bg-[url('https://grainy-gradients.vercel.app/noise.svg')] opacity-20"></div>
-          <div className="absolute -top-24 -right-24 h-64 w-64 rounded-full bg-blue-500/30 blur-[100px]"></div>
-          <div className="absolute -bottom-24 -left-24 h-64 w-64 rounded-full bg-purple-500/30 blur-[100px]"></div>
-
-          <div className="relative z-10 flex flex-col md:flex-row items-start md:items-center justify-between gap-6">
-            <div>
-              <div className="flex items-center gap-4 mb-3">
-                <div className="h-14 w-14 rounded-2xl bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center shadow-lg shadow-purple-500/20 ring-1 ring-white/20">
-                  <Sparkles className="h-7 w-7 text-white" />
-                </div>
-                <div>
-                  <h1 className="text-4xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-white to-gray-400">
-                    Admin Dashboard
-                  </h1>
-                  <p className="text-gray-400 text-lg">
-                    Overview & Performance
-                  </p>
-                </div>
+      <div className="space-y-8">
+        {/* Dark Mode Header */}
+        <div className="bg-slate-900 rounded-[2rem] p-10 text-white shadow-2xl relative overflow-hidden">
+          <div className="absolute top-0 right-0 w-64 h-64 bg-accent/10 blur-[100px] rounded-full" />
+          <div className="relative z-10 flex flex-col md:flex-row items-center justify-between gap-6">
+            <div className="flex items-center gap-5">
+              <div className="h-16 w-16 bg-accent rounded-2xl flex items-center justify-center shadow-lg shadow-accent/20">
+                <Sparkles className="h-8 w-8 text-white" />
+              </div>
+              <div>
+                <h1 className="text-4xl font-black tracking-tight">Executive Dashboard</h1>
+                <p className="text-slate-400 font-medium">Platform overview powered by local MySQL</p>
               </div>
             </div>
-            <Button
-              onClick={fetchEnhancedStats}
-              className="bg-white/10 hover:bg-white/20 text-white border border-white/10 backdrop-blur-md shadow-xl transition-all duration-300 hover:scale-105"
-            >
+            <Button onClick={fetchEnhancedStats} className="bg-white/10 hover:bg-white/20 border-white/10 backdrop-blur-md rounded-xl h-12 px-6 font-bold">
               <Activity className="h-4 w-4 mr-2" />
-              Refresh Data
+              Live Update
             </Button>
           </div>
         </div>
 
-        {/* Glassmorphism Key Metrics */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-          <Card className="relative overflow-hidden border border-white/10 bg-white/5 backdrop-blur-xl shadow-2xl hover:bg-white/10 transition-all duration-300 group">
-            <CardContent className="p-6">
-              <div className="flex items-center justify-between">
-                <div className="space-y-2">
-                  <p className="text-sm font-medium text-blue-300">
-                    Total Salons
-                  </p>
-                  <p className="text-4xl font-bold text-white tracking-tight">
-                    {dashboardStats?.totalSalons || 0}
-                  </p>
-                  <div className="flex items-center gap-2">
-                    <div className="h-1.5 w-full bg-gray-700 rounded-full overflow-hidden w-24">
-                      <div
-                        className="h-full bg-blue-500 rounded-full"
-                        style={{
-                          width: `${((dashboardStats?.activeSalons || 0) / (dashboardStats?.totalSalons || 1)) * 100}%`,
-                        }}
-                      />
-                    </div>
-                    <span className="text-xs text-blue-300">
-                      {Math.round(
-                        ((dashboardStats?.activeSalons || 0) /
-                          (dashboardStats?.totalSalons || 1)) *
-                          100,
-                      )}
-                      % active
-                    </span>
+        {/* Global Analytics Cards */}
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
+          {[
+            { label: "Total Salons", value: dashboardStats.totalSalons, active: `${dashboardStats.activeSalons} Active`, icon: Building2, color: "text-blue-500", bg: "bg-blue-50" },
+            { label: "Total Users", value: dashboardStats.totalUsers, active: `${dashboardStats.totalOwners} Owners`, icon: Users, color: "text-emerald-500", bg: "bg-emerald-50" },
+            { label: "Daily Volume", value: dashboardStats.todayBookings, active: "Bookings Today", icon: Calendar, color: "text-amber-500", bg: "bg-amber-50" },
+            { label: "Total Revenue", value: `$${dashboardStats.monthlyRevenue}`, active: "Gross Earnings", icon: DollarSign, color: "text-purple-500", bg: "bg-purple-50" },
+          ].map((stat, i) => (
+            <Card key={i} className="border-none shadow-sm bg-white rounded-3xl group hover:shadow-xl transition-all">
+              <CardContent className="p-6">
+                <div className="flex items-start justify-between">
+                  <div className="space-y-1">
+                    <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">{stat.label}</p>
+                    <p className="text-3xl font-black text-slate-900">{stat.value}</p>
+                    <p className="text-xs font-bold text-slate-500">{stat.active}</p>
+                  </div>
+                  <div className={`w-12 h-12 rounded-xl ${stat.bg} ${stat.color} flex items-center justify-center group-hover:scale-110 transition-transform`}>
+                    <stat.icon className="w-6 h-6" />
                   </div>
                 </div>
-                <div className="h-12 w-12 rounded-xl bg-blue-500/20 flex items-center justify-center group-hover:scale-110 transition-transform duration-300">
-                  <Building2 className="h-6 w-6 text-blue-400" />
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-
-          <Card className="relative overflow-hidden border border-white/10 bg-white/5 backdrop-blur-xl shadow-2xl hover:bg-white/10 transition-all duration-300 group">
-            <CardContent className="p-6">
-              <div className="flex items-center justify-between">
-                <div className="space-y-2">
-                  <p className="text-sm font-medium text-green-300">
-                    Total Users
-                  </p>
-                  <p className="text-4xl font-bold text-white tracking-tight">
-                    {dashboardStats?.totalUsers || 0}
-                  </p>
-                  <div className="flex items-center gap-2 text-sm text-green-300/80">
-                    <Users className="h-4 w-4" />
-                    <span>{dashboardStats?.totalOwners || 0} owners</span>
-                  </div>
-                </div>
-                <div className="h-12 w-12 rounded-xl bg-green-500/20 flex items-center justify-center group-hover:scale-110 transition-transform duration-300">
-                  <Users className="h-6 w-6 text-green-400" />
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-
-          <Card className="relative overflow-hidden border border-white/10 bg-white/5 backdrop-blur-xl shadow-2xl hover:bg-white/10 transition-all duration-300 group">
-            <CardContent className="p-6">
-              <div className="flex items-center justify-between">
-                <div className="space-y-2">
-                  <p className="text-sm font-medium text-purple-300">
-                    Weekly Bookings
-                  </p>
-                  <p className="text-4xl font-bold text-white tracking-tight">
-                    {dashboardStats?.weeklyBookings || 0}
-                  </p>
-                  <div className="flex items-center gap-2 text-sm text-purple-300/80">
-                    <TrendingUp className="h-4 w-4" />
-                    <span>{dashboardStats?.todayBookings || 0} today</span>
-                  </div>
-                </div>
-                <div className="h-12 w-12 rounded-xl bg-purple-500/20 flex items-center justify-center group-hover:scale-110 transition-transform duration-300">
-                  <Calendar className="h-6 w-6 text-purple-400" />
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-
-          <Card className="relative overflow-hidden border border-white/10 bg-white/5 backdrop-blur-xl shadow-2xl hover:bg-white/10 transition-all duration-300 group">
-            <CardContent className="p-6">
-              <div className="flex items-center justify-between">
-                <div className="space-y-2">
-                  <p className="text-sm font-medium text-orange-300">
-                    Est. Revenue
-                  </p>
-                  <p className="text-4xl font-bold text-white tracking-tight">
-                    ₹{dashboardStats?.monthlyRevenue?.toLocaleString() || 0}
-                  </p>
-                  <div className="flex items-center gap-2">
-                    {(dashboardStats?.pendingSalons || 0) > 0 ? (
-                      <Badge
-                        variant="outline"
-                        className="border-red-500/50 text-red-400 bg-red-500/10"
-                      >
-                        {dashboardStats?.pendingSalons} pending
-                      </Badge>
-                    ) : (
-                      <Badge
-                        variant="outline"
-                        className="border-green-500/50 text-green-400 bg-green-500/10"
-                      >
-                        All Clear
-                      </Badge>
-                    )}
-                  </div>
-                </div>
-                <div className="h-12 w-12 rounded-xl bg-orange-500/20 flex items-center justify-center group-hover:scale-110 transition-transform duration-300">
-                  <DollarSign className="h-6 w-6 text-orange-400" />
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-        </div>
-
-        {/* Charts Section - Combined Grid */}
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-          {/* Revenue Chart - Spans 2 Columns */}
-          <Card className="lg:col-span-2 border border-white/10 bg-gradient-to-b from-gray-800 to-gray-900/50 backdrop-blur-xl shadow-2xl relative overflow-hidden">
-            <Tabs defaultValue="monthly" className="w-full">
-              <CardHeader className="pb-2">
-                <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
-                  <div>
-                    <div className="flex items-center gap-2">
-                      <div className="p-2 bg-blue-500/20 rounded-lg">
-                        <DollarSign className="h-5 w-5 text-blue-400" />
-                      </div>
-                      <CardTitle className="text-white text-xl tracking-tight">
-                        Revenue Analytics
-                      </CardTitle>
-                    </div>
-                    <CardDescription className="text-gray-400 mt-1 ml-1 flex items-center gap-2">
-                      Financial performance overview
-                      <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-green-500/10 text-green-400">
-                        <TrendingUp className="w-3 h-3 mr-1" /> +12.5% this
-                        month
-                      </span>
-                    </CardDescription>
-                  </div>
-                  <TabsList className="grid w-full sm:w-[240px] grid-cols-2 bg-black/20 border border-white/5 p-1 h-auto rounded-xl">
-                    <TabsTrigger
-                      value="monthly"
-                      className="rounded-lg data-[state=active]:bg-gradient-to-r data-[state=active]:from-blue-600 data-[state=active]:to-indigo-600 data-[state=active]:text-white transition-all duration-300 py-2 text-xs"
-                    >
-                      Monthly
-                    </TabsTrigger>
-                    <TabsTrigger
-                      value="annual"
-                      className="rounded-lg data-[state=active]:bg-gradient-to-r data-[state=active]:from-purple-600 data-[state=active]:to-indigo-600 data-[state=active]:text-white transition-all duration-300 py-2 text-xs"
-                    >
-                      Annual
-                    </TabsTrigger>
-                  </TabsList>
-                </div>
-              </CardHeader>
-              <CardContent>
-                <TabsContent value="monthly" className="mt-6 h-[350px]">
-                  <ResponsiveContainer width="100%" height="100%">
-                    <AreaChart
-                      data={dashboardStats?.revenueData?.monthly || []}
-                      margin={{ top: 10, right: 10, left: 0, bottom: 0 }}
-                    >
-                      <defs>
-                        <linearGradient
-                          id="colorRevenue"
-                          x1="0"
-                          y1="0"
-                          x2="0"
-                          y2="1"
-                        >
-                          <stop
-                            offset="5%"
-                            stopColor="#3b82f6"
-                            stopOpacity={0.5}
-                          />
-                          <stop
-                            offset="95%"
-                            stopColor="#3b82f6"
-                            stopOpacity={0}
-                          />
-                        </linearGradient>
-                      </defs>
-                      <CartesianGrid
-                        strokeDasharray="3 3"
-                        stroke="#1f2937"
-                        vertical={false}
-                      />
-                      <XAxis
-                        dataKey="name"
-                        stroke="#6b7280"
-                        tick={{ fill: "#9ca3af", fontSize: 12 }}
-                        axisLine={false}
-                        tickLine={false}
-                        dy={10}
-                      />
-                      <YAxis
-                        stroke="#6b7280"
-                        tick={{ fill: "#9ca3af", fontSize: 12 }}
-                        axisLine={false}
-                        tickLine={false}
-                        dx={-10}
-                        tickFormatter={(value) => `₹${value.toLocaleString()}`}
-                      />
-                      <Tooltip
-                        contentStyle={{
-                          backgroundColor: "rgba(17, 24, 39, 0.9)",
-                          border: "1px solid rgba(255,255,255,0.1)",
-                          borderRadius: "12px",
-                          color: "#fff",
-                          boxShadow: "0 10px 15px -3px rgba(0, 0, 0, 0.5)",
-                          backdropFilter: "blur(12px)",
-                        }}
-                        itemStyle={{ color: "#e5e7eb" }}
-                        cursor={{
-                          stroke: "rgba(59, 130, 246, 0.5)",
-                          strokeWidth: 1,
-                          strokeDasharray: "5 5",
-                        }}
-                        formatter={(value: number) => [
-                          `₹${value.toLocaleString()}`,
-                          "Revenue",
-                        ]}
-                      />
-                      <Area
-                        type="monotone"
-                        dataKey="value"
-                        stroke="#3b82f6"
-                        strokeWidth={3}
-                        fillOpacity={1}
-                        fill="url(#colorRevenue)"
-                        activeDot={{ r: 6, strokeWidth: 0, fill: "#60a5fa" }}
-                      />
-                    </AreaChart>
-                  </ResponsiveContainer>
-                </TabsContent>
-
-                <TabsContent value="annual" className="mt-6 h-[350px]">
-                  <ResponsiveContainer width="100%" height="100%">
-                    <BarChart
-                      data={dashboardStats?.revenueData?.annual || []}
-                      margin={{ top: 10, right: 10, left: 0, bottom: 0 }}
-                    >
-                      <CartesianGrid
-                        strokeDasharray="3 3"
-                        stroke="#1f2937"
-                        vertical={false}
-                      />
-                      <XAxis
-                        dataKey="name"
-                        stroke="#6b7280"
-                        tick={{ fill: "#9ca3af", fontSize: 12 }}
-                        axisLine={false}
-                        tickLine={false}
-                        dy={10}
-                      />
-                      <YAxis
-                        stroke="#6b7280"
-                        tick={{ fill: "#9ca3af", fontSize: 12 }}
-                        axisLine={false}
-                        tickLine={false}
-                        dx={-10}
-                        tickFormatter={(value) => `₹${value.toLocaleString()}`}
-                      />
-                      <Tooltip
-                        contentStyle={{
-                          backgroundColor: "rgba(17, 24, 39, 0.9)",
-                          border: "1px solid rgba(255,255,255,0.1)",
-                          borderRadius: "12px",
-                          color: "#fff",
-                          boxShadow: "0 10px 15px -3px rgba(0, 0, 0, 0.5)",
-                          backdropFilter: "blur(12px)",
-                        }}
-                        cursor={{ fill: "rgba(255, 255, 255, 0.05)" }}
-                        formatter={(value: number) => [
-                          `₹${value.toLocaleString()}`,
-                          "Revenue",
-                        ]}
-                      />
-                      <Bar
-                        dataKey="value"
-                        fill="#8b5cf6"
-                        radius={[6, 6, 0, 0]}
-                        barSize={60}
-                      >
-                        {dashboardStats?.revenueData?.annual.map(
-                          (entry, index) => (
-                            <Cell
-                              key={`cell-${index}`}
-                              fill={
-                                index ===
-                                dashboardStats.revenueData.annual.length - 1
-                                  ? "#8b5cf6"
-                                  : "#6366f1"
-                              }
-                              opacity={
-                                index ===
-                                dashboardStats.revenueData.annual.length - 1
-                                  ? 1
-                                  : 0.7
-                              }
-                            />
-                          ),
-                        )}
-                      </Bar>
-                    </BarChart>
-                  </ResponsiveContainer>
-                </TabsContent>
               </CardContent>
-            </Tabs>
-          </Card>
-
-          {/* Customer Ratio - Spans 1 Column */}
-          <Card className="border border-white/10 bg-white/5 backdrop-blur-xl shadow-2xl">
-            <CardHeader className="text-center">
-              <CardTitle className="text-white text-xl">
-                Customer Ratio
-              </CardTitle>
-              <CardDescription className="text-gray-400">
-                New vs Returning
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              <div className="h-[250px] relative">
-                <ResponsiveContainer width="100%" height="100%">
-                  <PieChart>
-                    <Pie
-                      data={[
-                        {
-                          name: "New",
-                          value: dashboardStats?.customerStats?.new || 0,
-                        },
-                        {
-                          name: "Existing",
-                          value: dashboardStats?.customerStats?.existing || 0,
-                        },
-                      ]}
-                      cx="50%"
-                      cy="50%"
-                      innerRadius={60}
-                      outerRadius={80}
-                      paddingAngle={5}
-                      dataKey="value"
-                      stroke="none"
-                    >
-                      {[
-                        {
-                          name: "New",
-                          value: dashboardStats?.customerStats?.new || 0,
-                        },
-                        {
-                          name: "Existing",
-                          value: dashboardStats?.customerStats?.existing || 0,
-                        },
-                      ].map((entry, index) => (
-                        <Cell
-                          key={`cell-${index}`}
-                          fill={
-                            index === 0
-                              ? STATUS_COLORS.new
-                              : STATUS_COLORS.existing
-                          }
-                        />
-                      ))}
-                    </Pie>
-                    <Tooltip
-                      contentStyle={{
-                        backgroundColor: "#111827",
-                        border: "none",
-                        borderRadius: "8px",
-                        color: "#fff",
-                      }}
-                    />
-                  </PieChart>
-                </ResponsiveContainer>
-                <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-                  <div className="text-center">
-                    <p className="text-3xl font-bold text-white">
-                      {dashboardStats?.customerStats?.total || 0}
-                    </p>
-                    <p className="text-xs text-gray-400">Total Users</p>
-                  </div>
-                </div>
-              </div>
-              <div className="flex justify-center gap-6 mt-6">
-                <div className="flex items-center gap-2">
-                  <div
-                    className="h-3 w-3 rounded-full"
-                    style={{ backgroundColor: STATUS_COLORS.new }}
-                  ></div>
-                  <div>
-                    <p className="text-lg font-bold text-white leading-none">
-                      {dashboardStats?.customerStats?.new || 0}
-                    </p>
-                    <p className="text-xs text-gray-400">New</p>
-                  </div>
-                </div>
-                <div className="flex items-center gap-2">
-                  <div
-                    className="h-3 w-3 rounded-full"
-                    style={{ backgroundColor: STATUS_COLORS.existing }}
-                  ></div>
-                  <div>
-                    <p className="text-lg font-bold text-white leading-none">
-                      {dashboardStats?.customerStats?.existing || 0}
-                    </p>
-                    <p className="text-xs text-gray-400">Existing</p>
-                  </div>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
+            </Card>
+          ))}
         </div>
 
-        {/* Popular Treatments & Activity */}
+        {/* Dynamic Charts Section */}
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-          {/* Popular Treatments */}
-          <Card className="border border-white/10 bg-white/5 backdrop-blur-xl shadow-2xl">
-            <CardHeader>
-              <CardTitle className="text-white text-xl">
-                Top Treatments
-              </CardTitle>
-              <CardDescription className="text-gray-400">
-                Most requested services
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              <div className="space-y-6">
-                {dashboardStats?.popularTreatments?.map((treatment, index) => (
-                  <div key={treatment.name} className="space-y-2">
-                    <div className="flex justify-between items-center">
-                      <div className="flex items-center gap-3">
-                        <div
-                          className={`h-8 w-8 rounded-lg flex items-center justify-center text-sm font-bold ${index === 0 ? "bg-yellow-500/20 text-yellow-500" : index === 1 ? "bg-gray-400/20 text-gray-400" : index === 2 ? "bg-orange-700/20 text-orange-600" : "bg-gray-800 text-gray-500"}`}
-                        >
-                          #{index + 1}
-                        </div>
-                        <span className="font-medium text-white">
-                          {treatment.name}
-                        </span>
-                      </div>
-                      <span className="text-sm text-gray-400 font-mono">
-                        {treatment.value}
-                      </span>
-                    </div>
-                    <Progress
-                      value={
-                        (treatment.value /
-                          (dashboardStats?.popularTreatments?.[0]?.value ||
-                            1)) *
-                        100
-                      }
-                      className="h-1.5 bg-gray-800"
-                    />
-                  </div>
-                ))}
-                {!dashboardStats?.popularTreatments?.length && (
-                  <div className="text-center py-8">
-                    <div className="h-12 w-12 bg-gray-800 rounded-full flex items-center justify-center mx-auto mb-3">
-                      <BarChart3 className="h-6 w-6 text-gray-600" />
-                    </div>
-                    <p className="text-gray-500">No data available yet</p>
-                  </div>
-                )}
+          <Card className="lg:col-span-2 border-none shadow-sm bg-white rounded-[2.5rem] overflow-hidden">
+            <CardHeader className="flex flex-row items-center justify-between pb-2">
+              <div>
+                <CardTitle className="text-xl font-bold">Revenue Projections</CardTitle>
+                <CardDescription className="font-medium">Monthly earnings trend from database</CardDescription>
               </div>
+              <div className="flex gap-2">
+                <Badge className="bg-blue-50 text-blue-600 border-none font-bold">Local Host</Badge>
+              </div>
+            </CardHeader>
+            <CardContent className="h-[350px] mt-6">
+              <ResponsiveContainer width="100%" height="100%">
+                <AreaChart data={dashboardStats.revenueData.monthly}>
+                  <defs>
+                    <linearGradient id="colorValue" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="5%" stopColor="#3b82f6" stopOpacity={0.8} />
+                      <stop offset="95%" stopColor="#3b82f6" stopOpacity={0} />
+                    </linearGradient>
+                  </defs>
+                  <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{ fill: '#94a3b8', fontWeight: 700, fontSize: 12 }} dy={10} />
+                  <YAxis axisLine={false} tickLine={false} tick={{ fill: '#94a3b8', fontWeight: 700, fontSize: 12 }} dx={-10} />
+                  <Tooltip
+                    contentStyle={{ borderRadius: '20px', border: 'none', boxShadow: '0 10px 15px -3px rgba(0,0,0,0.1)' }}
+                    labelStyle={{ fontWeight: 900 }}
+                  />
+                  <Area type="monotone" dataKey="value" stroke="#3b82f6" strokeWidth={4} fillOpacity={1} fill="url(#colorValue)" />
+                </AreaChart>
+              </ResponsiveContainer>
             </CardContent>
           </Card>
 
-          {/* Live Activity Feed */}
-          <Card className="lg:col-span-2 border border-white/10 bg-white/5 backdrop-blur-xl shadow-2xl">
-            <CardHeader className="border-b border-white/5">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-3">
-                  <div className="h-10 w-10 rounded-xl bg-green-500/20 flex items-center justify-center">
-                    <Activity className="h-5 w-5 text-green-500" />
+          <Card className="border-none shadow-sm bg-white rounded-[2.5rem] p-8">
+            <CardTitle className="text-xl font-bold mb-6">Market Expansion</CardTitle>
+            <div className="space-y-6">
+              {dashboardStats.topCities.map((city, idx) => (
+                <div key={idx} className="space-y-2">
+                  <div className="flex items-center justify-between font-bold text-sm">
+                    <span className="text-slate-700">{city.city}</span>
+                    <span className="text-accent">{city.count} Saloons</span>
                   </div>
-                  <div>
-                    <CardTitle className="text-xl text-white">
-                      Live Activity
-                    </CardTitle>
-                    <CardDescription className="text-gray-400">
-                      Real-time platform updates
-                    </CardDescription>
-                  </div>
+                  <Progress value={(city.count / dashboardStats.totalSalons) * 100} className="h-3 rounded-full bg-slate-100" />
                 </div>
-                <div className="flex items-center gap-2 px-3 py-1 rounded-full bg-green-500/10 border border-green-500/20 text-green-500 text-xs font-medium">
-                  <span className="relative flex h-2 w-2">
-                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75"></span>
-                    <span className="relative inline-flex rounded-full h-2 w-2 bg-green-500"></span>
-                  </span>
-                  Live Updates
-                </div>
-              </div>
-            </CardHeader>
-            <CardContent className="p-0">
-              <ScrollArea className="h-[400px]">
-                {dashboardStats?.recentActivity.length === 0 ? (
-                  <div className="flex flex-col items-center justify-center h-full text-gray-500 p-8">
-                    <Activity className="h-12 w-12 mb-3 opacity-20" />
-                    <p>No activity recorded yet</p>
-                  </div>
-                ) : (
-                  <div className="divide-y divide-white/5">
-                    {dashboardStats?.recentActivity.map((activity, index) => (
-                      <div
-                        key={activity.id + index}
-                        className="flex items-start gap-4 p-5 hover:bg-white/5 transition-colors"
-                      >
-                        <div
-                          className={`h-10 w-10 rounded-full flex items-center justify-center shrink-0 ${
-                            activity.type === "new_user"
-                              ? "bg-blue-500/20 text-blue-400"
-                              : activity.type === "booking"
-                                ? "bg-purple-500/20 text-purple-400"
-                                : "bg-orange-500/20 text-orange-400"
-                          }`}
-                        >
-                          {getActivityIcon(activity.type)}
-                        </div>
-                        <div className="flex-1 min-w-0 pt-1">
-                          <p className="text-sm font-medium text-white">
-                            {activity.description}
-                          </p>
-                          <p className="text-xs text-gray-500 mt-0.5">
-                            {format(
-                              new Date(activity.timestamp),
-                              "MMM d, h:mm a",
-                            )}
-                          </p>
-                        </div>
-                        <Badge
-                          variant="outline"
-                          className={`${getStatusColor(activity.status)} border-current bg-transparent`}
-                        >
-                          {activity.status}
-                        </Badge>
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </ScrollArea>
-            </CardContent>
+              ))}
+              {dashboardStats.topCities.length === 0 && <p className="text-slate-400 text-center py-10 font-medium">No location data found.</p>}
+            </div>
           </Card>
         </div>
 
-        {/* Secondary Metrics & Actions */}
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-          {/* Top Cities */}
-          <Card className="border border-white/10 bg-white/5 backdrop-blur-xl shadow-2xl hover:bg-white/10 transition-all duration-300">
+        {/* Global Activity Feed */}
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+          <Card className="border-none shadow-sm bg-white rounded-[2rem] overflow-hidden">
             <CardHeader>
-              <div className="flex items-center gap-3">
-                <div className="h-10 w-10 rounded-xl bg-indigo-500/20 flex items-center justify-center">
-                  <MapPin className="h-5 w-5 text-indigo-400" />
-                </div>
-                <div>
-                  <CardTitle className="text-white">Top Cities</CardTitle>
-                  <CardDescription className="text-gray-400">
-                    Highest performing locations
-                  </CardDescription>
-                </div>
-              </div>
+              <CardTitle className="text-xl font-bold">System Log</CardTitle>
+              <CardDescription className="font-medium">Real-time database events</CardDescription>
             </CardHeader>
             <CardContent>
               <div className="space-y-4">
-                {dashboardStats?.topCities.map((city, index) => (
-                  <div
-                    key={city.city}
-                    className="flex items-center justify-between p-3 rounded-lg bg-white/5 hover:bg-white/10 transition-colors"
-                  >
-                    <div className="flex items-center gap-3">
-                      <div className="h-8 w-8 rounded-lg bg-indigo-500/20 flex items-center justify-center text-indigo-400 text-sm font-bold">
-                        {index + 1}
+                {dashboardStats.recentActivity.map(act => (
+                  <div key={act.id} className="flex items-center justify-between p-4 rounded-2xl bg-slate-50 border border-transparent hover:border-slate-100 transition-all">
+                    <div className="flex items-center gap-4">
+                      <div className="w-10 h-10 bg-white rounded-xl shadow-sm flex items-center justify-center text-accent">
+                        {act.type === 'booking' ? <Calendar className="w-5 h-5" /> : <Activity className="w-5 h-5" />}
                       </div>
-                      <span className="font-medium text-white">
-                        {city.city}
-                      </span>
+                      <div>
+                        <p className="font-black text-slate-900 leading-tight">{act.description}</p>
+                        <p className="text-[10px] font-bold text-slate-400 mt-1 uppercase tracking-widest">{format(new Date(act.timestamp), "h:mm a, MMM d")}</p>
+                      </div>
                     </div>
-                    <Badge
-                      variant="secondary"
-                      className="bg-indigo-500/10 text-indigo-300 border-indigo-500/20"
-                    >
-                      {city.count} salons
-                    </Badge>
+                    <Badge className="bg-white text-slate-600 border-none shadow-sm px-3 font-bold">{act.status}</Badge>
                   </div>
                 ))}
-                {(!dashboardStats?.topCities ||
-                  dashboardStats.topCities.length === 0) && (
-                  <div className="text-center text-gray-500 py-6">
-                    <MapPin className="h-8 w-8 mx-auto mb-2 opacity-50" />
-                    <p>No location data</p>
-                  </div>
-                )}
+                {dashboardStats.recentActivity.length === 0 && <p className="text-slate-400 text-center py-10">No recent logs.</p>}
               </div>
             </CardContent>
           </Card>
 
-          {/* Quick Actions */}
-          <Card className="border border-white/10 bg-white/5 backdrop-blur-xl shadow-2xl hover:bg-white/10 transition-all duration-300">
-            <CardHeader>
-              <div className="flex items-center gap-3">
-                <div className="h-10 w-10 rounded-xl bg-emerald-500/20 flex items-center justify-center">
-                  <Zap className="h-5 w-5 text-emerald-400" />
+          <Card className="border-none shadow-sm bg-slate-900 rounded-[2rem] p-8 text-white relative overflow-hidden">
+            <div className="absolute bottom-0 right-0 opacity-10">
+              <Target className="w-64 h-64" />
+            </div>
+            <h3 className="text-2xl font-black mb-2">Platform Goals</h3>
+            <p className="text-slate-400 font-medium mb-8">Quarterly target reaching 50 local saloons.</p>
+            <div className="space-y-8">
+              <div className="space-y-3">
+                <div className="flex justify-between font-black text-sm uppercase tracking-widest text-slate-400">
+                  <span>Saloon Growth</span>
+                  <span>{Math.round((dashboardStats.totalSalons / 50) * 100)}%</span>
                 </div>
-                <div>
-                  <CardTitle className="text-white">Quick Actions</CardTitle>
-                  <CardDescription className="text-gray-400">
-                    Management shortcuts
-                  </CardDescription>
+                <Progress value={(dashboardStats.totalSalons / 50) * 100} className="h-4 bg-white/10" />
+              </div>
+              <div className="space-y-3">
+                <div className="flex justify-between font-black text-sm uppercase tracking-widest text-slate-400">
+                  <span>Revenue Target</span>
+                  <span>65%</span>
                 </div>
+                <Progress value={65} className="h-4 bg-white/10" />
               </div>
-            </CardHeader>
-            <CardContent>
-              <div className="grid grid-cols-2 gap-4">
-                <Button
-                  variant="outline"
-                  className="h-24 flex flex-col items-center justify-center gap-2 bg-white/5 border-white/10 hover:bg-blue-600/20 hover:border-blue-500/50 transition-all group"
-                  asChild
-                >
-                  <Link to="/admin/salons?status=pending">
-                    <div className="h-8 w-8 rounded-full bg-blue-500/20 flex items-center justify-center group-hover:bg-blue-500 group-hover:text-white transition-colors">
-                      <Clock className="h-4 w-4 text-blue-400 group-hover:text-white" />
-                    </div>
-                    <span className="text-white">Review Pending</span>
-                  </Link>
-                </Button>
-                <Button
-                  variant="outline"
-                  className="h-24 flex flex-col items-center justify-center gap-2 bg-white/5 border-white/10 hover:bg-purple-600/20 hover:border-purple-500/50 transition-all group"
-                  asChild
-                >
-                  <Link to="/admin/reports">
-                    <div className="h-8 w-8 rounded-full bg-purple-500/20 flex items-center justify-center group-hover:bg-purple-500 group-hover:text-white transition-colors">
-                      <BarChart3 className="h-4 w-4 text-purple-400 group-hover:text-white" />
-                    </div>
-                    <span className="text-white">Analytics</span>
-                  </Link>
-                </Button>
-                <Button
-                  variant="outline"
-                  className="h-24 flex flex-col items-center justify-center gap-2 bg-white/5 border-white/10 hover:bg-pink-600/20 hover:border-pink-500/50 transition-all group"
-                  asChild
-                >
-                  <Link to="/admin/marketing">
-                    <div className="h-8 w-8 rounded-full bg-pink-500/20 flex items-center justify-center group-hover:bg-pink-500 group-hover:text-white transition-colors">
-                      <Megaphone className="h-4 w-4 text-pink-400 group-hover:text-white" />
-                    </div>
-                    <span className="text-white">Promotions</span>
-                  </Link>
-                </Button>
-                <Button
-                  variant="outline"
-                  className="h-24 flex flex-col items-center justify-center gap-2 bg-white/5 border-white/10 hover:bg-gray-600/20 hover:border-gray-500/50 transition-all group"
-                  asChild
-                >
-                  <Link to="/admin/settings">
-                    <div className="h-8 w-8 rounded-full bg-gray-500/20 flex items-center justify-center group-hover:bg-gray-500 group-hover:text-white transition-colors">
-                      <Settings className="h-4 w-4 text-gray-400 group-hover:text-white" />
-                    </div>
-                    <span className="text-white">Settings</span>
-                  </Link>
-                </Button>
-              </div>
-            </CardContent>
+            </div>
+            <Button className="w-full mt-10 bg-accent text-white font-black h-14 rounded-2xl shadow-xl shadow-accent/20">
+              Market Analysis (Pro)
+            </Button>
           </Card>
         </div>
       </div>

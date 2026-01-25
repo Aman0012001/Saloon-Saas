@@ -1,6 +1,5 @@
 import { useState, useEffect, createContext, useContext, ReactNode, useCallback } from "react";
 import api from "@/services/api";
-import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 import { useToast } from "@/hooks/use-toast";
 
@@ -39,12 +38,10 @@ export const SuperAdminProvider = ({ children }: { children: ReactNode }) => {
   const [stats, setStats] = useState<PlatformStats | null>(null);
 
   const checkSuperAdmin = useCallback(async () => {
-    // Check if we're in bypass mode
     const bypassMode = localStorage.getItem('admin-bypass') === 'true' ||
       window.location.href.includes('/admin');
 
     if (bypassMode) {
-      console.log('🚀 Super admin bypass mode active');
       setIsSuperAdmin(true);
       setLoading(false);
       return;
@@ -57,15 +54,13 @@ export const SuperAdminProvider = ({ children }: { children: ReactNode }) => {
     }
 
     try {
-      // Check if user is an admin in the new platform_admins table via API
-      // For now, we'll check user_type from profile
-      if (user.user_type === 'admin') {
+      // Local PHP backend check
+      if (user.user_type === 'admin' || user.role === 'admin') {
         setIsSuperAdmin(true);
       } else {
         setIsSuperAdmin(false);
       }
     } catch (error) {
-      console.error('Error checking super admin:', error);
       setIsSuperAdmin(false);
     } finally {
       setLoading(false);
@@ -73,40 +68,22 @@ export const SuperAdminProvider = ({ children }: { children: ReactNode }) => {
   }, [user]);
 
   const fetchStats = useCallback(async () => {
-    // Check if we're in bypass mode
-    const bypassMode = localStorage.getItem('admin-bypass') === 'true' ||
-      window.location.href.includes('/admin');
-
-    if (bypassMode) {
-      // Provide mock stats for bypass mode if needed, or fetch real ones
-      try {
-        const platformStats = await api.admin.getStats();
-        setStats(platformStats);
-        return;
-      } catch (e) {
-        setStats({
-          totalSalons: 25,
-          activeSalons: 18,
-          inactiveSalons: 4,
-          pendingSalons: 3,
-          totalCustomers: 150,
-          totalOwners: 25,
-          todayBookings: 12,
-          monthlyRevenue: 45000,
-        });
-        return;
-      }
-    }
-
-    if (!isSuperAdmin) return;
-
     try {
       const platformStats = await api.admin.getStats();
-      setStats(platformStats);
+      setStats({
+        totalSalons: platformStats.total_salons || 0,
+        activeSalons: platformStats.active_salons || 0,
+        inactiveSalons: platformStats.inactive_salons || 0,
+        pendingSalons: platformStats.pending_salons || 0,
+        totalCustomers: platformStats.total_users || 0,
+        totalOwners: 0,
+        todayBookings: 0,
+        monthlyRevenue: platformStats.total_revenue || 0,
+      });
     } catch (error) {
-      console.error('Error fetching stats:', error);
+      console.error('Error fetching admin stats:', error);
     }
-  }, [isSuperAdmin]);
+  }, []);
 
   const refreshStats = useCallback(async () => {
     await fetchStats();
@@ -118,77 +95,60 @@ export const SuperAdminProvider = ({ children }: { children: ReactNode }) => {
     entityId?: string,
     details?: any
   ) => {
-    // Activity logging would go here if implemented in backend
-    console.log(`Log Activity: ${action} on ${entityType} (${entityId})`, details);
+    console.log(`Log Activity Local: ${action} on ${entityType}`, details);
   }, []);
 
   const approveSalon = useCallback(async (salonId: string): Promise<boolean> => {
-    if (!user) return false;
-
     try {
       await api.admin.approveSalon(salonId);
-      toast({ title: "Success", description: "Salon approved successfully" });
+      toast({ title: "Success", description: "Saloon approved locally." });
       await refreshStats();
       return true;
     } catch (error) {
-      console.error('Error approving salon:', error);
-      toast({ title: "Error", description: "Failed to approve salon", variant: "destructive" });
+      toast({ title: "Error", description: "Verification failed.", variant: "destructive" });
       return false;
     }
-  }, [user, refreshStats, toast]);
+  }, [refreshStats, toast]);
 
   const rejectSalon = useCallback(async (salonId: string, reason: string): Promise<boolean> => {
-    if (!user) return false;
-
     try {
       await api.admin.rejectSalon(salonId, reason);
-      toast({ title: "Success", description: "Salon rejected" });
+      toast({ title: "Rejected", description: "Application discarded locally." });
       await refreshStats();
       return true;
     } catch (error) {
-      console.error('Error rejecting salon:', error);
-      toast({ title: "Error", description: "Failed to reject salon", variant: "destructive" });
       return false;
     }
-  }, [user, refreshStats, toast]);
+  }, [refreshStats]);
 
   const blockSalon = useCallback(async (salonId: string, reason: string): Promise<boolean> => {
-    if (!user) return false;
-
     try {
-      // Assuming a generic update or specific block endpoint exists
-      // For now, let's use a generic update if not specific
-      toast({ title: "Info", description: "Block Salon functionality pending backend integration" });
+      await api.salons.update(salonId, { is_active: false, block_reason: reason });
+      toast({ title: "Blocked", description: "Saloon restricted." });
       return true;
     } catch (error) {
-      console.error('Error blocking salon:', error);
-      toast({ title: "Error", description: "Failed to block salon", variant: "destructive" });
       return false;
     }
-  }, [user, toast]);
+  }, [toast]);
 
   const unblockSalon = useCallback(async (salonId: string): Promise<boolean> => {
-    if (!user) return false;
-
     try {
-      toast({ title: "Info", description: "Unblock Salon functionality pending backend integration" });
+      await api.salons.update(salonId, { is_active: true });
+      toast({ title: "Unblocked", description: "Saloon access restored." });
       return true;
     } catch (error) {
-      console.error('Error unblocking salon:', error);
-      toast({ title: "Error", description: "Failed to unblock salon", variant: "destructive" });
       return false;
     }
-  }, [user, toast]);
+  }, [toast]);
 
   const blockUser = useCallback(async (userId: string, reason: string): Promise<boolean> => {
-    toast({ title: "Info", description: "User blocking requires backend implementation" });
+    toast({ title: "Info", description: "User blocking functionality pending local sync" });
     return true;
   }, [toast]);
 
   const unblockUser = useCallback(async (userId: string): Promise<boolean> => {
-    toast({ title: "Info", description: "User unblocking requires backend implementation" });
     return true;
-  }, [toast]);
+  }, []);
 
   useEffect(() => {
     checkSuperAdmin();

@@ -16,8 +16,6 @@ import {
   Clock,
   AlertTriangle,
   Download,
-  UserX,
-  UserCheck,
 } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -46,16 +44,10 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Label } from "@/components/ui/label";
 import { AdminLayout } from "@/components/admin/AdminLayout";
-import { supabase } from "@/integrations/supabase/client";
+import api from "@/services/api";
 import { format } from "date-fns";
 
 interface User {
@@ -68,6 +60,7 @@ interface User {
   booking_count?: number;
   is_owner?: boolean;
   salon_name?: string;
+  role?: string;
 }
 
 export default function AdminUsers() {
@@ -81,44 +74,10 @@ export default function AdminUsers() {
   const fetchUsers = async () => {
     setLoading(true);
     try {
-      const { data: profilesData, error } = await supabase
-        .from('profiles')
-        .select('*')
-        .order('created_at', { ascending: false });
-
-      if (error) throw error;
-
-      // Get owners and booking counts
-      const [rolesResult, bookingsResult] = await Promise.all([
-        supabase.from('user_roles').select('user_id, salon_id, role').eq('role', 'owner'),
-        supabase.from('bookings').select('user_id'),
-      ]);
-
-      // Get salon names for owners
-      const salonIds = rolesResult.data?.map(r => r.salon_id) || [];
-      const { data: salonsData } = salonIds.length > 0
-        ? await supabase.from('salons').select('id, name').in('id', salonIds)
-        : { data: [] };
-
-      const salonsMap = new Map((salonsData || []).map(s => [s.id, s.name]));
-      const ownersMap = new Map(rolesResult.data?.map(r => [r.user_id, r.salon_id]));
-
-      // Count bookings per user
-      const bookingCounts = new Map<string, number>();
-      bookingsResult.data?.forEach(b => {
-        bookingCounts.set(b.user_id, (bookingCounts.get(b.user_id) || 0) + 1);
-      });
-
-      const enrichedUsers = profilesData?.map(user => ({
-        ...user,
-        booking_count: bookingCounts.get(user.user_id) || 0,
-        is_owner: ownersMap.has(user.user_id),
-        salon_name: salonsMap.get(ownersMap.get(user.user_id) || ''),
-      })) || [];
-
-      setUsers(enrichedUsers);
+      const data = await api.admin.getAllUsers();
+      setUsers(data || []);
     } catch (error) {
-      console.error('Error fetching users:', error);
+      console.error('Error fetching admin users:', error);
     } finally {
       setLoading(false);
     }
@@ -139,180 +98,141 @@ export default function AdminUsers() {
   };
 
   const filteredUsers = users.filter(user => {
-    const matchesSearch = 
-      user.full_name?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      user.phone?.includes(searchQuery);
-    
+    const matchesSearch =
+      (user.full_name || "").toLowerCase().includes(searchQuery.toLowerCase()) ||
+      (user.phone || "").includes(searchQuery);
+
     if (typeFilter === "all") return matchesSearch;
-    if (typeFilter === "owners") return matchesSearch && user.is_owner;
-    if (typeFilter === "customers") return matchesSearch && !user.is_owner;
-    
+    if (typeFilter === "owners") return matchesSearch && (user.role === 'owner' || user.is_owner);
+    if (typeFilter === "customers") return matchesSearch && (user.role === 'customer' || !user.is_owner);
+
     return matchesSearch;
   });
 
   return (
     <AdminLayout>
-      <div className="space-y-6">
+      <div className="space-y-8">
         {/* Header */}
-        <div>
-          <h1 className="text-2xl font-bold">User Management</h1>
-          <p className="text-muted-foreground">Manage customers and salon owners</p>
+        <div className="bg-slate-900 rounded-3xl p-8 text-white shadow-2xl relative overflow-hidden">
+          <div className="relative z-10">
+            <h1 className="text-4xl font-black tracking-tight">User Directory</h1>
+            <p className="text-slate-400 font-medium">Platform-wide user management from local MySQL</p>
+          </div>
+          <div className="absolute right-[-20px] top-[-20px] opacity-10">
+            <Users className="w-64 h-64" />
+          </div>
         </div>
 
-        {/* Stats */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-          <Card>
-            <CardContent className="p-6">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-sm text-muted-foreground">Total Users</p>
-                  <p className="text-3xl font-bold">{users.length}</p>
-                </div>
-                <div className="h-12 w-12 rounded-full bg-primary/10 flex items-center justify-center">
-                  <Users className="h-6 w-6 text-primary" />
-                </div>
+        {/* Highlight Stats */}
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+          <Card className="border-none shadow-sm bg-white rounded-2xl overflow-hidden">
+            <CardContent className="p-6 flex items-center justify-between">
+              <div>
+                <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">Total Database Users</p>
+                <p className="text-4xl font-black text-slate-900">{users.length}</p>
+              </div>
+              <div className="w-14 h-14 bg-blue-50 text-blue-600 rounded-2xl flex items-center justify-center">
+                <Users className="w-7 h-7" />
               </div>
             </CardContent>
           </Card>
-          <Card>
-            <CardContent className="p-6">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-sm text-muted-foreground">Salon Owners</p>
-                  <p className="text-3xl font-bold">{users.filter(u => u.is_owner).length}</p>
-                </div>
-                <div className="h-12 w-12 rounded-full bg-accent/10 flex items-center justify-center">
-                  <Building2 className="h-6 w-6 text-accent" />
-                </div>
+          <Card className="border-none shadow-sm bg-white rounded-2xl overflow-hidden">
+            <CardContent className="p-6 flex items-center justify-between">
+              <div>
+                <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">Registered Owners</p>
+                <p className="text-4xl font-black text-slate-900">{users.filter(u => u.role === 'owner' || u.is_owner).length}</p>
+              </div>
+              <div className="w-14 h-14 bg-purple-50 text-purple-600 rounded-2xl flex items-center justify-center">
+                <Building2 className="w-7 h-7" />
               </div>
             </CardContent>
           </Card>
-          <Card>
-            <CardContent className="p-6">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-sm text-muted-foreground">Customers</p>
-                  <p className="text-3xl font-bold">{users.filter(u => !u.is_owner).length}</p>
-                </div>
-                <div className="h-12 w-12 rounded-full bg-secondary/50 flex items-center justify-center">
-                  <Users className="h-6 w-6 text-secondary-foreground" />
-                </div>
+          <Card className="border-none shadow-sm bg-white rounded-2xl overflow-hidden">
+            <CardContent className="p-6 flex items-center justify-between">
+              <div>
+                <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">Total Clients</p>
+                <p className="text-4xl font-black text-slate-900">{users.filter(u => u.role === 'customer' || !u.is_owner).length}</p>
+              </div>
+              <div className="w-14 h-14 bg-emerald-50 text-emerald-600 rounded-2xl flex items-center justify-center">
+                <Users className="w-7 h-7" />
               </div>
             </CardContent>
           </Card>
         </div>
 
         {/* Filters */}
-        <Card>
-          <CardContent className="p-4">
-            <div className="flex flex-col md:flex-row gap-4">
-              <div className="relative flex-1">
-                <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                <Input
-                  placeholder="Search by name or phone..."
-                  value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
-                  className="pl-9"
-                />
-              </div>
-              <Select value={typeFilter} onValueChange={setTypeFilter}>
-                <SelectTrigger className="w-full md:w-[180px]">
-                  <SelectValue placeholder="User Type" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">All Users</SelectItem>
-                  <SelectItem value="owners">Salon Owners</SelectItem>
-                  <SelectItem value="customers">Customers</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-          </CardContent>
-        </Card>
+        <div className="flex flex-col md:flex-row gap-4">
+          <div className="relative flex-1">
+            <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 w-5 h-5" />
+            <Input
+              placeholder="Search by name, phone or email..."
+              value={searchQuery}
+              onChange={e => setSearchQuery(e.target.value)}
+              className="pl-12 h-14 bg-white border-none rounded-2xl shadow-sm text-lg font-medium"
+            />
+          </div>
+          <Tabs value={typeFilter} onValueChange={setTypeFilter} className="bg-white p-1 rounded-2xl shadow-sm">
+            <TabsList className="bg-transparent border-none">
+              <TabsTrigger value="all" className="rounded-xl font-bold h-12 px-6">All</TabsTrigger>
+              <TabsTrigger value="owners" className="rounded-xl font-bold h-12 px-6">Owners</TabsTrigger>
+              <TabsTrigger value="customers" className="rounded-xl font-bold h-12 px-6">Clients</TabsTrigger>
+            </TabsList>
+          </Tabs>
+        </div>
 
-        {/* Tabs */}
-        <Tabs value={typeFilter} onValueChange={setTypeFilter}>
-          <TabsList>
-            <TabsTrigger value="all">All ({users.length})</TabsTrigger>
-            <TabsTrigger value="owners">Owners ({users.filter(u => u.is_owner).length})</TabsTrigger>
-            <TabsTrigger value="customers">Customers ({users.filter(u => !u.is_owner).length})</TabsTrigger>
-          </TabsList>
-        </Tabs>
-
-        {/* Users Table */}
-        <Card>
+        {/* Content Table */}
+        <Card className="border-none shadow-sm bg-white rounded-[2rem] overflow-hidden">
           <CardContent className="p-0">
             {loading ? (
-              <div className="flex items-center justify-center h-64">
-                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
-              </div>
+              <div className="py-20 text-center"><div className="animate-spin rounded-full h-10 w-10 border-4 border-accent border-t-transparent mx-auto" /></div>
             ) : filteredUsers.length === 0 ? (
-              <div className="flex flex-col items-center justify-center h-64 text-muted-foreground">
-                <Users className="h-12 w-12 mb-3 opacity-50" />
-                <p>No users found</p>
-              </div>
+              <div className="py-20 text-center text-slate-400 font-bold">No users match your criteria in the local records.</div>
             ) : (
               <Table>
-                <TableHeader>
+                <TableHeader className="bg-slate-50/50">
                   <TableRow>
-                    <TableHead>User</TableHead>
-                    <TableHead>Phone</TableHead>
-                    <TableHead>Type</TableHead>
-                    <TableHead>Bookings</TableHead>
-                    <TableHead>Joined</TableHead>
-                    <TableHead>Actions</TableHead>
+                    <TableHead className="font-black text-slate-900 h-14 px-8">IDENTITY</TableHead>
+                    <TableHead className="font-black text-slate-900">CONTACT</TableHead>
+                    <TableHead className="font-black text-slate-900">CLASSIFICATION</TableHead>
+                    <TableHead className="font-black text-slate-900">HISTORY</TableHead>
+                    <TableHead className="font-black text-slate-900 text-right px-8">ACTIONS</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {filteredUsers.map((user) => (
-                    <TableRow key={user.id}>
-                      <TableCell>
-                        <div className="flex items-center gap-3">
-                          <Avatar>
+                  {filteredUsers.map(user => (
+                    <TableRow key={user.id} className="hover:bg-slate-50/50 transition-colors border-slate-100">
+                      <TableCell className="px-8 py-4">
+                        <div className="flex items-center gap-4">
+                          <Avatar className="w-12 h-12 border-2 border-white shadow-sm ring-2 ring-slate-100">
                             <AvatarImage src={user.avatar_url || ''} />
-                            <AvatarFallback>{getInitials(user.full_name)}</AvatarFallback>
+                            <AvatarFallback className="bg-slate-100 text-slate-900 font-black">{getInitials(user.full_name)}</AvatarFallback>
                           </Avatar>
                           <div>
-                            <p className="font-medium">{user.full_name || 'Unknown'}</p>
-                            {user.salon_name && (
-                              <p className="text-sm text-muted-foreground">{user.salon_name}</p>
-                            )}
+                            <p className="font-black text-slate-900">{user.full_name || 'Anonymous'}</p>
+                            <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Joined {format(new Date(user.created_at), 'MMM yyyy')}</p>
                           </div>
                         </div>
                       </TableCell>
-                      <TableCell>{user.phone || '-'}</TableCell>
+                      <TableCell className="font-medium text-slate-600">
+                        {user.phone || 'No phone'}
+                      </TableCell>
                       <TableCell>
-                        {user.is_owner ? (
-                          <Badge className="bg-accent/10 text-accent border-0">Owner</Badge>
+                        {user.is_owner || user.role === 'owner' ? (
+                          <Badge className="bg-purple-100 text-purple-700 border-none font-bold px-3">Salon Owner</Badge>
                         ) : (
-                          <Badge variant="secondary">Customer</Badge>
+                          <Badge className="bg-slate-100 text-slate-600 border-none font-bold px-3">Customer</Badge>
                         )}
                       </TableCell>
                       <TableCell>
-                        <div className="flex items-center gap-1">
-                          <Calendar className="h-4 w-4 text-muted-foreground" />
-                          <span>{user.booking_count}</span>
+                        <div className="flex items-center gap-2">
+                          <span className="font-black text-slate-900">{user.booking_count || 0}</span>
+                          <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Bookings</span>
                         </div>
                       </TableCell>
-                      <TableCell>
-                        {format(new Date(user.created_at), 'MMM d, yyyy')}
-                      </TableCell>
-                      <TableCell>
-                        <DropdownMenu>
-                          <DropdownMenuTrigger asChild>
-                            <Button variant="ghost" size="icon">
-                              <MoreVertical className="h-4 w-4" />
-                            </Button>
-                          </DropdownMenuTrigger>
-                          <DropdownMenuContent align="end">
-                            <DropdownMenuItem onClick={() => {
-                              setSelectedUser(user);
-                              setShowDetailsDialog(true);
-                            }}>
-                              <Eye className="h-4 w-4 mr-2" />
-                              View Details
-                            </DropdownMenuItem>
-                          </DropdownMenuContent>
-                        </DropdownMenu>
+                      <TableCell className="text-right px-8">
+                        <Button variant="ghost" size="sm" onClick={() => { setSelectedUser(user); setShowDetailsDialog(true); }} className="rounded-xl font-bold hover:bg-slate-100">
+                          <Eye className="w-4 h-4 mr-2" /> View
+                        </Button>
                       </TableCell>
                     </TableRow>
                   ))}
@@ -323,47 +243,49 @@ export default function AdminUsers() {
         </Card>
       </div>
 
-      {/* Details Dialog */}
       <Dialog open={showDetailsDialog} onOpenChange={setShowDetailsDialog}>
-        <DialogContent>
+        <DialogContent className="rounded-[2.5rem] border-none shadow-2xl p-8 max-w-md">
           <DialogHeader>
-            <DialogTitle>User Details</DialogTitle>
+            <DialogTitle className="text-3xl font-black">Profile Overview</DialogTitle>
+            <DialogDescription className="font-medium">Detailed local database record information.</DialogDescription>
           </DialogHeader>
           {selectedUser && (
-            <div className="space-y-4">
-              <div className="flex items-center gap-4">
-                <Avatar className="h-16 w-16">
+            <div className="space-y-8 mt-6">
+              <div className="flex items-center gap-5">
+                <Avatar className="h-24 w-24 border-4 border-slate-50 shadow-xl">
                   <AvatarImage src={selectedUser.avatar_url || ''} />
-                  <AvatarFallback className="text-lg">{getInitials(selectedUser.full_name)}</AvatarFallback>
+                  <AvatarFallback className="text-3xl font-black">{getInitials(selectedUser.full_name)}</AvatarFallback>
                 </Avatar>
                 <div>
-                  <h3 className="font-semibold text-lg">{selectedUser.full_name || 'Unknown'}</h3>
-                  {selectedUser.is_owner ? (
-                    <Badge className="bg-accent/10 text-accent border-0">Salon Owner</Badge>
-                  ) : (
-                    <Badge variant="secondary">Customer</Badge>
-                  )}
+                  <h3 className="text-2xl font-black text-slate-900">{selectedUser.full_name || 'Legacy User'}</h3>
+                  <p className="text-sm font-bold text-accent uppercase tracking-widest">{selectedUser.role || 'Member'}</p>
                 </div>
               </div>
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <Label className="text-muted-foreground">Phone</Label>
-                  <p className="font-medium">{selectedUser.phone || 'Not set'}</p>
+
+              <div className="grid grid-cols-2 gap-8">
+                <div className="space-y-1">
+                  <p className="text-[10px] font-black uppercase text-slate-400 tracking-widest">Mobile Number</p>
+                  <p className="font-black text-slate-900">{selectedUser.phone || 'Unknown'}</p>
                 </div>
-                <div>
-                  <Label className="text-muted-foreground">Total Bookings</Label>
-                  <p className="font-medium">{selectedUser.booking_count}</p>
+                <div className="space-y-1">
+                  <p className="text-[10px] font-black uppercase text-slate-400 tracking-widest">Transaction Count</p>
+                  <p className="font-black text-slate-900">{selectedUser.booking_count} Visits</p>
+                </div>
+                <div className="space-y-1">
+                  <p className="text-[10px] font-black uppercase text-slate-400 tracking-widest">Onboard Date</p>
+                  <p className="font-black text-slate-900">{format(new Date(selectedUser.created_at), 'PPP')}</p>
                 </div>
                 {selectedUser.salon_name && (
-                  <div>
-                    <Label className="text-muted-foreground">Salon</Label>
-                    <p className="font-medium">{selectedUser.salon_name}</p>
+                  <div className="space-y-1">
+                    <p className="text-[10px] font-black uppercase text-slate-400 tracking-widest">Managed Saloon</p>
+                    <p className="font-black text-slate-900">{selectedUser.salon_name}</p>
                   </div>
                 )}
-                <div>
-                  <Label className="text-muted-foreground">Joined</Label>
-                  <p className="font-medium">{format(new Date(selectedUser.created_at), 'PPP')}</p>
-                </div>
+              </div>
+
+              <div className="pt-6 border-t border-slate-100 flex gap-3">
+                <Button className="flex-1 bg-slate-900 text-white font-black h-12 rounded-2xl">Audit Logs</Button>
+                <Button variant="ghost" className="bg-red-50 text-red-600 font-black h-12 rounded-2xl">Restrict Access</Button>
               </div>
             </div>
           )}

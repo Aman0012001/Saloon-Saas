@@ -95,15 +95,15 @@ export const createSampleData = async () => {
         .from("salons")
         .insert([
           {
-            name: "Glamour Studio",
-            slug: "glamour-studio",
+            name: "Glamour Saloon",
+            slug: "glamour-saloon",
             description: "Premium beauty salon with expert stylists",
             address: "123 Fashion Street, Bandra West",
             city: "Mumbai",
             state: "Maharashtra",
             pincode: "400050",
             phone: "+91 98765 43210",
-            email: "info@glamourstudio.com",
+            email: "info@glamoursaloon.com",
             is_active: true
           },
           {

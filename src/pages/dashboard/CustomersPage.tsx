@@ -6,7 +6,7 @@ import {
   Mail,
   Phone,
   Calendar,
-  IndianRupee,
+  DollarSign,
   ChevronRight,
   Plus,
   Filter,
@@ -50,7 +50,7 @@ import { ResponsiveDashboardLayout } from "@/components/dashboard/ResponsiveDash
 import { useSalon } from "@/hooks/useSalon";
 import { useAuth } from "@/hooks/useAuth";
 import { useMobile } from "@/hooks/use-mobile";
-import { supabase } from "@/integrations/supabase/client";
+import api from "@/services/api";
 import { useToast } from "@/hooks/use-toast";
 import { format, formatDistanceToNow } from "date-fns";
 
@@ -94,7 +94,7 @@ export default function CustomersPage() {
   const handleExport = () => {
     if (customers.length === 0) return;
 
-    const headers = ["Name", "Phone", "Visits", "Total Spent (₹)", "Last Visit"];
+    const headers = ["Name", "Phone", "Visits", "Total Spent ($)", "Last Visit"];
     const csvContent = [
       headers.join(","),
       ...filteredCustomers.map(c => [
@@ -127,42 +127,29 @@ export default function CustomersPage() {
 
     setAdding(true);
     try {
-      // 1. Create a dummy user/profile for the walk-in
-      // In a real app, we'd use a specific 'customers' table, 
-      // but here we'll create a profile and a 'completed' booking to represent a visit.
-
-      const tempId = crypto.randomUUID();
-
-      // We simulate adding by ensuring a profile exists (this is simplified for the demo/working mock)
-      // and creating a booking record which our fetch logic uses to identify customers.
-
-      const { error: bookingError } = await supabase
-        .from("bookings")
-        .insert({
-          user_id: user?.id, // In this demo, we use current user as proxy, or tempId if handled by server
-          salon_id: currentSalon.id,
-          service_id: addFormData.initial_service || (await supabase.from('services').select('id').limit(1).single()).data?.id,
-          status: "completed",
-          booking_date: new Date().toISOString().split('T')[0],
-          booking_time: "12:00",
-          notes: `Manually added customer: ${addFormData.full_name}. Phone: ${addFormData.phone}`
-        });
-
-      if (bookingError) throw bookingError;
+      // Manual creation for walk-in via API
+      await api.bookings.create({
+        salon_id: currentSalon.id,
+        service_id: addFormData.initial_service,
+        status: "completed",
+        booking_date: new Date().toISOString().split('T')[0],
+        booking_time: "12:00",
+        notes: `Manual Customer: ${addFormData.full_name}, Phone: ${addFormData.phone}`
+      });
 
       toast({
         title: "Customer Added",
-        description: `${addFormData.full_name} has been added to your records.`,
+        description: `${addFormData.full_name} has been added to local records.`,
       });
 
       setIsAddDialogOpen(false);
       setAddFormData({ full_name: "", phone: "", email: "", initial_service: "" });
       fetchCustomers();
-    } catch (error) {
+    } catch (error: any) {
       console.error("Error adding customer:", error);
       toast({
-        title: "Registration Failed",
-        description: "Could not create customer record. Please try again.",
+        title: "Failed",
+        description: error.message || "Could not create customer record locally.",
         variant: "destructive",
       });
     } finally {
@@ -175,14 +162,8 @@ export default function CustomersPage() {
 
     setLoading(true);
     try {
-      // Get unique customers from bookings
-      const { data: bookings, error: bookingsError } = await supabase
-        .from("bookings")
-        .select("user_id, booking_date, service_id")
-        .eq("salon_id", currentSalon.id)
-        .in("status", ["confirmed", "completed"]);
-
-      if (bookingsError) throw bookingsError;
+      // Get all bookings for this salon from the PHP API
+      const bookings = await api.bookings.getAll({ salon_id: currentSalon.id });
 
       if (!bookings || bookings.length === 0) {
         setCustomers([]);
@@ -190,68 +171,55 @@ export default function CustomersPage() {
         return;
       }
 
-      // Get unique user IDs
-      const userIds = [...new Set(bookings.map(b => b.user_id))];
+      // Group by user_id to identify unique customers
+      const customerMap = new Map<string, Customer>();
 
-      // Fetch profiles
-      const { data: profiles, error: profilesError } = await supabase
-        .from("profiles")
-        .select("user_id, full_name, phone, avatar_url")
-        .in("user_id", userIds);
+      for (const booking of bookings) {
+        const userId = booking.user_id;
+        if (!userId) continue;
 
-      if (profilesError) throw profilesError;
+        if (!customerMap.has(userId)) {
+          customerMap.set(userId, {
+            user_id: userId,
+            full_name: booking.user_name || "Unknown",
+            phone: booking.user_phone || null,
+            avatar_url: null,
+            total_visits: 0,
+            total_spent: 0,
+            last_visit: null,
+          });
+        }
 
-      // Fetch service prices
-      const serviceIds = [...new Set(bookings.map(b => b.service_id))];
-      const { data: services } = await supabase
-        .from("services")
-        .select("id, price")
-        .in("id", serviceIds);
+        const stats = customerMap.get(userId)!;
+        stats.total_visits += 1;
+        stats.total_spent += Number(booking.price || 0);
 
-      // Calculate customer stats
-      const customerStats = userIds.map(userId => {
-        const userBookings = bookings.filter(b => b.user_id === userId);
-        const profile = profiles?.find(p => p.user_id === userId);
+        if (!stats.last_visit || new Date(booking.booking_date) > new Date(stats.last_visit)) {
+          stats.last_visit = booking.booking_date;
+        }
+      }
 
-        const totalSpent = userBookings.reduce((sum, b) => {
-          const service = services?.find(s => s.id === b.service_id);
-          return sum + (service?.price || 0);
-        }, 0);
-
-        const sortedBookings = userBookings.sort(
-          (a, b) => new Date(b.booking_date).getTime() - new Date(a.booking_date).getTime()
-        );
-
-        return {
-          user_id: userId,
-          full_name: profile?.full_name || null,
-          phone: profile?.phone || null,
-          avatar_url: profile?.avatar_url || null,
-          total_visits: userBookings.length,
-          total_spent: totalSpent,
-          last_visit: sortedBookings[0]?.booking_date || null,
-        };
-      });
+      const customerList = Array.from(customerMap.values());
 
       // Sort by selected criteria
       if (sortBy === "visits") {
-        customerStats.sort((a, b) => b.total_visits - a.total_visits);
+        customerList.sort((a, b) => b.total_visits - a.total_visits);
       } else if (sortBy === "spent") {
-        customerStats.sort((a, b) => b.total_spent - a.total_spent);
+        customerList.sort((a, b) => b.total_spent - a.total_spent);
       } else if (sortBy === "recent") {
-        customerStats.sort((a, b) => {
+        customerList.sort((a, b) => {
           if (!a.last_visit) return 1;
           if (!b.last_visit) return -1;
           return new Date(b.last_visit).getTime() - new Date(a.last_visit).getTime();
         });
       }
 
-      setCustomers(customerStats);
+      setCustomers(customerList);
     } catch (error) {
       console.error("Error fetching customers:", error);
       toast({
         title: "Error",
-        description: "Failed to load customers",
+        description: "Failed to load customers from local database",
         variant: "destructive",
       });
     } finally {
@@ -379,15 +347,15 @@ export default function CustomersPage() {
             </Card>
             <Card className="border-0 shadow-sm bg-gradient-to-br from-emerald-50 to-emerald-100">
               <CardContent className="p-3 text-center">
-                <IndianRupee className="w-5 h-5 text-emerald-600 mx-auto mb-1" />
-                <p className="text-lg font-bold text-emerald-700">₹{Math.round(totalRevenue / 1000)}K</p>
+                <DollarSign className="w-5 h-5 text-emerald-600 mx-auto mb-1" />
+                <p className="text-lg font-bold text-emerald-700">${Math.round(totalRevenue / 1000)}K</p>
                 <p className="text-xs text-emerald-600 font-medium">Revenue</p>
               </CardContent>
             </Card>
             <Card className="border-0 shadow-sm bg-gradient-to-br from-amber-50 to-amber-100">
               <CardContent className="p-3 text-center">
                 <TrendingUp className="w-5 h-5 text-amber-600 mx-auto mb-1" />
-                <p className="text-lg font-bold text-amber-700">₹{Math.round(avgSpentPerCustomer)}</p>
+                <p className="text-lg font-bold text-amber-700">${Math.round(avgSpentPerCustomer)}</p>
                 <p className="text-xs text-amber-600 font-medium">Avg</p>
               </CardContent>
             </Card>
@@ -404,7 +372,7 @@ export default function CustomersPage() {
                   {customers.length}
                 </Badge>
               </h1>
-              <p className="text-muted-foreground font-medium">Analyze loyalty and manage client relationships</p>
+              <p className="text-muted-foreground font-medium">Analyze loyalty and manage client relationships from local DB</p>
             </div>
             <div className="flex items-center gap-3">
               <Button
@@ -448,10 +416,10 @@ export default function CustomersPage() {
                 <div className="flex items-center justify-between">
                   <div>
                     <p className="text-sm font-medium text-emerald-600">Total Revenue</p>
-                    <p className="text-3xl font-bold text-emerald-700 mt-2">₹{totalRevenue.toLocaleString()}</p>
+                    <p className="text-3xl font-bold text-emerald-700 mt-2">${totalRevenue.toLocaleString()}</p>
                   </div>
                   <div className="w-12 h-12 bg-emerald-200 rounded-xl flex items-center justify-center">
-                    <IndianRupee className="w-6 h-6 text-emerald-600" />
+                    <DollarSign className="w-6 h-6 text-emerald-600" />
                   </div>
                 </div>
               </CardContent>
@@ -462,7 +430,7 @@ export default function CustomersPage() {
                 <div className="flex items-center justify-between">
                   <div>
                     <p className="text-sm font-medium text-amber-600">Avg. Spent</p>
-                    <p className="text-3xl font-bold text-amber-700 mt-2">₹{Math.round(avgSpentPerCustomer).toLocaleString()}</p>
+                    <p className="text-3xl font-bold text-amber-700 mt-2">${Math.round(avgSpentPerCustomer).toLocaleString()}</p>
                   </div>
                   <div className="w-12 h-12 bg-amber-200 rounded-xl flex items-center justify-center">
                     <TrendingUp className="w-6 h-6 text-amber-600" />
@@ -542,7 +510,7 @@ export default function CustomersPage() {
                         </div>
                         <div className="flex items-center gap-3 text-xs text-muted-foreground">
                           <span>{customer.total_visits} visits</span>
-                          <span>₹{customer.total_spent.toLocaleString()}</span>
+                          <span>${customer.total_spent.toLocaleString()}</span>
                         </div>
                       </div>
                     </div>
@@ -599,7 +567,7 @@ export default function CustomersPage() {
                         </div>
                         <div className="flex justify-between">
                           <span className="text-muted-foreground">Spent:</span>
-                          <span className="font-medium">₹{customer.total_spent.toLocaleString()}</span>
+                          <span className="font-medium">${customer.total_spent.toLocaleString()}</span>
                         </div>
                       </div>
                     </div>
@@ -682,12 +650,7 @@ export default function CustomersPage() {
                 <Button
                   size={isMobile ? "sm" : "default"}
                   className="bg-gradient-to-r from-accent to-accent/90 text-white"
-                  onClick={() => {
-                    toast({
-                      title: "Add Customer",
-                      description: "Add customer feature will be available soon",
-                    });
-                  }}
+                  onClick={() => setIsAddDialogOpen(true)}
                 >
                   <UserPlus className="w-4 h-4 mr-2" />
                   Add First Customer
@@ -745,7 +708,7 @@ export default function CustomersPage() {
                         {isMobile && (
                           <div className="flex items-center gap-4 mt-1 text-xs">
                             <span className="text-accent font-medium">{customer.total_visits} visits</span>
-                            <span className="text-emerald-600 font-medium">₹{customer.total_spent.toLocaleString()}</span>
+                            <span className="text-emerald-600 font-medium">${customer.total_spent.toLocaleString()}</span>
                           </div>
                         )}
                       </div>
@@ -758,7 +721,7 @@ export default function CustomersPage() {
                             <p className="text-xs text-muted-foreground font-medium">Visits</p>
                           </div>
                           <div className="text-center">
-                            <p className="text-lg font-bold text-foreground">₹{customer.total_spent.toLocaleString()}</p>
+                            <p className="text-lg font-bold text-foreground">${customer.total_spent.toLocaleString()}</p>
                             <p className="text-xs text-muted-foreground font-medium">Total Spent</p>
                           </div>
                           <div className="text-center min-w-[100px]">
@@ -798,39 +761,13 @@ export default function CustomersPage() {
                           </DropdownMenuItem>
                           <DropdownMenuItem
                             className="hover:bg-secondary/50"
-                            onClick={() => {
-                              if (customer.phone) {
-                                window.open(`tel:${customer.phone}`);
-                              } else {
-                                toast({
-                                  title: "No Phone Number",
-                                  description: "This customer doesn't have a phone number on file",
-                                });
-                              }
-                            }}
+                            onClick={() => navigate(`/dashboard/customers/${customer.user_id}`)}
                           >
-                            <Phone className="w-4 h-4 mr-2" />
-                            Call Customer
-                          </DropdownMenuItem>
-                          <DropdownMenuItem
-                            className="hover:bg-secondary/50"
-                            onClick={() => {
-                              toast({
-                                title: "Customer History",
-                                description: "History feature will be available soon",
-                              });
-                            }}
-                          >
-                            <Star className="w-4 h-4 mr-2" />
+                            <ChevronRight className="w-4 h-4 mr-2" />
                             View History
                           </DropdownMenuItem>
                         </DropdownMenuContent>
                       </DropdownMenu>
-
-                      {/* Mobile Chevron */}
-                      {isMobile && (
-                        <ChevronRight className="w-4 h-4 text-muted-foreground flex-shrink-0" />
-                      )}
                     </div>
                   );
                 })}
@@ -838,74 +775,61 @@ export default function CustomersPage() {
             )}
           </CardContent>
         </Card>
-      </div>
 
-      {/* Add Customer Dialog */}
-      <Dialog open={isAddDialogOpen} onOpenChange={setIsAddDialogOpen}>
-        <DialogContent className="max-w-md border-0 shadow-2xl bg-white/95 backdrop-blur-xl rounded-[2.5rem] p-0 overflow-hidden">
-          <div className="bg-gradient-to-br from-accent/20 to-accent/5 p-8 pb-6">
+        {/* Add Customer Dialog */}
+        <Dialog open={isAddDialogOpen} onOpenChange={setIsAddDialogOpen}>
+          <DialogContent className="max-w-md">
             <DialogHeader>
-              <div className="w-14 h-14 bg-white rounded-2xl flex items-center justify-center shadow-xl mb-4">
-                <UserPlus className="w-7 h-7 text-accent" />
-              </div>
-              <DialogTitle className="text-3xl font-black tracking-tight text-foreground">Add Walk-in</DialogTitle>
-              <DialogDescription className="text-muted-foreground font-medium text-lg leading-snug">
-                Register a new customer to your database instantly.
+              <DialogTitle className="text-2xl font-bold">Add New Customer</DialogTitle>
+              <DialogDescription>
+                Manual entries are stored in your local local database for records.
               </DialogDescription>
             </DialogHeader>
-          </div>
-
-          <div className="p-8 space-y-6">
-            <div className="space-y-2">
-              <Label className="text-xs font-black uppercase tracking-widest text-muted-foreground ml-1">Full Name</Label>
-              <Input
-                placeholder="e.g. Rahul Sharma"
-                value={addFormData.full_name}
-                onChange={(e) => setAddFormData({ ...addFormData, full_name: e.target.value })}
-                className="h-14 bg-secondary/30 border-none rounded-2xl font-bold text-lg"
-              />
-            </div>
-
-            <div className="grid grid-cols-2 gap-4">
+            <div className="space-y-4 py-4">
               <div className="space-y-2">
-                <Label className="text-xs font-black uppercase tracking-widest text-muted-foreground ml-1">Phone</Label>
+                <Label htmlFor="full_name">Full Name</Label>
                 <Input
-                  placeholder="98765..."
+                  id="full_name"
+                  placeholder="Enter customer name"
+                  value={addFormData.full_name}
+                  onChange={(e) => setAddFormData({ ...addFormData, full_name: e.target.value })}
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="phone">Phone Number</Label>
+                <Input
+                  id="phone"
+                  placeholder="Enter phone number"
                   value={addFormData.phone}
                   onChange={(e) => setAddFormData({ ...addFormData, phone: e.target.value })}
-                  className="h-14 bg-secondary/30 border-none rounded-2xl font-bold"
                 />
               </div>
               <div className="space-y-2">
-                <Label className="text-xs font-black uppercase tracking-widest text-muted-foreground ml-1">Email (Opt)</Label>
+                <Label htmlFor="email">Email (Optional)</Label>
                 <Input
-                  placeholder="rahul@..."
+                  id="email"
+                  type="email"
+                  placeholder="customer@example.com"
                   value={addFormData.email}
                   onChange={(e) => setAddFormData({ ...addFormData, email: e.target.value })}
-                  className="h-14 bg-secondary/30 border-none rounded-2xl font-medium"
                 />
               </div>
             </div>
-
-            <p className="text-xs text-muted-foreground italic bg-accent/5 p-3 rounded-xl border border-accent/10">
-              * This will create a completed record for today's visit.
-            </p>
-          </div>
-
-          <div className="p-8 bg-secondary/10 flex gap-4">
-            <Button variant="ghost" onClick={() => setIsAddDialogOpen(false)} className="flex-1 h-14 rounded-2xl font-bold">
-              Discard
-            </Button>
-            <Button
-              onClick={handleAddCustomer}
-              disabled={!addFormData.full_name || adding}
-              className="flex-[2] h-14 bg-accent hover:bg-accent/90 text-white rounded-2xl font-black shadow-xl shadow-accent/20"
-            >
-              {adding ? "Saving..." : "Add Customer"}
-            </Button>
-          </div>
-        </DialogContent>
-      </Dialog>
+            <div className="flex justify-end gap-3 pt-4">
+              <Button variant="outline" onClick={() => setIsAddDialogOpen(false)}>
+                Cancel
+              </Button>
+              <Button
+                onClick={handleAddCustomer}
+                className="bg-accent text-white font-bold"
+                disabled={!addFormData.full_name || adding}
+              >
+                {adding ? "Adding..." : "Add Customer"}
+              </Button>
+            </div>
+          </DialogContent>
+        </Dialog>
+      </div>
     </ResponsiveDashboardLayout>
   );
 }

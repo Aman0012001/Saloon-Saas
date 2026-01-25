@@ -1,32 +1,18 @@
 import { useEffect, useState } from "react";
 import {
   CreditCard,
-  Download,
   Search,
   TrendingUp,
   DollarSign,
   Receipt,
   Calendar,
+  Sparkles,
+  Zap,
 } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table";
 import {
   Dialog,
   DialogContent,
@@ -39,8 +25,7 @@ import {
 import { Label } from "@/components/ui/label";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { AdminLayout } from "@/components/admin/AdminLayout";
-import { supabase } from "@/integrations/supabase/client";
-import { format } from "date-fns";
+import api from "@/services/api";
 
 interface SubscriptionPlan {
   id: string;
@@ -76,21 +61,11 @@ export default function AdminPayments() {
   const fetchPlans = async () => {
     setLoading(true);
     try {
-      const { data, error } = await supabase
-        .from('subscription_plans')
-        .select('*')
-        .order('sort_order');
-
-      if (error) throw error;
-
-      const parsedPlans = data?.map(plan => ({
-        ...plan,
-        features: Array.isArray(plan.features) ? plan.features as string[] : [],
-      })) || [];
-
-      setPlans(parsedPlans);
+      // Fetch from local subscriptions API
+      const data = await api.admin.getSubscriptionPlans();
+      setPlans(data || []);
     } catch (error) {
-      console.error('Error fetching plans:', error);
+      console.error('Local plans sync failed:', error);
     } finally {
       setLoading(false);
     }
@@ -103,34 +78,15 @@ export default function AdminPayments() {
   const handleSavePlan = async () => {
     try {
       if (editingPlan) {
-        await supabase
-          .from('subscription_plans')
-          .update({
-            name: planForm.name,
-            description: planForm.description,
-            price_monthly: planForm.price_monthly,
-            price_yearly: planForm.price_yearly,
-            max_staff: planForm.max_staff,
-            max_services: planForm.max_services,
-          })
-          .eq('id', editingPlan.id);
+        await api.admin.updateSubscriptionPlan(editingPlan.id, planForm);
       } else {
-        await supabase.from('subscription_plans').insert({
-          name: planForm.name,
-          slug: planForm.slug,
-          description: planForm.description,
-          price_monthly: planForm.price_monthly,
-          price_yearly: planForm.price_yearly,
-          max_staff: planForm.max_staff,
-          max_services: planForm.max_services,
-        });
+        await api.admin.createSubscriptionPlan(planForm);
       }
-
       await fetchPlans();
       setShowPlanDialog(false);
       resetForm();
     } catch (error) {
-      console.error('Error saving plan:', error);
+      console.error('Local plan persist failed:', error);
     }
   };
 
@@ -163,224 +119,121 @@ export default function AdminPayments() {
 
   return (
     <AdminLayout>
-      <div className="space-y-6">
-        {/* Header */}
-        <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
-          <div>
-            <h1 className="text-2xl font-bold">Payments & Subscriptions</h1>
-            <p className="text-muted-foreground">Manage subscription plans and track payments</p>
+      <div className="space-y-8">
+        <div className="bg-slate-900 rounded-[2.5rem] p-10 text-white shadow-2xl relative overflow-hidden">
+          <div className="absolute top-0 right-0 w-80 h-80 bg-accent/20 blur-[120px] rounded-full" />
+          <div className="relative z-10 flex flex-col md:flex-row items-center justify-between gap-6">
+            <div className="flex items-center gap-5">
+              <div className="h-16 w-16 bg-white/10 backdrop-blur-md rounded-2xl flex items-center justify-center border border-white/10 text-accent">
+                <Receipt className="h-8 w-8" />
+              </div>
+              <div>
+                <h1 className="text-4xl font-black tracking-tight">Financal Ledger</h1>
+                <p className="text-slate-400 font-bold uppercase tracking-widest text-[10px]">Subscription & Revenue Models (Local)</p>
+              </div>
+            </div>
+            <Dialog open={showPlanDialog} onOpenChange={(open) => { setShowPlanDialog(open); if (!open) resetForm(); }}>
+              <DialogTrigger asChild>
+                <Button className="bg-accent text-white font-black rounded-xl h-14 px-8 shadow-lg shadow-accent/20">
+                  <Zap className="w-4 h-4 mr-2" /> NEW SUBSCRIPTION TIER
+                </Button>
+              </DialogTrigger>
+              <DialogContent className="rounded-[2.5rem] border-none shadow-2xl p-10">
+                <DialogHeader>
+                  <DialogTitle className="text-3xl font-black tracking-tight text-slate-900">Configure Tier</DialogTitle>
+                  <DialogDescription className="font-bold text-slate-400">Initialize a new economic model for your local saloons.</DialogDescription>
+                </DialogHeader>
+                <div className="space-y-6 mt-6">
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="space-y-2">
+                      <Label className="text-[10px] font-black uppercase text-slate-400 tracking-widest">Descriptor</Label>
+                      <Input value={planForm.name} onChange={e => setPlanForm({ ...planForm, name: e.target.value })} className="h-14 bg-slate-50 border-none rounded-xl font-bold" />
+                    </div>
+                    <div className="space-y-2">
+                      <Label className="text-[10px] font-black uppercase text-slate-400 tracking-widest">Slug</Label>
+                      <Input value={planForm.slug} onChange={e => setPlanForm({ ...planForm, slug: e.target.value })} className="h-14 bg-slate-50 border-none rounded-xl font-bold" disabled={!!editingPlan} />
+                    </div>
+                  </div>
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="space-y-2">
+                      <Label className="text-[10px] font-black uppercase text-slate-400 tracking-widest">Monthly Rate ($)</Label>
+                      <Input type="number" value={planForm.price_monthly} onChange={e => setPlanForm({ ...planForm, price_monthly: Number(e.target.value) })} className="h-14 bg-slate-50 border-none rounded-xl font-black" />
+                    </div>
+                    <div className="space-y-2">
+                      <Label className="text-[10px] font-black uppercase text-slate-400 tracking-widest">Yearly Rate ($)</Label>
+                      <Input type="number" value={planForm.price_yearly} onChange={e => setPlanForm({ ...planForm, price_yearly: Number(e.target.value) })} className="h-14 bg-slate-50 border-none rounded-xl font-black" />
+                    </div>
+                  </div>
+                </div>
+                <DialogFooter className="mt-8">
+                  <Button onClick={handleSavePlan} className="w-full h-16 bg-slate-900 text-white font-black rounded-3xl shadow-xl">{editingPlan ? 'PERSIST CHANGES' : 'GENERATE TIER'}</Button>
+                </DialogFooter>
+              </DialogContent>
+            </Dialog>
           </div>
         </div>
 
-        {/* Stats */}
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-          <Card>
-            <CardContent className="p-6">
-              <div className="flex items-center justify-between">
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
+          {[
+            { label: "Gross Local Intake", value: "$0", icon: DollarSign, color: "text-emerald-500", bg: "bg-emerald-50" },
+            { label: "Active Nodes", value: plans.length, icon: Zap, color: "text-blue-500", bg: "bg-blue-50" },
+            { label: "Registry Tiers", value: plans.filter(p => p.is_active).length, icon: Receipt, color: "text-purple-500", bg: "bg-purple-50" },
+            { label: "Tax Protocol", value: "10%", icon: TrendingUp, color: "text-amber-500", bg: "bg-amber-50" }
+          ].map((stat, i) => (
+            <Card key={i} className="border-none shadow-sm bg-white rounded-3xl p-6 group hover:shadow-lg transition-all">
+              <div className="flex justify-between items-start">
                 <div>
-                  <p className="text-sm text-muted-foreground">Total Revenue</p>
-                  <p className="text-3xl font-bold">₹0</p>
-                  <p className="text-sm text-muted-foreground">This month</p>
+                  <p className="text-[10px] font-black uppercase text-slate-400 tracking-widest leading-none">{stat.label}</p>
+                  <p className="text-3xl font-black text-slate-900 mt-3">{stat.value}</p>
                 </div>
-                <div className="h-12 w-12 rounded-full bg-primary/10 flex items-center justify-center">
-                  <DollarSign className="h-6 w-6 text-primary" />
+                <div className={`w-12 h-12 rounded-xl ${stat.bg} ${stat.color} flex items-center justify-center group-hover:scale-110 transition-transform`}>
+                  <stat.icon className="w-6 h-6" />
                 </div>
               </div>
-            </CardContent>
-          </Card>
-          <Card>
-            <CardContent className="p-6">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-sm text-muted-foreground">Active Subscriptions</p>
-                  <p className="text-3xl font-bold">0</p>
-                </div>
-                <div className="h-12 w-12 rounded-full bg-accent/10 flex items-center justify-center">
-                  <CreditCard className="h-6 w-6 text-accent" />
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-          <Card>
-            <CardContent className="p-6">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-sm text-muted-foreground">Plans Available</p>
-                  <p className="text-3xl font-bold">{plans.filter(p => p.is_active).length}</p>
-                </div>
-                <div className="h-12 w-12 rounded-full bg-secondary/50 flex items-center justify-center">
-                  <Receipt className="h-6 w-6 text-secondary-foreground" />
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-          <Card>
-            <CardContent className="p-6">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-sm text-muted-foreground">Commission Rate</p>
-                  <p className="text-3xl font-bold">10%</p>
-                </div>
-                <div className="h-12 w-12 rounded-full bg-muted flex items-center justify-center">
-                  <TrendingUp className="h-6 w-6 text-muted-foreground" />
-                </div>
-              </div>
-            </CardContent>
-          </Card>
+            </Card>
+          ))}
         </div>
 
-        {/* Tabs */}
         <Tabs value={activeTab} onValueChange={setActiveTab}>
-          <TabsList>
-            <TabsTrigger value="plans">Subscription Plans</TabsTrigger>
-            <TabsTrigger value="transactions">Transactions</TabsTrigger>
+          <TabsList className="bg-white p-1 rounded-[2rem] border border-slate-100 shadow-sm mb-8">
+            <TabsTrigger value="plans" className="rounded-[1.5rem] px-8 h-12 font-bold data-[state=active]:bg-slate-900 data-[state=active]:text-white">Subscription Infrastructure</TabsTrigger>
+            <TabsTrigger value="transactions" className="rounded-[1.5rem] px-8 h-12 font-bold data-[state=active]:bg-slate-900 data-[state=active]:text-white">Audit Log</TabsTrigger>
           </TabsList>
 
-          <TabsContent value="plans" className="space-y-4">
-            <div className="flex justify-end">
-              <Dialog open={showPlanDialog} onOpenChange={(open) => {
-                setShowPlanDialog(open);
-                if (!open) resetForm();
-              }}>
-                <DialogTrigger asChild>
-                  <Button>Add New Plan</Button>
-                </DialogTrigger>
-                <DialogContent>
-                  <DialogHeader>
-                    <DialogTitle>{editingPlan ? 'Edit Plan' : 'Create New Plan'}</DialogTitle>
-                    <DialogDescription>
-                      Configure subscription plan details
-                    </DialogDescription>
-                  </DialogHeader>
-                  <div className="space-y-4">
-                    <div className="grid grid-cols-2 gap-4">
-                      <div className="space-y-2">
-                        <Label>Plan Name</Label>
-                        <Input
-                          value={planForm.name}
-                          onChange={(e) => setPlanForm({ ...planForm, name: e.target.value })}
-                          placeholder="e.g., Professional"
-                        />
-                      </div>
-                      <div className="space-y-2">
-                        <Label>Slug</Label>
-                        <Input
-                          value={planForm.slug}
-                          onChange={(e) => setPlanForm({ ...planForm, slug: e.target.value })}
-                          placeholder="e.g., professional"
-                          disabled={!!editingPlan}
-                        />
-                      </div>
+          <TabsContent value="plans" className="animate-in fade-in duration-500">
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
+              {plans.map((plan) => (
+                <Card key={plan.id} className="border-none shadow-sm bg-white rounded-[3rem] p-8 relative overflow-hidden group hover:shadow-2xl transition-all border-t-8 border-t-accent">
+                  {plan.is_featured && <Badge className="absolute top-6 right-6 bg-accent text-white font-black border-none px-4">ELITE</Badge>}
+                  <h3 className="text-2xl font-black text-slate-900 mb-2">{plan.name}</h3>
+                  <p className="text-xs font-bold text-slate-400 uppercase tracking-widest">{plan.description}</p>
+
+                  <div className="my-10">
+                    <p className="text-5xl font-black text-slate-900 tracking-tighter">${plan.price_monthly}<span className="text-sm text-slate-400 font-bold ml-2">/ CYCLE</span></p>
+                  </div>
+
+                  <div className="space-y-4 mb-10">
+                    <div className="flex items-center gap-3 text-sm font-bold text-slate-600">
+                      <div className="w-6 h-6 rounded-full bg-slate-100 flex items-center justify-center"><Calendar className="w-3.5 h-3.5" /></div>
+                      Up to {plan.max_staff || '∞'} Staff Nodes
                     </div>
-                    <div className="space-y-2">
-                      <Label>Description</Label>
-                      <Input
-                        value={planForm.description}
-                        onChange={(e) => setPlanForm({ ...planForm, description: e.target.value })}
-                        placeholder="Short description"
-                      />
-                    </div>
-                    <div className="grid grid-cols-2 gap-4">
-                      <div className="space-y-2">
-                        <Label>Monthly Price (₹)</Label>
-                        <Input
-                          type="number"
-                          value={planForm.price_monthly}
-                          onChange={(e) => setPlanForm({ ...planForm, price_monthly: Number(e.target.value) })}
-                        />
-                      </div>
-                      <div className="space-y-2">
-                        <Label>Yearly Price (₹)</Label>
-                        <Input
-                          type="number"
-                          value={planForm.price_yearly}
-                          onChange={(e) => setPlanForm({ ...planForm, price_yearly: Number(e.target.value) })}
-                        />
-                      </div>
-                    </div>
-                    <div className="grid grid-cols-2 gap-4">
-                      <div className="space-y-2">
-                        <Label>Max Staff</Label>
-                        <Input
-                          type="number"
-                          value={planForm.max_staff}
-                          onChange={(e) => setPlanForm({ ...planForm, max_staff: Number(e.target.value) })}
-                        />
-                      </div>
-                      <div className="space-y-2">
-                        <Label>Max Services</Label>
-                        <Input
-                          type="number"
-                          value={planForm.max_services}
-                          onChange={(e) => setPlanForm({ ...planForm, max_services: Number(e.target.value) })}
-                        />
-                      </div>
+                    <div className="flex items-center gap-3 text-sm font-bold text-slate-600">
+                      <div className="w-6 h-6 rounded-full bg-slate-100 flex items-center justify-center"><Sparkles className="w-3.5 h-3.5" /></div>
+                      {plan.max_services || '∞'} Service Records
                     </div>
                   </div>
-                  <DialogFooter>
-                    <Button variant="outline" onClick={() => setShowPlanDialog(false)}>
-                      Cancel
-                    </Button>
-                    <Button onClick={handleSavePlan}>
-                      {editingPlan ? 'Update Plan' : 'Create Plan'}
-                    </Button>
-                  </DialogFooter>
-                </DialogContent>
-              </Dialog>
-            </div>
 
-            {loading ? (
-              <div className="flex items-center justify-center h-64">
-                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
-              </div>
-            ) : (
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-                {plans.map((plan) => (
-                  <Card key={plan.id} className={plan.is_featured ? 'border-primary' : ''}>
-                    <CardHeader>
-                      <div className="flex items-center justify-between">
-                        <CardTitle className="text-lg">{plan.name}</CardTitle>
-                        {plan.is_featured && (
-                          <Badge>Popular</Badge>
-                        )}
-                      </div>
-                      <CardDescription>{plan.description}</CardDescription>
-                    </CardHeader>
-                    <CardContent className="space-y-4">
-                      <div>
-                        <p className="text-3xl font-bold">₹{plan.price_monthly}</p>
-                        <p className="text-sm text-muted-foreground">/month</p>
-                      </div>
-                      <div className="space-y-2 text-sm">
-                        <p>• Up to {plan.max_staff || 'Unlimited'} staff</p>
-                        <p>• Up to {plan.max_services || 'Unlimited'} services</p>
-                        {plan.features.slice(0, 3).map((feature, i) => (
-                          <p key={i}>• {feature}</p>
-                        ))}
-                      </div>
-                      <Button
-                        variant="outline"
-                        className="w-full"
-                        onClick={() => openEditPlan(plan)}
-                      >
-                        Edit Plan
-                      </Button>
-                    </CardContent>
-                  </Card>
-                ))}
-              </div>
-            )}
+                  <Button variant="outline" className="w-full h-14 border-slate-200 rounded-2xl font-black hover:bg-slate-900 hover:text-white transition-all" onClick={() => openEditPlan(plan)}>UPDATE POLICY</Button>
+                </Card>
+              ))}
+            </div>
           </TabsContent>
 
           <TabsContent value="transactions">
-            <Card>
-              <CardContent className="py-12 text-center">
-                <Receipt className="h-12 w-12 mx-auto mb-3 text-muted-foreground opacity-50" />
-                <p className="text-muted-foreground">No transactions yet</p>
-                <p className="text-sm text-muted-foreground">
-                  Payment tracking will appear here once salons start subscribing
-                </p>
-              </CardContent>
+            <Card className="border-none shadow-sm bg-white rounded-[3rem] p-20 text-center">
+              <Receipt className="h-16 w-16 mx-auto mb-6 text-slate-100" />
+              <h4 className="text-xl font-black text-slate-900 uppercase tracking-widest">Audit Archive Empty</h4>
+              <p className="text-slate-400 font-bold mt-2">Zero financial events detected in the local repository.</p>
             </Card>
           </TabsContent>
         </Tabs>

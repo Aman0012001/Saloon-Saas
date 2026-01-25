@@ -8,7 +8,7 @@ import {
   Edit,
   Trash2,
   Clock,
-  IndianRupee,
+  DollarSign,
   Star,
   TrendingUp,
   Filter,
@@ -32,6 +32,13 @@ import {
   DialogTrigger,
   DialogFooter,
 } from "@/components/ui/dialog";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import {
   Select,
   SelectContent,
@@ -93,7 +100,7 @@ export default function ServicesPage() {
 
     setLoading(true);
     try {
-      const data = await api.services.getBySalon(currentSalon.id);
+      const data = await api.services.getBySalon(currentSalon.id, true);
       setServices(data || []);
     } catch (error) {
       console.error("Error fetching services:", error);
@@ -359,9 +366,9 @@ export default function ServicesPage() {
 
                     <div className="grid grid-cols-2 gap-4">
                       <div className="space-y-2">
-                        <Label htmlFor="price" className="text-xs font-black uppercase tracking-widest text-muted-foreground ml-1">Price (₹)</Label>
+                        <Label htmlFor="price" className="text-xs font-black uppercase tracking-widest text-muted-foreground ml-1">Price ($)</Label>
                         <div className="relative">
-                          <IndianRupee className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-accent/50" />
+                          <DollarSign className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-accent/50" />
                           <Input
                             id="price"
                             type="number"
@@ -498,13 +505,13 @@ export default function ServicesPage() {
               <div className="flex items-center justify-between relative z-10">
                 <div>
                   <p className="text-sm font-semibold text-emerald-600/80 uppercase tracking-wider">Avg. Price</p>
-                  <p className="text-4xl font-black text-emerald-900 mt-2">₹{Math.round(avgPrice)}</p>
+                  <p className="text-4xl font-black text-emerald-900 mt-2">${Math.round(avgPrice)}</p>
                   <p className="text-xs font-medium text-emerald-600 mt-1 flex items-center gap-1">
                     <TrendingUp className="w-3 h-3" /> Standard Rate
                   </p>
                 </div>
                 <div className="w-14 h-14 bg-white shadow-lg rounded-2xl flex items-center justify-center group-hover:rotate-12 transition-transform duration-300">
-                  <IndianRupee className="w-7 h-7 text-emerald-600" />
+                  <DollarSign className="w-7 h-7 text-emerald-600" />
                 </div>
               </div>
             </CardContent>
@@ -729,7 +736,7 @@ export default function ServicesPage() {
                     <div className="space-y-1">
                       <p className={`text-[10px] font-black uppercase tracking-[0.2em] text-muted-foreground/60 leading-none ${viewMode === "list" ? "hidden" : ""}`}>Price</p>
                       <p className="text-3xl font-black text-foreground flex items-center tracking-tighter">
-                        <span className="text-lg font-medium mr-1 opacity-60">₹</span>
+                        <span className="text-lg font-medium mr-1 opacity-60">$</span>
                         {service.price.toLocaleString()}
                       </p>
                     </div>

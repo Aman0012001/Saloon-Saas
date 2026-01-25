@@ -24,7 +24,7 @@ const Pricing = () => {
     {
       name: "Starter",
       icon: Star,
-      price: "₹999",
+      price: "$999",
       period: "/month",
       description: "Perfect for small salons getting started",
       popular: false,
@@ -46,7 +46,7 @@ const Pricing = () => {
     {
       name: "Professional",
       icon: Crown,
-      price: "₹2,499",
+      price: "$2,499",
       period: "/month",
       description: "Most popular choice for growing salons",
       popular: true,
@@ -69,7 +69,7 @@ const Pricing = () => {
     {
       name: "Enterprise",
       icon: Zap,
-      price: "₹4,999",
+      price: "$4,999",
       period: "/month",
       description: "Complete solution for salon chains",
       popular: false,
@@ -92,25 +92,25 @@ const Pricing = () => {
   const addOns = [
     {
       name: "Advanced Analytics",
-      price: "₹499/month",
+      price: "$499/month",
       description: "Detailed business insights and performance metrics",
       icon: BarChart3
     },
     {
       name: "WhatsApp Integration",
-      price: "₹299/month", 
+      price: "$299/month", 
       description: "Send booking confirmations and reminders via WhatsApp",
       icon: Smartphone
     },
     {
       name: "Website Integration",
-      price: "₹799/month",
+      price: "$799/month",
       description: "Embed booking widget on your salon website",
       icon: Globe
     },
     {
       name: "Dedicated Support",
-      price: "₹1,999/month",
+      price: "$1,999/month",
       description: "Priority support with dedicated account manager",
       icon: Headphones
     }
@@ -135,7 +135,7 @@ const Pricing = () => {
     },
     {
       question: "What if I need more bookings?",
-      answer: "Our Professional and Enterprise plans include unlimited bookings. For Starter plan, additional bookings are ₹2 each."
+      answer: "Our Professional and Enterprise plans include unlimited bookings. For Starter plan, additional bookings are $2 each."
     },
     {
       question: "Do you offer discounts for annual payments?",

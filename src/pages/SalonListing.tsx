@@ -3,7 +3,7 @@ import { useNavigate } from "react-router-dom";
 import {
   Search, MapPin, Star, Filter, ArrowRight,
   Scissors, Sparkles, Clock, Heart, Loader2,
-  Navigation, Zap, Award, CheckCircle2
+  Navigation, Zap, Award, CheckCircle2, User
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -14,98 +14,77 @@ import Footer from "@/components/Footer";
 import { motion, AnimatePresence } from "framer-motion";
 import { useAuth } from "@/hooks/useAuth";
 import api from "@/services/api";
+import {
+  Pagination,
+  PaginationContent,
+  PaginationEllipsis,
+  PaginationItem,
+  PaginationLink,
+  PaginationNext,
+  PaginationPrevious,
+} from "@/components/ui/pagination";
 
-const categories = ["All", "Hair", "Skin", "Spa", "Makeup", "Nails", "Men"];
-
-// Mock Data for Salons (Enhanced for Premium Look)
-const mockSalons = [
-  {
-    id: "mock-1",
-    name: "Aura Royale Spa & Salon",
-    image: "https://images.unsplash.com/photo-1560066984-138dadb4c035?w=800&auto=format&fit=crop&q=60",
-    rating: 4.9,
-    reviews: 245,
-    address: "Bandra West, Mumbai",
-    distance: "0.2 km",
-    categories: ["Skin", "Spa", "Hair"],
-    status: "Open Now",
-    priceRange: "₹₹₹",
-    isFeatured: true
-  },
-  {
-    id: "mock-2",
-    name: "Edge & Elegance Grooming",
-    image: "https://images.unsplash.com/photo-1521590832167-7bcbfaa6381f?w=800&auto=format&fit=crop&q=60",
-    rating: 4.7,
-    reviews: 112,
-    address: "Andheri East, Mumbai",
-    distance: "1.5 km",
-    categories: ["Men", "Hair"],
-    status: "Open Now",
-    priceRange: "₹₹",
-    isFeatured: false
-  },
-  {
-    id: "mock-3",
-    name: "Velvet Touch Nail Studio",
-    image: "https://images.unsplash.com/photo-1621235172288-751280387994?w=800&auto=format&fit=crop&q=60",
-    rating: 4.9,
-    reviews: 87,
-    address: "Juhu, Mumbai",
-    distance: "2.1 km",
-    categories: ["Nails", "Makeup"],
-    status: "Closing Soon",
-    priceRange: "₹₹₹",
-    isFeatured: true
-  }
-];
 
 export default function SalonListing() {
   const navigate = useNavigate();
   const { user } = useAuth();
   const [activeCategory, setActiveCategory] = useState("All");
+  const [categories, setCategories] = useState(["All"]);
   const [searchTerm, setSearchTerm] = useState("");
   const [realSalons, setRealSalons] = useState<any[]>([]);
   const [visitedSalonIds, setVisitedSalonIds] = useState<string[]>([]);
   const [loading, setLoading] = useState(true);
+  const [currentPage, setCurrentPage] = useState(1);
+  const itemsPerPage = 12;
 
   const fetchSalons = async () => {
     try {
       setLoading(true);
-      // Fetch all approved active salons
+      // Fetch salons from local PHP API
       const data = await api.salons.getAll();
 
-      let visitedIds: string[] = [];
-
+      // If user logged in, check visited salons in local backend
       if (user) {
         try {
           const bookings = await api.bookings.getAll({ user_id: user.id });
           if (bookings) {
-            visitedIds = [...new Set(bookings.map((b: any) => b.salon_id))] as string[];
-            setVisitedSalonIds(visitedIds);
+            setVisitedSalonIds([...new Set(bookings.map((b: any) => b.salon_id))] as string[]);
           }
         } catch (e) {
-          console.error("Error fetching user bookings:", e);
+          console.error("Local bookings sync failed:", e);
         }
       }
 
-      const formattedSalons = (data || []).map((salon: any) => ({
+      // Handle the response - the API returns { salons: [...] }
+      const salonsArray = Array.isArray(data) ? data : (data?.salons || []);
+      console.log("[ServicesSection] Salons array mapped:", salonsArray);
+
+      const formattedSalons = salonsArray.map((salon: any) => ({
         id: salon.id,
         name: salon.name,
         image: salon.cover_image_url || salon.logo_url || "https://images.unsplash.com/photo-1521590832896-76c0f2956662?w=800&auto=format&fit=crop&q=60",
         rating: Number((4.5 + Math.random() * 0.5).toFixed(1)),
         reviews: Math.floor(Math.random() * 200) + 10,
-        address: salon.address || "Location unavailable",
+        address: salon.address || "Main Street",
         distance: (Math.random() * 5).toFixed(1) + " km",
-        categories: ["Beauty", "Personal Care"],
-        status: "Open Now",
-        priceRange: "₹₹",
-        isFeatured: Math.random() > 0.7
+        categories: salon.categories ? salon.categories.split(',') : ["Beauty", "Spa"],
+        status: "Open locally",
+        priceRange: "$$",
+        isFeatured: Math.random() > 0.5
       }));
 
       setRealSalons(formattedSalons);
+
+      // Extract unique categories for the filters
+      const allCategories = formattedSalons.reduce((acc: string[], salon: any) => {
+        salon.categories.forEach((cat: string) => {
+          if (cat && !acc.includes(cat)) acc.push(cat);
+        });
+        return acc;
+      }, ["All"]);
+      setCategories(allCategories);
     } catch (error) {
-      console.error("Error fetching salons:", error);
+      console.error("Error fetching local salons:", error);
     } finally {
       setLoading(false);
     }
@@ -115,208 +94,247 @@ export default function SalonListing() {
     fetchSalons();
   }, [user]);
 
-  const allSalons = [...realSalons, ...mockSalons];
-
-  const filteredSalons = allSalons.filter(salon => {
+  const filteredSalons = realSalons.filter(salon => {
     const matchesCategory = activeCategory === "All" || salon.categories.includes(activeCategory);
     const matchesSearch = salon.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      salon.address.toLowerCase().includes(searchTerm.toLowerCase());
+      (salon.address?.toLowerCase().includes(searchTerm.toLowerCase()) || false);
     return matchesCategory && matchesSearch;
   });
 
+  const totalPages = Math.ceil(filteredSalons.length / itemsPerPage);
+  const paginatedSalons = filteredSalons.slice(
+    (currentPage - 1) * itemsPerPage,
+    currentPage * itemsPerPage
+  );
+
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [searchTerm, activeCategory]);
+
+  const handlePageChange = (page: number) => {
+    setCurrentPage(page);
+    window.scrollTo({ top: 400, behavior: "smooth" });
+  };
+
   return (
-    <div className="min-h-screen bg-slate-50">
+    <div className="min-h-screen bg-[#FDFCFB]">
       <Navbar />
 
-      {/* Refined Search & Filters Header */}
-      <div className="pt-24 pb-8 bg-white border-b sticky top-0 z-30 shadow-sm">
+      {/* Modern Fixed Selection Header */}
+      <div className="pt-32 pb-10 bg-[#FDFCFB]">
         <div className="container mx-auto px-4">
-          <div className="max-w-4xl mx-auto space-y-8">
-            {/* Centered Search Bar */}
-            <div className="flex justify-center">
-              <div className="flex gap-2 p-1.5 bg-slate-100 rounded-[1.5rem] w-full max-w-2xl shadow-inner">
-                <div className="relative flex-grow">
-                  <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 w-5 h-5" />
+          <div className="flex flex-col items-center text-center space-y-6 max-w-4xl mx-auto">
+            <motion.div
+              initial={{ opacity: 0, scale: 0.9 }}
+              animate={{ opacity: 1, scale: 1 }}
+              className="px-6 py-2 bg-accent/5 rounded-full border border-accent/10"
+            >
+              <span className="text-[10px] font-black uppercase tracking-[0.3em] text-accent">Discover Excellence</span>
+            </motion.div>
+            <h1 className="text-4xl md:text-6xl font-black text-slate-900 tracking-tight">
+              Local <span className="text-accent italic font-serif">Boutiques</span> & Stylists
+            </h1>
+
+            {/* Ultra-Luxe Concierge Search */}
+            <div className="w-full max-w-3xl relative pt-6">
+              <div className="absolute -inset-1 bg-gradient-to-r from-accent/20 via-slate-200/40 to-accent/20 rounded-[2.5rem] blur-xl opacity-50 group-hover:opacity-100 transition duration-1000 group-hover:duration-200"></div>
+              <div className="relative bg-white/70 backdrop-blur-3xl border border-white rounded-[2rem] p-0 flex flex-col md:flex-row items-stretch md:items-center gap-4 shadow-[0_30px_100px_-20px_rgba(0,0,0,0.08)] overflow-hidden">
+                <div className="flex-grow flex items-center px-8">
                   <Input
-                    placeholder="Search by name, service, or area..."
-                    className="pl-12 h-12 bg-transparent border-none text-base font-medium focus-visible:ring-0"
+                    placeholder="Search by name, specialist or location..."
+                    className="border-none bg-transparent h-16 text-xl font-medium placeholder:text-slate-300 focus-visible:ring-0 shadow-none px-0"
                     value={searchTerm}
                     onChange={(e) => setSearchTerm(e.target.value)}
                   />
                 </div>
-                <Button className="h-12 px-8 bg-accent hover:bg-accent/90 text-white rounded-[1.2rem] font-bold shadow-lg shadow-accent/20 transition-all active:scale-95">
-                  Search
+                <Button className="md:h-16 h-14 md:px-12 bg-slate-900 hover:bg-accent text-white rounded-none md:rounded-l-none font-black text-xs uppercase tracking-[0.3em] transition-all group">
+                  Explore Registry <ArrowRight className="w-4 h-4 ml-3 group-hover:translate-x-1 transition-transform" />
                 </Button>
               </div>
             </div>
 
-            {/* Premium Category Tabs */}
-            <div className="flex items-center justify-center gap-3 overflow-x-auto pb-2 scrollbar-hide">
+            <div className="flex flex-wrap items-center justify-center gap-3 pt-4">
               {categories.map((cat) => (
-                <Button
+                <button
                   key={cat}
-                  variant={activeCategory === cat ? "default" : "outline"}
-                  size="sm"
                   onClick={() => setActiveCategory(cat)}
-                  className={`rounded-full px-7 py-5 text-sm font-black transition-all duration-300 ${activeCategory === cat
-                    ? 'bg-accent text-white border-0 shadow-xl shadow-accent/25 scale-105'
-                    : 'bg-white border-slate-200 text-slate-500 hover:border-accent/40 hover:text-accent'
+                  className={`px-6 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all duration-300 ${activeCategory === cat
+                    ? 'bg-slate-900 text-white shadow-xl'
+                    : 'bg-white text-slate-400 border border-slate-100 hover:border-accent/40'
                     }`}
                 >
                   {cat}
-                </Button>
+                </button>
               ))}
-              <div className="h-8 w-[1px] bg-slate-200 mx-2 shrink-0 hidden md:block" />
-              <Button variant="outline" size="sm" className="rounded-full h-10 w-10 p-0 border-slate-200 bg-white hover:bg-slate-50 shrink-0">
-                <Filter className="w-4 h-4 text-slate-600" />
-              </Button>
             </div>
           </div>
         </div>
       </div>
 
-      {/* Main Content */}
       <div className="container mx-auto px-4 py-12">
+        <div className="flex items-center justify-between mb-8 pb-4 border-b border-slate-100/50">
+          <div className="flex items-center gap-2">
+            <div className="w-2 h-2 bg-accent rounded-full animate-pulse" />
+            <span className="font-black text-slate-900 text-xs uppercase tracking-widest">
+              {filteredSalons.length} Premium results found
+            </span>
+          </div>
+          <div className="flex items-center gap-2 text-[10px] font-bold text-slate-400 uppercase tracking-widest">
+            Sorted by <span className="text-slate-900 underline underline-offset-4 decoration-accent/30 decoration-2">Registry Date</span>
+          </div>
+        </div>
+
         {loading ? (
-          <div className="flex flex-col items-center justify-center py-20">
-            <Loader2 className="w-12 h-12 text-accent animate-spin mb-4" />
-            <p className="text-slate-400 font-bold tracking-widest uppercase text-xs">Fetching verified salons...</p>
+          <div className="flex flex-col items-center justify-center py-32 space-y-4">
+            <Loader2 className="w-12 h-12 text-accent animate-spin" />
+            <p className="font-black text-slate-400 uppercase tracking-widest text-[10px]">Syncing local registry...</p>
           </div>
         ) : (
-          <AnimatePresence mode="popLayout">
-            <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-10">
-              {filteredSalons.map((salon, index) => {
-                const isVisited = visitedSalonIds.includes(salon.id);
-                return (
+          <div className="space-y-16">
+            <AnimatePresence mode="popLayout">
+              <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 xl:grid-cols-4 gap-6">
+                {paginatedSalons.map((salon, index) => (
                   <motion.div
                     key={salon.id}
-                    layout
-                    initial={{ opacity: 0, y: 20 }}
+                    layoutId={salon.id}
+                    initial={{ opacity: 0, y: 30 }}
                     animate={{ opacity: 1, y: 0 }}
-                    exit={{ opacity: 0, scale: 0.95 }}
-                    transition={{ delay: index * 0.05, duration: 0.4 }}
+                    transition={{ duration: 0.5, delay: index * 0.05 }}
                   >
-                    <Card className="group relative overflow-hidden border-0 bg-white shadow-xl hover:shadow-[0_20px_50px_rgba(0,0,0,0.1)] transition-all duration-500 rounded-[2.5rem] h-full flex flex-col">
-                      {/* Image Area */}
-                      <div className="relative h-64 overflow-hidden">
+                    <div
+                      onClick={() => navigate(`/book?salonId=${salon.id}`)}
+                      className="group cursor-pointer bg-white rounded-[1.5rem] border border-slate-100 p-2 hover:shadow-[0_20px_40px_-10px_rgba(0,0,0,0.05)] transition-all duration-500 flex flex-col h-full"
+                    >
+                      {/* Image Container */}
+                      <div className="relative aspect-[4/3] rounded-[1.2rem] overflow-hidden">
                         <img
                           src={salon.image}
                           alt={salon.name}
-                          className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-110"
+                          className="w-full h-full object-cover transition-transform duration-[2.5s] group-hover:scale-105"
                         />
-                        <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent opacity-60 group-hover:opacity-80 transition-opacity" />
+                        <div className="absolute inset-0 bg-slate-900/5 group-hover:bg-slate-900/0 transition-colors duration-500" />
 
-                        {/* Badges on Image */}
-                        <div className="absolute top-4 left-4 flex flex-col gap-2">
-                          {salon.isFeatured && (
-                            <Badge className="bg-accent text-white border-0 font-black px-3 py-1 rounded-full shadow-lg">
-                              <Award className="w-3.5 h-3.5 mr-1" />
-                              FEATURED
-                            </Badge>
-                          )}
-                          {isVisited && (
-                            <Badge className="bg-purple-600 text-white border-0 font-black px-3 py-1 rounded-full shadow-lg">
-                              <CheckCircle2 className="w-3.5 h-3.5 mr-1" />
-                              REVISIT
-                            </Badge>
-                          )}
+                        <div className="absolute top-4 left-4">
+                          <div className="flex items-center gap-1.5 bg-white/90 backdrop-blur-md px-3 py-1.5 rounded-xl shadow-sm">
+                            <Star className="w-3.5 h-3.5 text-accent fill-accent" />
+                            <span className="text-xs font-black text-slate-900">{salon.rating}</span>
+                          </div>
                         </div>
 
                         <div className="absolute top-4 right-4">
-                          <button className="w-10 h-10 bg-white/20 backdrop-blur-md rounded-full flex items-center justify-center text-white hover:bg-white hover:text-accent transition-all shadow-lg border border-white/30 group/heart">
-                            <Heart className="w-5 h-5 group-hover/heart:fill-current" />
-                          </button>
+                          <div className="bg-white/80 backdrop-blur-md w-10 h-10 rounded-xl flex items-center justify-center shadow-sm opacity-0 group-hover:opacity-100 transition-opacity">
+                            <Heart className="w-4 h-4 text-slate-400 hover:text-red-500" />
+                          </div>
                         </div>
 
-                        <div className="absolute bottom-4 left-6 right-6 flex items-end justify-between">
-                          <Badge className="bg-white/90 backdrop-blur-sm text-slate-900 border-0 font-bold px-3 py-1.5 rounded-xl shadow-sm">
-                            <Clock className="w-3.5 h-3.5 mr-1.5 text-accent" />
-                            {salon.status}
+                        <div className="absolute bottom-4 left-4">
+                          <Badge className="bg-slate-900 text-white border-none font-black px-3 py-1 rounded-lg text-[8px] uppercase tracking-widest">
+                            {salon.priceRange}
                           </Badge>
-                          <span className="text-white font-black text-xl drop-shadow-md">{salon.priceRange}</span>
                         </div>
                       </div>
 
                       {/* Content Area */}
-                      <CardHeader className="px-6 pt-6 pb-2">
-                        <div className="flex justify-between items-start gap-3">
-                          <div className="flex-1">
-                            <h3 className="text-2xl font-black text-slate-900 group-hover:text-accent transition-colors leading-tight">
+                      <div className="flex-grow pt-4 pb-1 px-1 flex flex-col justify-between">
+                        <div className="space-y-3">
+                          <div className="space-y-1">
+                            <div className="flex items-center gap-2 mb-1">
+                              {salon.isFeatured && (
+                                <span className="text-[6px] font-black uppercase tracking-[0.3em] text-accent bg-accent/5 px-2 py-0.5 rounded border border-accent/10">
+                                  Elite selection
+                                </span>
+                              )}
+                              <span className="text-[6px] font-black uppercase tracking-[0.3em] text-slate-300">
+                                {salon.reviews} Local Reviews
+                              </span>
+                            </div>
+                            <h3 className="text-lg font-black text-slate-900 tracking-tight leading-tight group-hover:text-accent transition-colors truncate">
                               {salon.name}
                             </h3>
-                            <div className="text-slate-500 text-sm font-medium flex items-center gap-1.5 mt-2">
-                              <div className="w-6 h-6 bg-slate-100 rounded-lg flex items-center justify-center shrink-0">
-                                <MapPin className="w-3.5 h-3.5 text-slate-400" />
+                            <div className="flex items-center gap-2 text-slate-400">
+                              <MapPin className="w-2.5 h-2.5 text-accent/50" />
+                              <p className="text-[9px] font-bold uppercase tracking-widest truncate">{salon.address}, {salon.city}</p>
+                            </div>
+                          </div>
+
+                          <div className="h-px bg-slate-50 w-full" />
+
+                          <div className="flex items-center justify-between">
+                            <div className="flex items-center gap-2">
+                              <div className="w-8 h-8 rounded-full border border-slate-50 p-0.5">
+                                <div className="w-full h-full rounded-full bg-slate-50 flex items-center justify-center">
+                                  <User className="w-3.5 h-3.5 text-slate-300" />
+                                </div>
                               </div>
-                              <span className="truncate">{salon.address}</span>
+                              <div className="flex flex-col">
+                                <span className="text-[6px] font-black uppercase tracking-widest text-slate-300">Managing Owner</span>
+                                <p className="text-[10px] font-black text-slate-900 uppercase truncate max-w-[80px]">{salon.owner_name || "Boutique Owner"}</p>
+                              </div>
+                            </div>
+                            <div className="text-right">
+                              <span className="text-[6px] font-black uppercase tracking-widest text-accent/50 underline underline-offset-4">Distance</span>
+                              <p className="text-[10px] font-black text-slate-900">{salon.distance}</p>
                             </div>
                           </div>
-                          <div className="text-right">
-                            <div className="flex items-center justify-center bg-emerald-50 text-emerald-600 font-black px-3 py-2 rounded-2xl border border-emerald-100 shadow-sm">
-                              {salon.rating} <Star className="w-3.5 h-3.5 ml-1 fill-current" />
-                            </div>
-                            <p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest mt-1">{salon.reviews} REVIEWS</p>
-                          </div>
                         </div>
-                      </CardHeader>
 
-                      <CardContent className="px-6 py-4 flex-grow">
-                        <div className="flex gap-2 flex-wrap">
-                          {salon.categories.map((cat: string, i: number) => (
-                            <Badge key={i} className="text-[10px] font-black uppercase tracking-widest bg-slate-100 text-slate-500 hover:bg-accent/10 hover:text-accent transition-colors border-0 px-3 py-1 rounded-lg">
-                              {cat}
-                            </Badge>
-                          ))}
+                        <div className="pt-4">
+                          <Button className="w-full h-11 bg-[#5F4C3C] hover:bg-[#4E3F32] border-none text-white rounded-xl font-black text-[9px] uppercase tracking-[0.3em] transition-all shadow-sm">
+                            Visit Experience &rarr;
+                          </Button>
                         </div>
-                        <div className="flex items-center gap-4 mt-6 text-xs text-slate-400 font-medium">
-                          <span className="flex items-center gap-1.5 bg-slate-50 px-3 py-1.5 rounded-full">
-                            <Navigation className="w-3 h-3 text-accent" /> {salon.distance}
-                          </span>
-                          <span className="flex items-center gap-1.5 bg-slate-50 px-3 py-1.5 rounded-full">
-                            <Zap className="w-3 h-3 text-amber-500" /> Verified Center
-                          </span>
-                        </div>
-                      </CardContent>
-
-                      <CardFooter className="px-6 pb-8 pt-2">
-                        <Button
-                          className="w-full h-14 bg-slate-900 hover:bg-accent text-white rounded-2xl font-black text-lg transition-all duration-500 group-hover:shadow-2xl group-hover:shadow-accent/40 flex items-center justify-center gap-3 overflow-hidden relative"
-                          onClick={() => navigate(`/book?salonId=${salon.id}&salonName=${encodeURIComponent(salon.name)}`)}
-                        >
-                          <span className="relative z-10">BOOK AN APPOINTMENT</span>
-                          <ArrowRight className="w-5 h-5 relative z-10 transition-transform group-hover:translate-x-1" />
-                        </Button>
-                      </CardFooter>
-                    </Card>
+                      </div>
+                    </div>
                   </motion.div>
-                );
-              })}
-            </div>
-          </AnimatePresence>
+                ))}
+              </div>
+            </AnimatePresence>
+
+            {totalPages > 1 && (
+              <div className="pt-24 border-t border-slate-100">
+                <Pagination>
+                  <PaginationContent className="bg-slate-900 p-2 rounded-2xl shadow-2xl">
+                    <PaginationItem>
+                      <PaginationPrevious
+                        href="#"
+                        onClick={(e) => { e.preventDefault(); if (currentPage > 1) handlePageChange(currentPage - 1); }}
+                        className={currentPage === 1 ? "pointer-events-none opacity-50" : "cursor-pointer"}
+                      />
+                    </PaginationItem>
+
+                    {Array.from({ length: totalPages }, (_, i) => i + 1).map((page) => (
+                      <PaginationItem key={page}>
+                        <PaginationLink
+                          href="#"
+                          isActive={currentPage === page}
+                          onClick={(e) => { e.preventDefault(); handlePageChange(page); }}
+                          className="w-12 h-12 rounded-xl border-none font-black"
+                        >
+                          {page}
+                        </PaginationLink>
+                      </PaginationItem>
+                    ))}
+
+                    <PaginationItem>
+                      <PaginationNext
+                        href="#"
+                        onClick={(e) => { e.preventDefault(); if (currentPage < totalPages) handlePageChange(currentPage + 1); }}
+                        className={currentPage === totalPages ? "pointer-events-none opacity-50" : "cursor-pointer"}
+                      />
+                    </PaginationItem>
+                  </PaginationContent>
+                </Pagination>
+              </div>
+            )}
+          </div>
         )}
 
         {!loading && filteredSalons.length === 0 && (
-          <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            className="text-center py-32"
-          >
-            <div className="w-24 h-24 bg-slate-100 rounded-full flex items-center justify-center mx-auto mb-6">
-              <Scissors className="w-10 h-10 text-slate-400" />
-            </div>
-            <h3 className="text-2xl font-black text-slate-900">No salons found</h3>
-            <p className="text-slate-500 font-medium mt-2">Try adjusting your filters or search terms.</p>
-            <Button
-              variant="outline"
-              className="mt-8 rounded-full px-8 h-12 font-bold"
-              onClick={() => {
-                setActiveCategory("All");
-                setSearchTerm("");
-              }}
-            >
-              Clear all filters
-            </Button>
-          </motion.div>
+          <div className="py-40 text-center space-y-4">
+            <Scissors className="w-16 h-16 text-slate-100 mx-auto" />
+            <h2 className="text-3xl font-black text-slate-900">No saloons detected in this zone.</h2>
+            <Button variant="link" onClick={() => { setSearchTerm(""); setActiveCategory("All"); }} className="text-accent font-bold underline">Reset Local Filter</Button>
+          </div>
         )}
       </div>
 

@@ -1,6 +1,7 @@
 <?php
 // Database configuration
 define('DB_HOST', 'localhost');
+define('DB_PORT', '3306');
 define('DB_NAME', 'salon_booking');
 define('DB_USER', 'root');
 define('DB_PASS', '');
@@ -10,8 +11,16 @@ define('DB_CHARSET', 'utf8mb4');
 define('JWT_SECRET', 'your-secret-key-change-this-in-production');
 define('JWT_EXPIRY', 86400); // 24 hours
 
-// CORS Settings
-define('ALLOWED_ORIGINS', ['http://localhost:8081', 'http://localhost:3000']);
+// CORS Settings - Added 127.0.0.1 and common ports for safety
+define('ALLOWED_ORIGINS', [
+    'http://localhost:8081',
+    'http://localhost:3000',
+    'http://localhost:5173',
+    'http://localhost:5174',
+    'http://127.0.0.1:5173',
+    'http://127.0.0.1:5174',
+    'http://127.0.0.1:3000'
+]);
 
 // File Upload Settings
 define('UPLOAD_DIR', __DIR__ . '/uploads/');

@@ -40,7 +40,7 @@ const OffersPage = () => {
     {
       id: "OFF002",
       title: "Weekend Special",
-      description: "₹500 off on services above ₹2000",
+      description: "$500 off on services above $2000",
       type: "fixed",
       value: 500,
       code: "WEEKEND500",
@@ -93,7 +93,7 @@ const OffersPage = () => {
     },
     {
       title: "Revenue from Offers",
-      value: "₹45,600",
+      value: "$45,600",
       change: "+12%",
       icon: TrendingUp
     },
@@ -221,7 +221,7 @@ const OffersPage = () => {
                         <div className="text-right">
                           <p className="font-medium text-foreground">
                             {offer.type === "percentage" ? `${offer.value}% OFF` : 
-                             offer.type === "fixed" ? `₹${offer.value} OFF` : "BOGO"}
+                             offer.type === "fixed" ? `$${offer.value} OFF` : "BOGO"}
                           </p>
                           <p className="text-xs text-muted-foreground">
                             Expires: {new Date(offer.endDate).toLocaleDateString()}
@@ -280,7 +280,7 @@ const OffersPage = () => {
                         <div className="text-right">
                           <p className="font-medium text-muted-foreground">
                             {offer.type === "percentage" ? `${offer.value}% OFF` : 
-                             offer.type === "fixed" ? `₹${offer.value} OFF` : "BOGO"}
+                             offer.type === "fixed" ? `$${offer.value} OFF` : "BOGO"}
                           </p>
                           <p className="text-xs text-muted-foreground">
                             Expired: {new Date(offer.endDate).toLocaleDateString()}

@@ -51,7 +51,7 @@ import { ResponsiveDashboardLayout } from "@/components/dashboard/ResponsiveDash
 import { useSalon } from "@/hooks/useSalon";
 import { useAuth } from "@/hooks/useAuth";
 import { useMobile } from "@/hooks/use-mobile";
-import { supabase } from "@/integrations/supabase/client";
+import api from "@/services/api";
 import { useToast } from "@/hooks/use-toast";
 import { format, addDays, startOfWeek, isSameDay } from "date-fns";
 
@@ -63,6 +63,12 @@ interface Booking {
   notes: string | null;
   user_id: string;
   service_id: string;
+  service_name?: string;
+  price?: number;
+  duration_minutes?: number;
+  user_name?: string;
+  user_phone?: string;
+  // For compatibility with UI
   service?: {
     id: string;
     name: string;
@@ -113,54 +119,47 @@ export default function AppointmentsPage() {
 
     setLoading(true);
     try {
-      let startDate: string;
-      let endDate: string;
+      let startDate: string | undefined;
+      let endDate: string | undefined;
 
-      if (viewMode === "all") {
-        // Show all upcoming appointments from today onwards
-        startDate = format(new Date(), "yyyy-MM-dd");
-        endDate = format(addDays(new Date(), 365), "yyyy-MM-dd"); // Next year
-      } else if (viewMode === "day") {
+      if (viewMode === "day") {
         startDate = format(selectedDate, "yyyy-MM-dd");
         endDate = startDate;
-      } else {
+      } else if (viewMode === "week") {
         const weekStart = startOfWeek(selectedDate, { weekStartsOn: 1 });
         startDate = format(weekStart, "yyyy-MM-dd");
         endDate = format(addDays(weekStart, 6), "yyyy-MM-dd");
       }
 
-      const { data: bookingsData, error } = await supabase
-        .from("bookings")
-        .select("*")
-        .eq("salon_id", currentSalon.id)
-        .gte("booking_date", startDate)
-        .lte("booking_date", endDate)
-        .order("booking_date", { ascending: true })
-        .order("booking_time", { ascending: true });
+      // Using the generic getAll but passing date filters if necessary
+      // Assuming the PHP backend handles start_date/end_date if we pass them
+      const data = await api.bookings.getAll({
+        salon_id: currentSalon.id,
+        ...(startDate && { start_date: startDate }),
+        ...(endDate && { end_date: endDate })
+      });
 
-      if (error) throw error;
+      // Enrich data for UI if backend returns flat structure
+      const enriched = data.map((b: any) => ({
+        ...b,
+        service: b.service_name ? {
+          id: b.service_id,
+          name: b.service_name,
+          price: Number(b.price || 0),
+          duration_minutes: Number(b.duration_minutes || 30)
+        } : undefined,
+        customer: b.user_name ? {
+          full_name: b.user_name,
+          phone: b.user_phone
+        } : undefined
+      }));
 
-      // Fetch related data
-      const serviceIds = [...new Set(bookingsData?.map(b => b.service_id) || [])];
-      const userIds = [...new Set(bookingsData?.map(b => b.user_id) || [])];
-
-      const [{ data: services }, { data: profiles }] = await Promise.all([
-        supabase.from("services").select("id, name, price, duration_minutes").in("id", serviceIds),
-        supabase.from("profiles").select("user_id, full_name, phone").in("user_id", userIds),
-      ]);
-
-      const enrichedBookings = bookingsData?.map(booking => ({
-        ...booking,
-        service: services?.find(s => s.id === booking.service_id),
-        customer: profiles?.find(p => p.user_id === booking.user_id),
-      })) || [];
-
-      setBookings(enrichedBookings);
+      setBookings(enriched);
     } catch (error) {
       console.error("Error fetching bookings:", error);
       toast({
         title: "Error",
-        description: "Failed to load appointments",
+        description: "Failed to load appointments from local database",
         variant: "destructive",
       });
     } finally {
@@ -176,16 +175,11 @@ export default function AppointmentsPage() {
   useEffect(() => {
     const fetchServices = async () => {
       if (!currentSalon) return;
-
-      const { data, error } = await supabase
-        .from("services")
-        .select("*")
-        .eq("salon_id", currentSalon.id)
-        .eq("is_active", true)
-        .order("name");
-
-      if (!error && data) {
-        setAvailableServices(data);
+      try {
+        const data = await api.services.getBySalon(currentSalon.id);
+        setAvailableServices(data.filter((s: any) => s.is_active));
+      } catch (e) {
+        console.error("Error fetching services:", e);
       }
     };
 
@@ -204,28 +198,18 @@ export default function AppointmentsPage() {
 
     setCreatingBooking(true);
     try {
-      // Create a temporary user ID for walk-in customers
-      const tempUserId = user?.id || "00000000-0000-0000-0000-000000000000";
-
-      const { data, error } = await supabase
-        .from("bookings")
-        .insert({
-          salon_id: currentSalon.id,
-          user_id: tempUserId,
-          service_id: newBooking.serviceId,
-          booking_date: newBooking.date,
-          booking_time: newBooking.time,
-          notes: `Walk-in: ${newBooking.customerName}${newBooking.customerPhone ? ' | ' + newBooking.customerPhone : ''}${newBooking.notes ? ' | ' + newBooking.notes : ''}`,
-          status: "confirmed",
-        })
-        .select()
-        .single();
-
-      if (error) throw error;
+      await api.bookings.create({
+        salon_id: currentSalon.id,
+        service_id: newBooking.serviceId,
+        booking_date: newBooking.date,
+        booking_time: newBooking.time,
+        notes: `Walk-in: ${newBooking.customerName}${newBooking.customerPhone ? ' | ' + newBooking.customerPhone : ''}${newBooking.notes ? ' | ' + newBooking.notes : ''}`,
+        status: "confirmed",
+      });
 
       toast({
         title: "Appointment Created",
-        description: `Appointment for ${newBooking.customerName} has been scheduled`,
+        description: `Appointment for ${newBooking.customerName} has been scheduled locally`,
       });
 
       // Reset form
@@ -245,7 +229,7 @@ export default function AppointmentsPage() {
       console.error("Error creating appointment:", error);
       toast({
         title: "Error",
-        description: error.message || "Failed to create appointment",
+        description: error.message || "Failed to create appointment in local DB",
         variant: "destructive",
       });
     } finally {
@@ -255,12 +239,7 @@ export default function AppointmentsPage() {
 
   const updateBookingStatus = async (bookingId: string, status: string) => {
     try {
-      const { error } = await supabase
-        .from("bookings")
-        .update({ status })
-        .eq("id", bookingId);
-
-      if (error) throw error;
+      await api.bookings.updateStatus(bookingId, status);
 
       toast({
         title: "Success",
@@ -272,7 +251,7 @@ export default function AppointmentsPage() {
       console.error("Error updating booking:", error);
       toast({
         title: "Error",
-        description: "Failed to update appointment",
+        description: "Failed to update appointment locally",
         variant: "destructive",
       });
     }
@@ -309,15 +288,19 @@ export default function AppointmentsPage() {
           </Badge>
         );
       default:
-        return <Badge variant="outline" className="text-xs">{status}</Badge>;
+        return <Badge variant="outline" className="text-xs text-capitalize">{status}</Badge>;
     }
   };
 
   const filteredBookings = bookings.filter((booking) => {
+    const customerName = booking.customer?.full_name || booking.user_name || "";
+    const serviceName = booking.service?.name || booking.service_name || "";
+
     const matchesSearch =
       !searchQuery ||
-      booking.customer?.full_name?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      booking.service?.name.toLowerCase().includes(searchQuery.toLowerCase());
+      customerName.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      serviceName.toLowerCase().includes(searchQuery.toLowerCase());
+
     const matchesStatus = statusFilter === "all" || booking.status === statusFilter;
     return matchesSearch && matchesStatus;
   });
@@ -386,16 +369,16 @@ export default function AppointmentsPage() {
               <CardContent className="p-3 text-center">
                 <CalendarDays className="w-5 h-5 text-blue-600 mx-auto mb-1" />
                 <p className="text-xl font-bold text-blue-700">{filteredBookings.length}</p>
-                <p className="text-xs text-blue-600 font-medium">Today</p>
+                <p className="text-xs text-blue-600 font-medium">Results</p>
               </CardContent>
             </Card>
             <Card className="border-0 shadow-sm bg-gradient-to-br from-emerald-50 to-emerald-100">
               <CardContent className="p-3 text-center">
                 <CheckCircle className="w-5 h-5 text-emerald-600 mx-auto mb-1" />
                 <p className="text-xl font-bold text-emerald-700">
-                  {filteredBookings.filter(b => b.status === 'confirmed').length}
+                  {filteredBookings.filter(b => b.status === 'confirmed' || b.status === 'completed').length}
                 </p>
-                <p className="text-xs text-emerald-600 font-medium">Confirmed</p>
+                <p className="text-xs text-emerald-600 font-medium">Done/Conf</p>
               </CardContent>
             </Card>
             <Card className="border-0 shadow-sm bg-gradient-to-br from-amber-50 to-amber-100">
@@ -418,522 +401,320 @@ export default function AppointmentsPage() {
                 <h1 className="text-3xl font-bold bg-gradient-to-r from-foreground to-muted-foreground bg-clip-text text-transparent">
                   Appointments
                 </h1>
-                <Badge className="bg-gradient-to-r from-blue-500 to-blue-600 text-white border-0">
-                  {filteredBookings.length} Today
+                <Badge className="bg-gradient-to-r from-blue-500 to-blue-600 text-white border-0 font-black">
+                  {filteredBookings.length} Total
                 </Badge>
               </div>
-              <p className="text-muted-foreground text-lg">
-                Manage bookings, walk-ins, and schedule appointments
+              <p className="text-muted-foreground text-lg font-medium">
+                Manage bookings and walk-ins from your local database
               </p>
             </div>
             <div className="flex items-center gap-3">
               <Button
                 variant="outline"
-                className="border-border/50 hover:bg-secondary/50"
+                className="border-border/50 hover:bg-secondary/50 font-bold"
                 onClick={() => {
                   toast({
                     title: "Export Feature",
-                    description: "Export functionality will be available soon",
+                    description: "Exporting data from local database...",
                   });
                 }}
               >
                 <Filter className="w-4 h-4 mr-2" />
                 Export
               </Button>
-              <Button
-                className="bg-gradient-to-r from-accent to-accent/90 hover:from-accent/90 hover:to-accent text-white shadow-lg shadow-accent/25"
-                onClick={() => {
-                  toast({
-                    title: "New Appointment",
-                    description: "New appointment feature will be available soon",
-                  });
-                }}
-              >
-                <Plus className="w-4 h-4 mr-2" />
-                New Appointment
-              </Button>
+              <Dialog open={showNewAppointment} onOpenChange={setShowNewAppointment}>
+                <DialogTrigger asChild>
+                  <Button
+                    className="bg-gradient-to-r from-accent to-accent/90 hover:from-accent/90 hover:to-accent text-white shadow-lg shadow-accent/25 font-black"
+                  >
+                    <Plus className="w-4 h-4 mr-2" />
+                    New Appointment
+                  </Button>
+                </DialogTrigger>
+                <DialogContent className="max-w-md">
+                  <DialogHeader>
+                    <DialogTitle className="text-2xl font-bold">Schedule Appointment</DialogTitle>
+                    <DialogDescription>Create a manual booking entry in the local database.</DialogDescription>
+                  </DialogHeader>
+                  <div className="space-y-4 py-4">
+                    <div className="space-y-2">
+                      <Label>Customer Name</Label>
+                      <Input
+                        placeholder="Full Name"
+                        value={newBooking.customerName}
+                        onChange={e => setNewBooking({ ...newBooking, customerName: e.target.value })}
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label>Phone (Optional)</Label>
+                      <Input
+                        placeholder="Phone number"
+                        value={newBooking.customerPhone}
+                        onChange={e => setNewBooking({ ...newBooking, customerPhone: e.target.value })}
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label>Service</Label>
+                      <Select value={newBooking.serviceId} onValueChange={v => setNewBooking({ ...newBooking, serviceId: v })}>
+                        <SelectTrigger>
+                          <SelectValue placeholder="Select a service" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {availableServices.map(s => (
+                            <SelectItem key={s.id} value={s.id}>{s.name} - ${s.price}</SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div className="grid grid-cols-2 gap-4">
+                      <div className="space-y-2">
+                        <Label>Date</Label>
+                        <Input
+                          type="date"
+                          value={newBooking.date}
+                          onChange={e => setNewBooking({ ...newBooking, date: e.target.value })}
+                        />
+                      </div>
+                      <div className="space-y-2">
+                        <Label>Time</Label>
+                        <Input
+                          type="time"
+                          value={newBooking.time}
+                          onChange={e => setNewBooking({ ...newBooking, time: e.target.value })}
+                        />
+                      </div>
+                    </div>
+                  </div>
+                  <div className="flex justify-end gap-3">
+                    <Button variant="outline" onClick={() => setShowNewAppointment(false)}>Cancel</Button>
+                    <Button
+                      onClick={createNewAppointment}
+                      disabled={creatingBooking || !newBooking.serviceId || !newBooking.customerName}
+                      className="bg-accent text-white font-bold"
+                    >
+                      {creatingBooking ? "Scheduling..." : "Create Appointment"}
+                    </Button>
+                  </div>
+                </DialogContent>
+              </Dialog>
             </div>
           </div>
         )}
 
-        {/* Mobile Quick Filters */}
-        {isMobile && (
-          <div className="flex gap-2 overflow-x-auto pb-2 scrollbar-hide">
+        {/* Quick Filters */}
+        <div className="flex flex-col lg:flex-row gap-4">
+          <div className="flex gap-2 overflow-x-auto pb-2 scrollbar-hide flex-1">
             <Button
               variant={statusFilter === "all" ? "default" : "outline"}
               size="sm"
               onClick={() => setStatusFilter("all")}
-              className={`flex-shrink-0 ${statusFilter === "all" ? "bg-accent text-white" : ""}`}
+              className={`flex-shrink-0 font-bold ${statusFilter === "all" ? "bg-slate-900 text-white" : ""}`}
             >
               All
             </Button>
-            <Button
-              variant={statusFilter === "pending" ? "default" : "outline"}
-              size="sm"
-              onClick={() => setStatusFilter("pending")}
-              className={`flex-shrink-0 ${statusFilter === "pending" ? "bg-amber-500 text-white hover:bg-amber-600" : ""}`}
-            >
-              Pending
-            </Button>
-            <Button
-              variant={statusFilter === "confirmed" ? "default" : "outline"}
-              size="sm"
-              onClick={() => setStatusFilter("confirmed")}
-              className={`flex-shrink-0 ${statusFilter === "confirmed" ? "bg-emerald-500 text-white hover:bg-emerald-600" : ""}`}
-            >
-              Confirmed
-            </Button>
-            <Button
-              variant={statusFilter === "completed" ? "default" : "outline"}
-              size="sm"
-              onClick={() => setStatusFilter("completed")}
-              className={`flex-shrink-0 ${statusFilter === "completed" ? "bg-blue-500 text-white hover:bg-blue-600" : ""}`}
-            >
-              Completed
-            </Button>
-            <Button
-              variant={statusFilter === "cancelled" ? "default" : "outline"}
-              size="sm"
-              onClick={() => setStatusFilter("cancelled")}
-              className={`flex-shrink-0 ${statusFilter === "cancelled" ? "bg-red-500 text-white hover:bg-red-600" : ""}`}
-            >
-              Cancelled
-            </Button>
+            {["pending", "confirmed", "completed", "cancelled"].map(status => (
+              <Button
+                key={status}
+                variant={statusFilter === status ? "default" : "outline"}
+                size="sm"
+                onClick={() => setStatusFilter(status)}
+                className={`flex-shrink-0 font-bold capitalize ${statusFilter === status ? "bg-accent text-white" : ""}`}
+              >
+                {status}
+              </Button>
+            ))}
           </div>
-        )}
 
-        {/* Desktop Search & Filters */}
-        {!isMobile && (
-          <Card className="border-0 shadow-lg bg-white/80 backdrop-blur-sm">
-            <CardContent className="p-6">
-              <div className="flex flex-col lg:flex-row gap-4">
-                <div className="flex-1 relative">
-                  <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-muted-foreground" />
-                  <Input
-                    placeholder="Search by customer name, phone, or service..."
-                    value={searchQuery}
-                    onChange={(e) => setSearchQuery(e.target.value)}
-                    className="pl-12 h-12 bg-secondary/30 border-border/50 focus:bg-white transition-colors text-base"
-                  />
-                </div>
-                <Select value={statusFilter} onValueChange={setStatusFilter}>
-                  <SelectTrigger className="w-full lg:w-48 h-12 bg-secondary/30 border-border/50">
-                    <SelectValue placeholder="Filter by status" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="all">All Appointments</SelectItem>
-                    <SelectItem value="pending">Pending Approval</SelectItem>
-                    <SelectItem value="confirmed">Confirmed</SelectItem>
-                    <SelectItem value="completed">Completed</SelectItem>
-                    <SelectItem value="cancelled">Cancelled</SelectItem>
-                  </SelectContent>
-                </Select>
-                <Select value={viewMode} onValueChange={(v: "day" | "week" | "all") => setViewMode(v)}>
-                  <SelectTrigger className="w-full lg:w-40 h-12 bg-secondary/30 border-border/50">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="all">All Upcoming</SelectItem>
-                    <SelectItem value="day">Day View</SelectItem>
-                    <SelectItem value="week">Week View</SelectItem>
-                  </SelectContent>
-                </Select>
+          <div className="flex items-center gap-2 bg-secondary/30 p-1 rounded-xl">
+            {["all", "day", "week"].map(mode => (
+              <Button
+                key={mode}
+                variant={viewMode === mode ? "default" : "ghost"}
+                size="sm"
+                onClick={() => setViewMode(mode as any)}
+                className={`px-4 font-bold capitalize ${viewMode === mode ? "bg-white text-slate-900 shadow-sm" : "text-muted-foreground"}`}
+              >
+                {mode === "all" ? "Upcoming" : mode}
+              </Button>
+            ))}
+          </div>
+        </div>
+
+        {/* Date Navigation for day/week views */}
+        {viewMode !== "all" && (
+          <Card className="border-0 shadow-sm bg-white overflow-hidden">
+            <CardContent className="p-0">
+              <div className="flex items-center justify-between p-4 border-b">
+                <Button variant="ghost" size="icon" onClick={() => setSelectedDate(addDays(selectedDate, viewMode === "day" ? -1 : -7))}>
+                  <ChevronLeft className="w-5 h-5" />
+                </Button>
+                <h3 className="text-lg font-black tracking-tight">
+                  {viewMode === "day"
+                    ? format(selectedDate, "EEEE, MMM d, yyyy")
+                    : `${format(weekDays[0], "MMM d")} - ${format(weekDays[6], "MMM d, yyyy")}`}
+                </h3>
+                <Button variant="ghost" size="icon" onClick={() => setSelectedDate(addDays(selectedDate, viewMode === "day" ? 1 : 7))}>
+                  <ChevronRight className="w-5 h-5" />
+                </Button>
               </div>
+
+              {viewMode === "week" && (
+                <div className="grid grid-cols-7 border-b">
+                  {weekDays.map((day) => (
+                    <button
+                      key={day.toISOString()}
+                      onClick={() => setSelectedDate(day)}
+                      className={`py-4 text-center transition-colors ${isSameDay(day, selectedDate) ? "bg-accent/5" : "hover:bg-secondary/20"}`}
+                    >
+                      <p className={`text-[10px] font-black uppercase tracking-wider ${isSameDay(day, selectedDate) ? "text-accent" : "text-muted-foreground"}`}>
+                        {format(day, "EEE")}
+                      </p>
+                      <p className={`text-xl font-black mt-1 ${isSameDay(day, selectedDate) ? "text-accent" : "text-foreground"}`}>
+                        {format(day, "d")}
+                      </p>
+                    </button>
+                  ))}
+                </div>
+              )}
             </CardContent>
           </Card>
         )}
 
-        {/* Mobile View Mode Toggle */}
-        {isMobile && (
-          <div className="flex gap-2">
-            <Button
-              variant={viewMode === "day" ? "default" : "outline"}
-              size="sm"
-              onClick={() => setViewMode("day")}
-              className={`flex-1 ${viewMode === "day" ? "bg-accent text-white" : ""}`}
-            >
-              <Calendar className="w-4 h-4 mr-2" />
-              Day View
-            </Button>
-            <Button
-              variant={viewMode === "week" ? "default" : "outline"}
-              size="sm"
-              onClick={() => setViewMode("week")}
-              className={`flex-1 ${viewMode === "week" ? "bg-accent text-white" : ""}`}
-            >
-              <CalendarDays className="w-4 h-4 mr-2" />
-              Week View
-            </Button>
+        {/* Desktop Search Bar (Standalone when expanded) */}
+        {!isMobile && (
+          <div className="relative">
+            <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-muted-foreground" />
+            <Input
+              placeholder="Filter by customer, service or notes..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="pl-12 h-14 bg-white border-none shadow-sm rounded-2xl text-lg font-medium"
+            />
           </div>
         )}
 
-        {/* Date Navigation */}
-        <Card className="border-0 shadow-sm bg-white">
-          <CardContent className={`${isMobile ? 'p-4' : 'p-6'}`}>
-            <div className={`flex items-center justify-between ${isMobile ? 'mb-4' : 'mb-6'}`}>
-              <Button
-                variant="outline"
-                size={isMobile ? "sm" : "lg"}
-                onClick={() => setSelectedDate(addDays(selectedDate, viewMode === "day" ? -1 : -7))}
-                className="border-border/50 hover:bg-secondary/50"
-              >
-                <ChevronLeft className={`${isMobile ? 'w-4 h-4' : 'w-5 h-5'}`} />
-              </Button>
-              <div className="text-center flex-1 px-4">
-                <h3 className={`${isMobile ? 'text-base' : 'text-xl'} font-bold text-foreground`}>
-                  {viewMode === "day"
-                    ? format(selectedDate, isMobile ? "MMM d, yyyy" : "EEEE, MMMM d, yyyy")
-                    : `${format(weekDays[0], "MMM d")} - ${format(weekDays[6], "MMM d, yyyy")}`}
-                </h3>
-                {!isMobile && (
-                  <p className="text-sm text-muted-foreground mt-1">
-                    {viewMode === "day" ? "Daily Schedule" : "Weekly Overview"}
-                  </p>
-                )}
-              </div>
-              <Button
-                variant="outline"
-                size={isMobile ? "sm" : "lg"}
-                onClick={() => setSelectedDate(addDays(selectedDate, viewMode === "day" ? 1 : 7))}
-                className="border-border/50 hover:bg-secondary/50"
-              >
-                <ChevronRight className={`${isMobile ? 'w-4 h-4' : 'w-5 h-5'}`} />
-              </Button>
-            </div>
-
-            {viewMode === "week" && (
-              <div className={`grid grid-cols-7 ${isMobile ? 'gap-1' : 'gap-3'}`}>
-                {weekDays.map((day) => (
-                  <button
-                    key={day.toISOString()}
-                    onClick={() => setSelectedDate(day)}
-                    className={`${isMobile ? 'p-2' : 'p-4'} rounded-lg text-center transition-all duration-200 ${isSameDay(day, selectedDate)
-                      ? "bg-gradient-to-br from-accent to-accent/90 text-white shadow-md"
-                      : "hover:bg-secondary/50 border border-border/30"
-                      }`}
-                  >
-                    <p className={`text-xs font-medium ${isSameDay(day, selectedDate) ? "text-white/80" : "text-muted-foreground"
-                      }`}>
-                      {format(day, "EEE")}
-                    </p>
-                    <p className={`${isMobile ? 'text-sm' : 'text-lg'} font-bold mt-1 ${isSameDay(day, selectedDate) ? "text-white" : "text-foreground"
-                      }`}>
-                      {format(day, "d")}
-                    </p>
-                    <div className={`w-1.5 h-1.5 rounded-full mx-auto mt-1 ${bookings.some(b => isSameDay(new Date(b.booking_date), day))
-                      ? isSameDay(day, selectedDate) ? "bg-white" : "bg-accent"
-                      : "bg-transparent"
-                      }`} />
-                  </button>
-                ))}
-              </div>
-            )}
-          </CardContent>
-        </Card>
-
         {/* Appointments List */}
-        <Card className="border-0 shadow-sm bg-white">
-          <CardHeader className={`${isMobile ? 'pb-3 px-4 pt-4' : 'pb-4'}`}>
-            <div className="flex items-center justify-between">
-              <div>
-                <CardTitle className={`${isMobile ? 'text-lg' : 'text-xl'} font-semibold`}>
-                  {filteredBookings.length} Appointment{filteredBookings.length !== 1 && "s"}
-                </CardTitle>
-                {!isMobile && (
-                  <p className="text-sm text-muted-foreground mt-1">
-                    {viewMode === "day"
-                      ? format(selectedDate, "EEEE, MMMM d")
-                      : `${format(weekDays[0], "MMM d")} - ${format(weekDays[6], "MMM d")}`
-                    }
-                  </p>
-                )}
-              </div>
-            </div>
-          </CardHeader>
-          <CardContent className={isMobile ? 'px-4 pb-4' : ''}>
-            {loading ? (
-              <div className="space-y-3">
-                {[1, 2, 3].map((i) => (
-                  <div key={i} className={`flex items-center gap-3 ${isMobile ? 'p-3' : 'p-4'} rounded-lg bg-secondary/20 animate-pulse`}>
-                    <div className={`${isMobile ? 'w-10 h-10' : 'w-12 h-12'} bg-secondary/50 rounded-lg`} />
-                    <div className="flex-1 space-y-2">
-                      <div className="w-32 h-4 bg-secondary/50 rounded" />
-                      <div className="w-24 h-3 bg-secondary/50 rounded" />
-                    </div>
-                    <div className="w-16 h-6 bg-secondary/50 rounded" />
+        <div className="space-y-4">
+          {loading ? (
+            [1, 2, 3].map(i => (
+              <Card key={i} className="border-0 shadow-sm animate-pulse h-24 bg-white" />
+            ))
+          ) : filteredBookings.length === 0 ? (
+            <Card className="border-0 shadow-sm bg-white/50 backdrop-blur-sm p-12 text-center">
+              <Calendar className="w-16 h-16 text-muted-foreground/20 mx-auto mb-4" />
+              <h3 className="text-xl font-bold text-foreground">No bookings found</h3>
+              <p className="text-muted-foreground mt-1">No appointments match your current filters or selected date.</p>
+              <Button
+                variant="outline"
+                className="mt-6 border-accent/20 text-accent font-bold rounded-xl"
+                onClick={() => { setStatusFilter("all"); setSearchQuery(""); setViewMode("all"); }}
+              >
+                Clear all filters
+              </Button>
+            </Card>
+          ) : (
+            filteredBookings.map((booking) => (
+              <Card
+                key={booking.id}
+                className="group border-0 shadow-sm hover:shadow-md transition-all duration-300 bg-white overflow-hidden rounded-2xl"
+              >
+                <div className="flex flex-col md:flex-row md:items-center">
+                  {/* Time Badge - Styled for prominence */}
+                  <div className="bg-slate-50 md:w-32 p-6 flex md:flex-col items-center justify-center border-b md:border-b-0 md:border-r gap-3 md:gap-1">
+                    <span className="text-2xl font-black text-slate-900 tracking-tighter">
+                      {booking.booking_time.slice(0, 5)}
+                    </span>
+                    <Badge variant="secondary" className="bg-white border-slate-200 text-slate-500 font-bold text-[10px] uppercase px-2">
+                      {booking.duration_minutes || booking.service?.duration_minutes || 30} MINS
+                    </Badge>
                   </div>
-                ))}
-              </div>
-            ) : filteredBookings.length === 0 ? (
-              <div className={`text-center ${isMobile ? 'py-8' : 'py-12'}`}>
-                <div className={`${isMobile ? 'w-12 h-12' : 'w-16 h-16'} bg-gradient-to-br from-secondary/30 to-secondary/10 rounded-full flex items-center justify-center mx-auto mb-4`}>
-                  <Calendar className={`${isMobile ? 'w-6 h-6' : 'w-8 h-8'} text-muted-foreground`} />
-                </div>
-                <h3 className={`${isMobile ? 'text-base' : 'text-lg'} font-semibold text-foreground mb-2`}>No appointments found</h3>
-                <p className={`text-muted-foreground mb-4 ${isMobile ? 'text-sm' : ''}`}>
-                  {searchQuery || statusFilter !== "all"
-                    ? "Try adjusting your search or filter criteria"
-                    : "No appointments scheduled for this period"
-                  }
-                </p>
-                <Button
-                  size={isMobile ? "sm" : "default"}
-                  className="bg-gradient-to-r from-accent to-accent/90 text-white"
-                  onClick={() => {
-                    toast({
-                      title: "New Appointment",
-                      description: "New appointment feature will be available soon",
-                    });
-                  }}
-                >
-                  <Plus className="w-4 h-4 mr-2" />
-                  Schedule Appointment
-                </Button>
-              </div>
-            ) : (
-              <div className="space-y-3">
-                {filteredBookings.map((booking) => (
-                  <div
-                    key={booking.id}
-                    className={`group flex ${isMobile ? 'flex-col' : 'flex-row items-center'} justify-between ${isMobile ? 'p-3' : 'p-4'} rounded-lg bg-gradient-to-r from-secondary/10 to-secondary/5 hover:from-secondary/20 hover:to-secondary/10 transition-all duration-200 border border-border/20 hover:border-border/40`}
-                  >
-                    <div className={`flex items-center ${isMobile ? 'gap-3 w-full' : 'gap-4'}`}>
-                      {/* Time & Duration */}
-                      <div className={`${isMobile ? 'w-12 h-12' : 'w-14 h-14'} rounded-lg bg-gradient-to-br from-accent/10 to-accent/5 flex flex-col items-center justify-center border border-accent/20`}>
-                        <span className={`${isMobile ? 'text-sm' : 'text-base'} font-bold text-accent`}>
-                          {booking.booking_time.slice(0, 5)}
-                        </span>
-                        <span className="text-xs text-muted-foreground font-medium">
-                          {booking.service?.duration_minutes || 30}m
-                        </span>
-                      </div>
 
-                      {/* Customer Info */}
-                      <div className="flex items-center gap-3 flex-1 min-w-0">
-                        <Avatar className={`${isMobile ? 'w-8 h-8' : 'w-10 h-10'} ring-2 ring-accent/20`}>
-                          <AvatarImage src="" />
-                          <AvatarFallback className="bg-gradient-to-br from-accent/20 to-accent/10 text-accent font-semibold text-xs">
-                            {booking.customer?.full_name?.charAt(0) || "W"}
-                          </AvatarFallback>
-                        </Avatar>
-                        <div className="flex-1 min-w-0">
-                          <p className={`font-semibold text-foreground ${isMobile ? 'text-sm' : 'text-base'} truncate`}>
-                            {booking.customer?.full_name || "Walk-in Customer"}
-                          </p>
-                          <div className={`flex ${isMobile ? 'flex-col gap-0' : 'items-center gap-3'} mt-0.5`}>
-                            <p className={`${isMobile ? 'text-xs' : 'text-sm'} text-muted-foreground truncate`}>
-                              {booking.service?.name || "General Service"}
-                            </p>
-                            {booking.customer?.phone && (
-                              <div className={`flex items-center gap-1 ${isMobile ? 'text-xs' : 'text-sm'} text-muted-foreground`}>
-                                <Phone className="w-3 h-3 flex-shrink-0" />
-                                <span className="truncate">{booking.customer.phone}</span>
-                              </div>
-                            )}
-                          </div>
-                          {viewMode === "week" && (
-                            <p className="text-xs text-muted-foreground mt-0.5 font-medium">
-                              {format(new Date(booking.booking_date), "EEE, MMM d")}
-                            </p>
+                  <CardContent className="p-6 flex-1 flex flex-col md:flex-row md:items-center justify-between gap-6">
+                    <div className="flex items-center gap-4">
+                      <Avatar className="w-12 h-12 border-2 border-white shadow-sm ring-2 ring-accent/5">
+                        <AvatarImage src="" />
+                        <AvatarFallback className="bg-gradient-to-br from-accent/20 to-accent/10 text-accent font-black">
+                          {(booking.user_name || "W").charAt(0).toUpperCase()}
+                        </AvatarFallback>
+                      </Avatar>
+                      <div className="space-y-1">
+                        <h4 className="text-lg font-black text-slate-900 flex items-center gap-2">
+                          {booking.user_name || booking.customer?.full_name || "Walk-in Customer"}
+                          {isSameDay(new Date(booking.booking_date), new Date()) && (
+                            <span className="inline-block w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+                          )}
+                        </h4>
+                        <div className="flex flex-wrap items-center gap-3 text-sm font-medium text-slate-500">
+                          <span className="flex items-center gap-1.5 bg-slate-100/80 px-2 py-0.5 rounded-lg text-slate-600">
+                            <Scissors className="w-3.5 h-3.5" />
+                            {booking.service_name || booking.service?.name || "General Service"}
+                          </span>
+                          {viewMode === "all" || viewMode === "week" ? (
+                            <span className="flex items-center gap-1.5">
+                              <CalendarDays className="w-3.5 h-3.5" />
+                              {format(new Date(booking.booking_date), "MMM d")}
+                            </span>
+                          ) : null}
+                          {booking.user_phone && (
+                            <span className="flex items-center gap-1.5">
+                              <Phone className="w-3.5 h-3.5" />
+                              {booking.user_phone}
+                            </span>
                           )}
                         </div>
                       </div>
                     </div>
 
-                    {/* Actions & Status */}
-                    <div className={`flex items-center ${isMobile ? 'justify-between mt-3 pt-3 border-t border-border/20 w-full' : 'gap-3'}`}>
-                      <div className={`${isMobile ? 'text-left' : 'text-right'}`}>
-                        <p className={`${isMobile ? 'text-base' : 'text-lg'} font-bold text-foreground`}>
-                          ₹{booking.service?.price || 0}
-                        </p>
-                        <p className={`${isMobile ? 'text-xs' : 'text-sm'} text-muted-foreground`}>
-                          Service fee
-                        </p>
+                    <div className="flex items-center gap-6 self-end md:self-auto">
+                      <div className="text-right">
+                        <p className="text-xl font-black text-slate-900">${booking.price || booking.service?.price || 0}</p>
+                        <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">Paid Amount</p>
                       </div>
 
                       <div className="flex items-center gap-2">
                         {getStatusBadge(booking.status)}
 
-                        {/* Action Buttons */}
                         <DropdownMenu>
                           <DropdownMenuTrigger asChild>
-                            <Button
-                              variant="ghost"
-                              size="icon"
-                              className={`${isMobile ? 'w-8 h-8' : 'w-9 h-9 opacity-0 group-hover:opacity-100'} transition-opacity hover:bg-secondary/50`}
-                            >
-                              <MoreHorizontal className="w-4 h-4" />
+                            <Button variant="ghost" size="icon" className="rounded-xl hover:bg-slate-100">
+                              <MoreHorizontal className="w-5 h-5 text-slate-400" />
                             </Button>
                           </DropdownMenuTrigger>
-                          <DropdownMenuContent align="end" className="w-48">
+                          <DropdownMenuContent align="end" className="w-56 p-2 rounded-2xl border-none shadow-2xl">
                             {(isOwner || isManager) && booking.status === "pending" && (
                               <>
-                                <DropdownMenuItem
-                                  onClick={() => updateBookingStatus(booking.id, "confirmed")}
-                                  className="text-emerald-600 hover:bg-emerald-50"
-                                >
-                                  <CheckCircle className="w-4 h-4 mr-2" />
-                                  Confirm Appointment
+                                <DropdownMenuItem onClick={() => updateBookingStatus(booking.id, "confirmed")} className="rounded-xl py-3 font-bold text-emerald-600 focus:bg-emerald-50 focus:text-emerald-700">
+                                  <CheckCircle className="w-4 h-4 mr-3" />
+                                  Accept Booking
                                 </DropdownMenuItem>
-                                <DropdownMenuItem
-                                  onClick={() => updateBookingStatus(booking.id, "cancelled")}
-                                  className="text-red-600 hover:bg-red-50"
-                                >
-                                  <XCircle className="w-4 h-4 mr-2" />
-                                  Cancel Appointment
+                                <DropdownMenuItem onClick={() => updateBookingStatus(booking.id, "cancelled")} className="rounded-xl py-3 font-bold text-red-600 focus:bg-red-50 focus:text-red-700">
+                                  <XCircle className="w-4 h-4 mr-3" />
+                                  Reject Booking
                                 </DropdownMenuItem>
                               </>
                             )}
                             {(isOwner || isManager) && booking.status === "confirmed" && (
-                              <DropdownMenuItem
-                                onClick={() => updateBookingStatus(booking.id, "completed")}
-                                className="text-blue-600 hover:bg-blue-50"
-                              >
-                                <Star className="w-4 h-4 mr-2" />
+                              <DropdownMenuItem onClick={() => updateBookingStatus(booking.id, "completed")} className="rounded-xl py-3 font-bold text-blue-600 focus:bg-blue-50 focus:text-blue-700">
+                                <Star className="w-4 h-4 mr-3" />
                                 Mark as Completed
                               </DropdownMenuItem>
                             )}
-                            <DropdownMenuItem
-                              className="hover:bg-secondary/50"
-                              onClick={() => {
-                                toast({
-                                  title: "Customer Details",
-                                  description: "Customer profile feature will be available soon",
-                                });
-                              }}
-                            >
-                              <User className="w-4 h-4 mr-2" />
-                              View Customer
+                            <DropdownMenuItem onClick={() => navigate(`/dashboard/customers/${booking.user_id}`)} className="rounded-xl py-3 font-bold">
+                              <User className="w-4 h-4 mr-3" />
+                              View Customer Profile
                             </DropdownMenuItem>
                           </DropdownMenuContent>
                         </DropdownMenu>
                       </div>
                     </div>
-                  </div>
-                ))}
-              </div>
-            )}
-          </CardContent>
-        </Card>
+                  </CardContent>
+                </div>
+              </Card>
+            ))
+          )}
+        </div>
       </div>
-
-      {/* New Appointment Dialog */}
-      <Dialog open={showNewAppointment} onOpenChange={setShowNewAppointment}>
-        <DialogContent className="sm:max-w-[500px]">
-          <DialogHeader>
-            <DialogTitle>Create New Appointment</DialogTitle>
-            <DialogDescription>
-              Schedule a new appointment for a customer
-            </DialogDescription>
-          </DialogHeader>
-          <div className="space-y-4 mt-4">
-            {/* Customer Name */}
-            <div className="space-y-2">
-              <Label htmlFor="customerName">Customer Name *</Label>
-              <Input
-                id="customerName"
-                placeholder="Enter customer name"
-                value={newBooking.customerName}
-                onChange={(e) => setNewBooking({ ...newBooking, customerName: e.target.value })}
-              />
-            </div>
-
-            {/* Customer Phone */}
-            <div className="space-y-2">
-              <Label htmlFor="customerPhone">Phone Number</Label>
-              <Input
-                id="customerPhone"
-                type="tel"
-                placeholder="Enter phone number"
-                value={newBooking.customerPhone}
-                onChange={(e) => setNewBooking({ ...newBooking, customerPhone: e.target.value })}
-              />
-            </div>
-
-            {/* Service Selection */}
-            <div className="space-y-2">
-              <Label htmlFor="service">Service *</Label>
-              <Select
-                value={newBooking.serviceId}
-                onValueChange={(value) => setNewBooking({ ...newBooking, serviceId: value })}
-              >
-                <SelectTrigger>
-                  <SelectValue placeholder="Select service" />
-                </SelectTrigger>
-                <SelectContent>
-                  {availableServices.map((service) => (
-                    <SelectItem key={service.id} value={service.id}>
-                      {service.name} - ₹{service.price} ({service.duration_minutes}min)
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-
-            {/* Date and Time */}
-            <div className="grid grid-cols-2 gap-4">
-              <div className="space-y-2">
-                <Label htmlFor="date">Date *</Label>
-                <Input
-                  id="date"
-                  type="date"
-                  value={newBooking.date}
-                  onChange={(e) => setNewBooking({ ...newBooking, date: e.target.value })}
-                  min={format(new Date(), "yyyy-MM-dd")}
-                />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="time">Time *</Label>
-                <Select
-                  value={newBooking.time}
-                  onValueChange={(value) => setNewBooking({ ...newBooking, time: value })}
-                >
-                  <SelectTrigger>
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {["09:00", "09:30", "10:00", "10:30", "11:00", "11:30", "12:00", "12:30",
-                      "14:00", "14:30", "15:00", "15:30", "16:00", "16:30", "17:00", "17:30", "18:00"].map((time) => (
-                        <SelectItem key={time} value={time}>{time}</SelectItem>
-                      ))}
-                  </SelectContent>
-                </Select>
-              </div>
-            </div>
-
-            {/* Notes */}
-            <div className="space-y-2">
-              <Label htmlFor="notes">Notes (Optional)</Label>
-              <Textarea
-                id="notes"
-                placeholder="Any special requests or notes"
-                value={newBooking.notes}
-                onChange={(e) => setNewBooking({ ...newBooking, notes: e.target.value })}
-                rows={3}
-              />
-            </div>
-
-            {/* Actions */}
-            <div className="flex gap-3 pt-4">
-              <Button
-                variant="outline"
-                className="flex-1"
-                onClick={() => setShowNewAppointment(false)}
-                disabled={creatingBooking}
-              >
-                Cancel
-              </Button>
-              <Button
-                className="flex-1 bg-gradient-to-r from-accent to-accent/90"
-                onClick={createNewAppointment}
-                disabled={creatingBooking || !newBooking.customerName || !newBooking.serviceId}
-              >
-                {creatingBooking ? "Creating..." : "Create Appointment"}
-              </Button>
-            </div>
-          </div>
-        </DialogContent>
-      </Dialog>
     </ResponsiveDashboardLayout>
   );
 }

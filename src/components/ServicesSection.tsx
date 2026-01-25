@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import SalonCard from "./SalonCard";
-import { supabase } from "@/integrations/supabase/client";
+import api from "@/services/api";
 import { Loader2 } from "lucide-react";
 
 interface Salon {
@@ -22,22 +22,20 @@ const ServicesSection = () => {
 
   const fetchSalons = async () => {
     try {
-      const { data, error } = await supabase
-        .from("salons")
-        .select("id, name, city, state, logo_url, cover_image_url")
-        .eq("is_active", true)
-        .eq("approval_status", "approved")
-        .limit(8)
-        .order("created_at", { ascending: false });
+      console.log("[ServicesSection] Fetching salons from API...");
+      const data = await api.salons.getAll();
+      console.log("[ServicesSection] Raw API response:", data);
+      console.log("[ServicesSection] Data type:", typeof data);
+      console.log("[ServicesSection] Is array?", Array.isArray(data));
+      console.log("[ServicesSection] Data length:", data?.length);
 
-      if (error) {
-        console.error("Error fetching salons:", error);
-        return;
-      }
+      // Handle the response - the API returns { salons: [...] }
+      const salonsArray = Array.isArray(data) ? data : (data?.salons || []);
+      console.log("[ServicesSection] Salons array mapped:", salonsArray);
 
-      setSalons(data || []);
+      setSalons(salonsArray);
     } catch (error) {
-      console.error("Error fetching salons:", error);
+      console.error("[ServicesSection] Error fetching salons from local API:", error);
     } finally {
       setLoading(false);
     }
@@ -71,7 +69,7 @@ const ServicesSection = () => {
   return (
     <section id="services" className="py-12 md:py-20 px-4">
       <div className="container mx-auto">
-        <h2 className="text-2xl sm:text-3xl md:text-4xl font-bold text-center mb-8 md:mb-12">Our Salons</h2>
+        <h2 className="text-2xl sm:text-3xl md:text-4xl font-bold text-center mb-8 md:mb-12 tracking-tight">Our Saloons</h2>
 
         {loading ? (
           <div className="flex justify-center items-center py-12">
@@ -79,12 +77,12 @@ const ServicesSection = () => {
           </div>
         ) : salons.length === 0 ? (
           <div className="text-center py-12">
-            <p className="text-muted-foreground">No salons available at the moment.</p>
+            <p className="text-muted-foreground">No local saloons registered in MySQL yet.</p>
           </div>
         ) : (
           <>
             {/* Mobile: Horizontal scroll */}
-            <div className="flex md:hidden gap-4 overflow-x-auto pb-4 -mx-4 px-4 snap-x snap-mandatory scrollbar-hide">
+            <div className="flex md:hidden gap-4 overflow-x-auto pb-4 -mx-4 px-4 snap-x snap-mandatory scrollbar-hide text-accent-foreground">
               {salons.map((salon, index) => (
                 <div key={salon.id} className="flex-shrink-0 w-72 snap-center">
                   <SalonCard {...formatSalonData(salon, index)} />

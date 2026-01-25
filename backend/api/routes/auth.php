@@ -10,6 +10,12 @@ if ($uriParts[1] === 'signup') {
     $email = $data['email'] ?? '';
     $password = $data['password'] ?? '';
     $fullName = $data['full_name'] ?? '';
+    $phone = $data['phone'] ?? '';
+    $userType = $data['user_type'] ?? 'customer';
+
+    // Salon specific fields
+    $salonName = $data['salon_name'] ?? '';
+    $salonSlug = $data['salon_slug'] ?? '';
 
     if (empty($email) || empty($password)) {
         sendResponse(['error' => 'Email and password are required'], 400);
@@ -23,7 +29,7 @@ if ($uriParts[1] === 'signup') {
     }
 
     // Create user
-    $userId = bin2hex(random_bytes(16));
+    $userId = Auth::generateUuid();
     $passwordHash = Auth::hashPassword($password);
 
     $db->beginTransaction();
@@ -32,19 +38,37 @@ if ($uriParts[1] === 'signup') {
         $stmt->execute([$userId, $email, $passwordHash]);
 
         // Create profile
-        $stmt = $db->prepare("INSERT INTO profiles (user_id, full_name) VALUES (?, ?)");
-        $stmt->execute([$userId, $fullName]);
+        $profileId = Auth::generateUuid();
+        $stmt = $db->prepare("INSERT INTO profiles (id, user_id, full_name, phone, user_type) VALUES (?, ?, ?, ?, ?)");
+        $stmt->execute([$profileId, $userId, $fullName, $phone, $userType]);
+
+        // If salon owner, create salon and link
+        if ($userType === 'salon_owner' && !empty($salonName)) {
+            $salonId = Auth::generateUuid();
+            if (empty($salonSlug)) {
+                $salonSlug = strtolower(trim(preg_replace('/[^A-Za-z0-9-]+/', '-', $salonName)));
+                $salonSlug .= '-' . substr(Auth::generateUuid(), 0, 4);
+            }
+
+            $stmt = $db->prepare("INSERT INTO salons (id, name, slug, email, phone, approval_status) VALUES (?, ?, ?, ?, ?, 'approved')");
+            $stmt->execute([$salonId, $salonName, $salonSlug, $email, $phone]);
+
+            // Link user to salon as owner
+            $roleId = Auth::generateUuid();
+            $stmt = $db->prepare("INSERT INTO user_roles (id, user_id, salon_id, role) VALUES (?, ?, ?, 'owner')");
+            $stmt->execute([$roleId, $userId, $salonId]);
+        }
 
         $db->commit();
 
         $token = Auth::generateToken($userId, $email);
         sendResponse([
-            'user' => ['id' => $userId, 'email' => $email],
+            'user' => ['id' => $userId, 'email' => $email, 'full_name' => $fullName, 'user_type' => $userType],
             'token' => $token
         ], 201);
     } catch (Exception $e) {
         $db->rollBack();
-        sendResponse(['error' => 'Failed to create user'], 500);
+        sendResponse(['error' => 'Failed to create user: ' . $e->getMessage()], 500);
     }
 }
 
@@ -61,7 +85,12 @@ if ($uriParts[1] === 'login') {
         sendResponse(['error' => 'Email and password are required'], 400);
     }
 
-    $stmt = $db->prepare("SELECT id, email, password_hash FROM users WHERE email = ?");
+    $stmt = $db->prepare("
+        SELECT u.id, u.email, u.password_hash, p.full_name, p.user_type
+        FROM users u
+        LEFT JOIN profiles p ON u.id = p.user_id
+        WHERE u.email = ?
+    ");
     $stmt->execute([$email]);
     $user = $stmt->fetch();
 
@@ -71,7 +100,12 @@ if ($uriParts[1] === 'login') {
 
     $token = Auth::generateToken($user['id'], $user['email']);
     sendResponse([
-        'user' => ['id' => $user['id'], 'email' => $user['email']],
+        'user' => [
+            'id' => $user['id'],
+            'email' => $user['email'],
+            'full_name' => $user['full_name'],
+            'user_type' => $user['user_type']
+        ],
         'token' => $token
     ]);
 }

@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { Bell, X, CheckCircle, AlertTriangle, Info, Clock } from "lucide-react";
+import { Bell, X, CheckCircle, AlertTriangle, Info, Clock, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { ScrollArea } from "@/components/ui/scroll-area";
@@ -9,7 +9,7 @@ import {
   PopoverTrigger,
 } from "@/components/ui/popover";
 import { Card, CardContent } from "@/components/ui/card";
-import { supabase } from "@/integrations/supabase/client";
+import api from "@/services/api";
 import { format } from "date-fns";
 
 interface Notification {
@@ -24,199 +24,107 @@ interface Notification {
 
 export function NotificationSystem() {
   const [notifications, setNotifications] = useState<Notification[]>([]);
-  const [unreadCount, setUnreadCount] = useState(0);
   const [isOpen, setIsOpen] = useState(false);
-
-  useEffect(() => {
-    fetchNotifications();
-    
-    // Set up real-time subscriptions
-    const salonsChannel = supabase
-      .channel('admin-notifications-salons')
-      .on(
-        'postgres_changes',
-        { event: 'INSERT', schema: 'public', table: 'salons' },
-        (payload) => {
-          addNotification({
-            type: 'pending',
-            title: 'New Salon Registration',
-            message: `${payload.new.name} has registered and needs approval`,
-            actionUrl: '/admin/salons?status=pending'
-          });
-        }
-      )
-      .subscribe();
-
-    const bookingsChannel = supabase
-      .channel('admin-notifications-bookings')
-      .on(
-        'postgres_changes',
-        { event: 'INSERT', schema: 'public', table: 'bookings' },
-        () => {
-          addNotification({
-            type: 'info',
-            title: 'New Booking',
-            message: 'A new booking has been created on the platform',
-            actionUrl: '/admin/bookings'
-          });
-        }
-      )
-      .subscribe();
-
-    return () => {
-      supabase.removeChannel(salonsChannel);
-      supabase.removeChannel(bookingsChannel);
-    };
-  }, []);
+  const [loading, setLoading] = useState(false);
 
   const fetchNotifications = async () => {
     try {
-      // Fetch pending salons
-      const { data: pendingSalons } = await supabase
-        .from('salons')
-        .select('id, name, created_at')
-        .eq('approval_status', 'pending')
-        .order('created_at', { ascending: false })
-        .limit(5);
+      setLoading(true);
+      // Fetch platform-wide notifications
+      const data = await api.notifications.getAll();
 
-      // Fetch recent bookings
-      const { data: recentBookings } = await supabase
-        .from('bookings')
-        .select('id, created_at')
-        .gte('created_at', new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString())
-        .order('created_at', { ascending: false })
-        .limit(3);
+      const mapped = data.map((n: any) => ({
+        id: n.id,
+        type: n.type === 'booking' ? 'success' : n.type === 'system' ? 'info' : 'warning',
+        title: n.title,
+        message: n.message,
+        timestamp: n.created_at,
+        read: Boolean(n.is_read),
+        actionUrl: n.link
+      }));
 
-      const newNotifications: Notification[] = [];
-
-      // Add pending salon notifications
-      pendingSalons?.forEach(salon => {
-        newNotifications.push({
-          id: `salon-${salon.id}`,
-          type: 'pending',
-          title: 'Salon Approval Needed',
-          message: `${salon.name} is waiting for approval`,
-          timestamp: salon.created_at,
-          read: false,
-          actionUrl: '/admin/salons?status=pending'
-        });
-      });
-
-      // Add recent booking notifications
-      if (recentBookings && recentBookings.length > 0) {
-        newNotifications.push({
-          id: `bookings-today`,
-          type: 'info',
-          title: 'Recent Bookings',
-          message: `${recentBookings.length} new bookings in the last 24 hours`,
-          timestamp: new Date().toISOString(),
-          read: false,
-          actionUrl: '/admin/bookings'
-        });
-      }
-
-      setNotifications(newNotifications);
-      setUnreadCount(newNotifications.filter(n => !n.read).length);
-
+      setNotifications(mapped);
     } catch (error) {
-      console.error('Error fetching notifications:', error);
+      console.error('Local notification sync failed:', error);
+    } finally {
+      setLoading(false);
     }
   };
 
-  const addNotification = (notification: Omit<Notification, 'id' | 'timestamp' | 'read'>) => {
-    const newNotification: Notification = {
-      ...notification,
-      id: `notif-${Date.now()}`,
-      timestamp: new Date().toISOString(),
-      read: false
-    };
+  useEffect(() => {
+    fetchNotifications();
+    const interval = setInterval(fetchNotifications, 60000);
+    return () => clearInterval(interval);
+  }, []);
 
-    setNotifications(prev => [newNotification, ...prev.slice(0, 9)]);
-    setUnreadCount(prev => prev + 1);
-  };
-
-  const markAsRead = (id: string) => {
-    setNotifications(prev => 
-      prev.map(n => n.id === id ? { ...n, read: true } : n)
-    );
-    setUnreadCount(prev => Math.max(0, prev - 1));
-  };
-
-  const markAllAsRead = () => {
-    setNotifications(prev => prev.map(n => ({ ...n, read: true })));
-    setUnreadCount(0);
-  };
-
-  const getNotificationIcon = (type: Notification['type']) => {
-    switch (type) {
-      case 'success': return <CheckCircle className="h-4 w-4 text-green-500" />;
-      case 'warning': return <AlertTriangle className="h-4 w-4 text-yellow-500" />;
-      case 'pending': return <Clock className="h-4 w-4 text-orange-500" />;
-      default: return <Info className="h-4 w-4 text-blue-500" />;
+  const markAsRead = async (id: string) => {
+    try {
+      await api.notifications.markAsRead(id);
+      setNotifications(prev => prev.map(n => n.id === id ? { ...n, read: true } : n));
+    } catch (error) {
+      console.error('Failed to mark admin notification as read:', error);
     }
   };
+
+  const unreadCount = notifications.filter(n => !n.read).length;
 
   return (
     <Popover open={isOpen} onOpenChange={setIsOpen}>
       <PopoverTrigger asChild>
-        <Button variant="ghost" size="icon" className="relative">
-          <Bell className="h-5 w-5" />
+        <Button variant="ghost" size="icon" className="relative h-10 w-10 rounded-xl hover:bg-slate-700 transition-colors">
+          <Bell className="h-5 w-5 text-gray-400" />
           {unreadCount > 0 && (
-            <Badge 
-              variant="destructive" 
-              className="absolute -top-1 -right-1 h-5 w-5 rounded-full p-0 flex items-center justify-center text-xs"
-            >
-              {unreadCount > 9 ? '9+' : unreadCount}
-            </Badge>
+            <span className="absolute top-2 right-2 h-4 w-4 bg-accent text-white rounded-full flex items-center justify-center text-[10px] font-black border-2 border-slate-800">
+              {unreadCount}
+            </span>
           )}
         </Button>
       </PopoverTrigger>
-      <PopoverContent className="w-80 p-0" align="end">
-        <div className="flex items-center justify-between p-4 border-b">
-          <h3 className="font-semibold">Notifications</h3>
-          {unreadCount > 0 && (
-            <Button variant="ghost" size="sm" onClick={markAllAsRead}>
-              Mark all read
-            </Button>
-          )}
+      <PopoverContent className="w-96 p-0 border-none shadow-2xl rounded-[2rem] overflow-hidden bg-slate-900 border border-slate-800" align="end">
+        <div className="bg-slate-900 p-6 text-white flex items-center justify-between border-b border-slate-800">
+          <div>
+            <h3 className="text-lg font-black tracking-tight">Governance Events</h3>
+            <p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest mt-1">Platform Status Registry</p>
+          </div>
+          {loading && <Loader2 className="w-4 h-4 animate-spin text-accent" />}
         </div>
-        
-        <ScrollArea className="h-[400px]">
+
+        <ScrollArea className="h-[450px] bg-slate-950">
           {notifications.length === 0 ? (
-            <div className="flex flex-col items-center justify-center h-32 text-muted-foreground">
-              <Bell className="h-8 w-8 mb-2 opacity-50" />
-              <p className="text-sm">No notifications</p>
+            <div className="flex flex-col items-center justify-center h-full py-20 text-center px-10">
+              <div className="w-16 h-16 bg-slate-900 rounded-2xl shadow-sm flex items-center justify-center mb-4 border border-slate-800">
+                <CheckCircle className="h-8 w-8 text-emerald-500" />
+              </div>
+              <p className="text-sm font-bold text-slate-500">Governance is synchronized. No pending alerts.</p>
             </div>
           ) : (
-            <div className="p-2">
-              {notifications.map((notification) => (
-                <Card 
-                  key={notification.id}
-                  className={`mb-2 cursor-pointer transition-colors ${
-                    !notification.read ? 'bg-muted/50' : ''
-                  }`}
+            <div className="p-4 space-y-3">
+              {notifications.map((n) => (
+                <Card
+                  key={n.id}
+                  className={`border-none shadow-sm rounded-2xl overflow-hidden group hover:shadow-md transition-all cursor-pointer ${n.read ? 'bg-slate-900/50 opacity-60' : 'bg-slate-900 border border-slate-800'
+                    }`}
                   onClick={() => {
-                    markAsRead(notification.id);
-                    if (notification.actionUrl) {
-                      window.location.href = notification.actionUrl;
-                    }
+                    markAsRead(n.id);
+                    if (n.actionUrl) window.location.href = n.actionUrl;
                   }}
                 >
-                  <CardContent className="p-3">
-                    <div className="flex items-start gap-3">
-                      {getNotificationIcon(notification.type)}
+                  <CardContent className="p-4">
+                    <div className="flex items-start gap-4">
+                      <div className={`w-10 h-10 rounded-xl flex items-center justify-center shrink-0 ${n.type === 'pending' || n.type === 'warning' ? 'bg-amber-500/10 text-amber-500' : 'bg-blue-500/10 text-blue-500'
+                        }`}>
+                        {n.type === 'pending' || n.type === 'warning' ? <AlertTriangle className="w-5 h-5" /> : <Info className="w-5 h-5" />}
+                      </div>
                       <div className="flex-1 min-w-0">
                         <div className="flex items-center justify-between">
-                          <p className="font-medium text-sm">{notification.title}</p>
-                          {!notification.read && (
-                            <div className="h-2 w-2 rounded-full bg-primary flex-shrink-0" />
-                          )}
+                          <h4 className="font-black text-white text-sm truncate">{n.title}</h4>
+                          <button onClick={(e) => { e.stopPropagation(); markAsRead(n.id); }} className="text-slate-600 hover:text-slate-400">
+                            <X className="w-3.5 h-3.5" />
+                          </button>
                         </div>
-                        <p className="text-sm text-muted-foreground mt-1">
-                          {notification.message}
-                        </p>
-                        <p className="text-xs text-muted-foreground mt-2">
-                          {format(new Date(notification.timestamp), 'MMM d, h:mm a')}
+                        <p className="text-xs font-medium text-slate-400 mt-1 leading-relaxed">{n.message}</p>
+                        <p className="text-[9px] font-bold text-slate-600 uppercase tracking-widest mt-3">
+                          {format(new Date(n.timestamp), 'MMM dd, HH:mm')}
                         </p>
                       </div>
                     </div>
@@ -227,9 +135,9 @@ export function NotificationSystem() {
           )}
         </ScrollArea>
 
-        <div className="p-3 border-t">
-          <Button variant="outline" className="w-full" size="sm" onClick={fetchNotifications}>
-            Refresh Notifications
+        <div className="p-4 bg-slate-900 border-t border-slate-800">
+          <Button onClick={fetchNotifications} variant="ghost" className="w-full h-12 rounded-xl text-xs font-black uppercase tracking-widest text-accent hover:bg-accent hover:text-white transition-all duration-300">
+            {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : "Sync Data Now"}
           </Button>
         </div>
       </PopoverContent>

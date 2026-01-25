@@ -5,7 +5,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useToast } from "@/hooks/use-toast";
-import { supabase } from "@/integrations/supabase/client";
+import api from "@/services/api";
 import { Shield, Lock, User } from "lucide-react";
 
 export default function TestAdminLogin() {
@@ -20,91 +20,24 @@ export default function TestAdminLogin() {
     setLoading(true);
 
     try {
-      console.log('Starting login process...');
+      console.log('Starting local login process...');
       console.log('Email:', email);
-      console.log('Supabase client:', supabase);
 
-      // Test Supabase connection first
-      const { data: testData, error: testError } = await supabase
-        .from('profiles')
-        .select('count')
-        .limit(1);
+      const data = await api.auth.login(email, password);
 
-      console.log('Supabase connection test:', { testData, testError });
+      console.log('Login result:', data);
 
-      if (testError) {
-        toast({
-          title: "Database Connection Failed",
-          description: testError.message,
-          variant: "destructive",
-        });
-        return;
-      }
-
-      // Try to sign in
-      console.log('Attempting authentication...');
-      const { data: authData, error: authError } = await supabase.auth.signInWithPassword({
-        email,
-        password,
-      });
-
-      console.log('Auth result:', { authData, authError });
-
-      if (authError) {
-        console.error('Auth error:', authError);
-        
-        // If user doesn't exist, try to create it
-        if (authError.message.includes('Invalid login credentials')) {
-          console.log('User not found, creating new user...');
-          
-          const { data: signUpData, error: signUpError } = await supabase.auth.signUp({
-            email,
-            password,
-            options: {
-              data: {
-                full_name: "Test Admin",
-                user_type: "admin"
-              }
-            }
-          });
-
-          console.log('SignUp result:', { signUpData, signUpError });
-
-          if (signUpError) {
-            toast({
-              title: "Account Creation Failed",
-              description: signUpError.message,
-              variant: "destructive",
-            });
-            return;
-          }
-
-          toast({
-            title: "Account Created!",
-            description: "New admin account created. Try logging in again.",
-          });
-          return;
-        }
-
+      if (!data.user) {
         toast({
           title: "Login Failed",
-          description: authError.message,
+          description: "No user data received from local backend",
           variant: "destructive",
         });
         return;
       }
 
-      if (!authData.user) {
-        toast({
-          title: "Login Failed", 
-          description: "No user data received",
-          variant: "destructive",
-        });
-        return;
-      }
+      console.log('Login successful! User:', data.user.email);
 
-      console.log('Login successful! User:', authData.user.email);
-      
       toast({
         title: "Login Successful!",
         description: "Redirecting to admin panel...",
@@ -115,11 +48,11 @@ export default function TestAdminLogin() {
         navigate("/admin");
       }, 1000);
 
-    } catch (error) {
+    } catch (error: any) {
       console.error('Unexpected error:', error);
       toast({
         title: "Error",
-        description: "An unexpected error occurred: " + (error as Error).message,
+        description: error.message || "Could not sync with local MySQL instance.",
         variant: "destructive",
       });
     } finally {
@@ -130,32 +63,30 @@ export default function TestAdminLogin() {
   const testConnection = async () => {
     setLoading(true);
     try {
-      console.log('Testing Supabase connection...');
-      
-      const { data, error } = await supabase
-        .from('profiles')
-        .select('count')
-        .limit(1);
+      console.log('Testing local backend connection...');
 
-      console.log('Connection test result:', { data, error });
+      const response = await fetch(`${import.meta.env.VITE_API_BASE_URL || 'http://localhost/backend/api'}/`);
+      const data = await response.json();
 
-      if (error) {
+      console.log('Connection test result:', data);
+
+      if (data.data?.status === 'online') {
         toast({
-          title: "Connection Failed",
-          description: error.message,
-          variant: "destructive",
+          title: "Connection Successful!",
+          description: "Local PHP API is working correctly",
         });
       } else {
         toast({
-          title: "Connection Successful!",
-          description: "Supabase is working correctly",
+          title: "Connection Failed",
+          description: "Backend responded but status is not online",
+          variant: "destructive",
         });
       }
     } catch (error) {
       console.error('Connection test error:', error);
       toast({
         title: "Connection Error",
-        description: (error as Error).message,
+        description: "Could not reach the local backend server.",
         variant: "destructive",
       });
     } finally {
@@ -176,9 +107,9 @@ export default function TestAdminLogin() {
           </p>
         </CardHeader>
         <CardContent className="space-y-4">
-          <Button 
-            variant="outline" 
-            className="w-full" 
+          <Button
+            variant="outline"
+            className="w-full"
             onClick={testConnection}
             disabled={loading}
           >
@@ -235,7 +166,7 @@ export default function TestAdminLogin() {
           <div className="bg-muted/50 p-3 rounded-lg text-sm">
             <p className="font-medium text-center mb-2">Test Credentials:</p>
             <p className="text-center text-muted-foreground">
-              📧 Email: <span className="font-mono">test@admin.com</span><br/>
+              📧 Email: <span className="font-mono">test@admin.com</span><br />
               🔑 Password: <span className="font-mono">admin123</span>
             </p>
             <p className="text-xs text-center mt-2 text-muted-foreground">

@@ -1,16 +1,28 @@
-<IfModule mod_rewrite.c>
-    RewriteEngine On
-    RewriteBase /backend/api/
-    RewriteCond %{REQUEST_FILENAME} !-f
-    RewriteCond %{REQUEST_FILENAME} !-d
-    RewriteRule ^(.*)$ index.php [QSA,L]
-</IfModule>
-
-# Security Headers
+# Security Headers & CORS
 <IfModule mod_headers.c>
     Header set X-Content-Type-Options "nosniff"
     Header set X-Frame-Options "SAMEORIGIN"
     Header set X-XSS-Protection "1; mode=block"
+    
+    # Force CORS headers even on error responses
+    SetEnvIf Origin "^(http://localhost:5174|http://127.0.0.1:5174|http://172.21.99.141:5174)$" ORIGIN=$0
+    Header set Access-Control-Allow-Origin %{ORIGIN}e env=ORIGIN
+    Header set Access-Control-Allow-Credentials "true" env=ORIGIN
+    Header set Access-Control-Allow-Methods "GET, POST, PUT, DELETE, OPTIONS, PATCH"
+    Header set Access-Control-Allow-Headers "Content-Type, Authorization, X-Requested-With, Accept, Origin"
+</IfModule>
+
+<IfModule mod_rewrite.c>
+    RewriteEngine On
+    RewriteBase /backend/api/
+    
+    # Pass Authorization Header to PHP
+    RewriteCond %{HTTP:Authorization} .
+    RewriteRule .* - [E=HTTP_AUTHORIZATION:%{HTTP:Authorization}]
+    
+    RewriteCond %{REQUEST_FILENAME} !-f
+    RewriteCond %{REQUEST_FILENAME} !-d
+    RewriteRule ^(.*)$ index.php [QSA,L]
 </IfModule>
 
 # Prevent directory listing

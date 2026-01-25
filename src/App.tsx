@@ -53,6 +53,9 @@ import DebugSupabase from "./pages/DebugSupabase";
 import CreateAdminCredentials from "./pages/CreateAdminCredentials";
 import DirectAdminAccess from "./pages/DirectAdminAccess";
 import SupabaseDebug from "./pages/SupabaseDebug";
+import CustomerSignup from "./pages/CustomerSignup";
+import SalonOwnerSignup from "./pages/Signup";
+import UnifiedSignup from "./pages/UnifiedSignup";
 
 const queryClient = new QueryClient();
 
@@ -84,7 +87,8 @@ const App = () => (
                 <Route path="/create-admin" element={<CreateAdminCredentials />} />
                 <Route path="/direct-admin" element={<DirectAdminAccess />} />
                 <Route path="/login" element={<Login />} />
-                <Route path="/signup" element={<Signup />} />
+                <Route path="/signup" element={<UnifiedSignup />} />
+                <Route path="/salon-owner/signup" element={<SalonOwnerSignup />} />
                 <Route path="/salon-owner/login" element={<SalonOwnerLogin />} />
                 <Route path="/book" element={<BookAppointment />} />
                 <Route path="/my-bookings" element={<MyBookings />} />

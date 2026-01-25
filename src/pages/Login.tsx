@@ -17,7 +17,7 @@ const Login = () => {
   const [loading, setLoading] = useState(false);
   const navigate = useNavigate();
   const { toast } = useToast();
-  const { refreshUser } = useAuth();
+  const { login } = useAuth();
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -25,7 +25,7 @@ const Login = () => {
     if (!email.trim() || !password.trim()) {
       toast({
         title: "Error",
-        description: "Please fill in all fields",
+        description: "Credentials missing",
         variant: "destructive",
       });
       return;
@@ -34,19 +34,28 @@ const Login = () => {
     setLoading(true);
 
     try {
-      await api.auth.login(email.trim(), password);
-      await refreshUser();
+      await login(email.trim(), password);
+
+      // Get the current user to check user type
+      const userData = await api.auth.getCurrentUser();
+      const userType = userData?.user?.user_type;
 
       toast({
-        title: "Welcome Back!",
-        description: "You have successfully logged in",
+        title: "Session Established",
+        description: "Accessing local management console...",
       });
-      navigate("/");
+
+      // Redirect based on user type
+      if (userType === 'salon_owner') {
+        navigate("/dashboard");
+      } else {
+        navigate("/");
+      }
     } catch (error: any) {
       console.error("Login error:", error);
       toast({
-        title: "Login Failed",
-        description: error.message || "Invalid credentials",
+        title: "Access Denied",
+        description: error.message || "Invalid digital signature",
         variant: "destructive",
       });
     } finally {
@@ -55,74 +64,75 @@ const Login = () => {
   };
 
   return (
-    <div className="min-h-screen bg-background flex items-center justify-center p-4">
-      <Card className="w-full max-w-md">
-        <CardHeader className="text-center">
-          <Link to="/" className="flex justify-center mb-4">
-            <img src={logo} alt="Salon Logo" className="h-16 w-auto" />
+    <div className="min-h-screen bg-[#FDFCFB] flex items-center justify-center p-4 relative overflow-hidden">
+      {/* Background Aura */}
+      <div className="absolute top-0 right-0 w-[500px] h-[500px] bg-accent/5 blur-[120px] rounded-full -translate-y-1/2 translate-x-1/2" />
+
+      <Card className="w-full max-w-md border-none shadow-[0_40px_80px_-20px_rgba(0,0,0,0.08)] bg-white/60 backdrop-blur-3xl rounded-[3rem] overflow-hidden border border-white/40">
+        <CardHeader className="text-center pt-12 pb-8">
+          <Link to="/" className="flex justify-center mb-6">
+            <img src={logo} alt="Saloon Logo" className="h-16 w-auto" />
           </Link>
-          <CardTitle className="text-2xl font-bold">Welcome Back</CardTitle>
-          <CardDescription>Login to your account</CardDescription>
+          <CardTitle className="text-4xl font-black text-slate-900 tracking-tight">Saloon Console</CardTitle>
+          <CardDescription className="font-bold text-slate-400 uppercase tracking-widest text-[10px] mt-2">Authenticated Partner Entrance Only</CardDescription>
         </CardHeader>
         <form onSubmit={handleLogin}>
-          <CardContent className="space-y-4">
+          <CardContent className="space-y-6 px-10">
             <div className="space-y-2">
-              <Label htmlFor="email">Email</Label>
+              <Label className="text-[10px] font-black uppercase text-slate-400 tracking-widest ml-1">Business Identifier (Email)</Label>
               <Input
                 id="email"
                 type="email"
-                placeholder="Enter your email"
+                placeholder="owner@saloon.com"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
+                className="h-14 bg-slate-50 border-none rounded-2xl font-bold px-5 shadow-inner"
                 required
               />
             </div>
             <div className="space-y-2">
-              <Label htmlFor="password">Password</Label>
+              <div className="flex items-center justify-between ml-1">
+                <Label className="text-[10px] font-black uppercase text-slate-400 tracking-widest">Access Pass</Label>
+                <Link to="#" className="text-[10px] font-black uppercase text-accent tracking-widest hover:underline">Forgot?</Link>
+              </div>
               <div className="relative">
                 <Input
                   id="password"
                   type={showPassword ? "text" : "password"}
-                  placeholder="Enter your password"
+                  placeholder="••••••••"
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
+                  className="h-14 bg-slate-50 border-none rounded-2xl font-bold px-5 pr-12 shadow-inner"
                   required
                 />
                 <button
                   type="button"
                   onClick={() => setShowPassword(!showPassword)}
-                  className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                  className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-300 hover:text-slate-600 transition-colors"
                 >
-                  {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                  {showPassword ? <EyeOff className="h-5 w-5" /> : <Eye className="h-5 w-5" />}
                 </button>
               </div>
             </div>
           </CardContent>
-          <CardFooter className="flex flex-col gap-4">
-            <Button type="submit" className="w-full" disabled={loading}>
+          <CardFooter className="flex flex-col gap-6 px-10 pb-12 pt-8">
+            <Button type="submit" className="w-full h-16 bg-slate-900 hover:bg-black text-white rounded-[2rem] font-black text-lg shadow-2xl shadow-slate-900/20 transition-all transform hover:scale-[1.01]" disabled={loading}>
               {loading ? (
                 <>
-                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                  Logging in...
+                  <Loader2 className="mr-3 h-5 w-5 animate-spin" />
+                  SYNCING...
                 </>
               ) : (
-                "Login"
+                "ACCESS DASHBOARD"
               )}
             </Button>
-            <p className="text-sm text-muted-foreground text-center">
-              Don't have an account?{" "}
-              <Link to="/signup" className="text-primary hover:underline font-medium">
-                Sign up
-              </Link>
-            </p>
             <div className="text-center">
-              <p className="text-xs text-muted-foreground mb-2">Are you a salon owner?</p>
-              <Link
-                to="/salon-owner/login"
-                className="text-accent hover:underline font-medium text-sm"
-              >
-                Salon Owner Login →
-              </Link>
+              <p className="text-xs text-slate-400 font-bold uppercase tracking-widest">
+                New Partner?{" "}
+                <Link to="/signup" className="text-accent underline font-black">
+                  Enroll Instance
+                </Link>
+              </p>
             </div>
           </CardFooter>
         </form>

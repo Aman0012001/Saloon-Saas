@@ -4,12 +4,10 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
-import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/hooks/useAuth";
-import { Eye, EyeOff, Loader2, Store, BarChart3, Users, Calendar } from "lucide-react";
+import { Eye, EyeOff, Loader2, Store, BarChart3, Users, Calendar, ShieldCheck } from "lucide-react";
 import logo from "@/assets/logo.png";
-import { ensureUserProfile, makeSalonOwner } from "@/utils/databaseUtils";
 
 const SalonOwnerLogin = () => {
   const [email, setEmail] = useState("");
@@ -18,11 +16,12 @@ const SalonOwnerLogin = () => {
   const [loading, setLoading] = useState(false);
   const navigate = useNavigate();
   const { toast } = useToast();
-  const { user, loading: authLoading } = useAuth();
+  const { user, loading: authLoading, login } = useAuth();
 
+  // Redirect if already logged in
   useEffect(() => {
     if (!authLoading && user) {
-      console.log("User already logged in, redirecting to dashboard");
+      console.log("Session verified, entering station dashboard...");
       navigate("/dashboard");
     }
   }, [user, authLoading, navigate]);
@@ -32,8 +31,8 @@ const SalonOwnerLogin = () => {
 
     if (!email.trim() || !password.trim()) {
       toast({
-        title: "Error",
-        description: "Please fill in all fields",
+        title: "Missing Credentials",
+        description: "Please provide both digital identity and access pass.",
         variant: "destructive",
       });
       return;
@@ -42,35 +41,24 @@ const SalonOwnerLogin = () => {
     setLoading(true);
 
     try {
-      const { data, error } = await supabase.auth.signInWithPassword({
-        email: email.trim(),
-        password,
+      // 1. Attempt local authentication
+      await login(email.trim(), password);
+
+      // 2. Success message
+      toast({
+        title: "Access Logged",
+        description: `Welcome back to the local control center.`,
       });
 
-      if (error) throw error;
+      // 3. Force redirection
+      console.log("Authentication successful, forcing navigation to dashboard");
+      navigate("/dashboard", { replace: true });
 
-      // Check if user is a salon owner
-      if (data.user) {
-        // Ensure user profile exists
-        let profile = await ensureUserProfile(data.user.id, 'salon_owner');
-
-        // If profile creation failed, try to make existing user a salon owner
-        if (!profile) {
-          profile = await makeSalonOwner(data.user.id, {
-            businessName: data.user.user_metadata?.business_name || 'My Salon'
-          });
-        }
-
-        toast({
-          title: "Welcome Back!",
-          description: `Welcome to your salon dashboard`,
-        });
-        navigate("/dashboard");
-      }
     } catch (error: any) {
+      console.error("Local login failed:", error);
       toast({
-        title: "Login Failed",
-        description: error.message,
+        title: "Access Denied",
+        description: error.message || "Failed to sync with local MySQL records. Check your credentials.",
         variant: "destructive",
       });
     } finally {
@@ -78,148 +66,145 @@ const SalonOwnerLogin = () => {
     }
   };
 
-  const features = [
+  const protocols = [
     {
       icon: BarChart3,
-      title: "Analytics Dashboard",
-      description: "Track revenue, appointments, and business growth"
+      title: "Isolated Analytics",
+      description: "Direct real-time metrics from your private MySQL node."
     },
     {
       icon: Calendar,
-      title: "Appointment Management",
-      description: "Manage bookings, schedules, and customer appointments"
+      title: "registry.Local",
+      description: "Encrypted appointment management within your network."
     },
     {
-      icon: Users,
-      title: "Staff & Customer Management",
-      description: "Organize your team and maintain customer relationships"
+      icon: ShieldCheck,
+      title: "Station Security",
+      description: "Session persistence managed via local JWT protocols."
     }
   ];
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-accent/5 via-background to-sage/5 flex items-center justify-center p-4">
-      <div className="w-full max-w-6xl grid grid-cols-1 lg:grid-cols-2 gap-8 items-center">
-        {/* Left Side - Features */}
-        <div className="hidden lg:block space-y-8">
-          <div className="text-center lg:text-left">
-            <div className="flex items-center gap-3 mb-6">
-              <div className="w-12 h-12 bg-accent rounded-xl flex items-center justify-center">
-                <Store className="w-6 h-6 text-accent-foreground" />
+    <div className="min-h-screen bg-[#0a0a0a] flex items-center justify-center p-4 selection:bg-accent/30">
+      <div className="w-full max-w-6xl grid grid-cols-1 lg:grid-cols-2 gap-16 items-center">
+
+        {/* Branding & Status */}
+        <div className="hidden lg:block space-y-12">
+          <div className="space-y-6">
+            <div className="flex items-center gap-4">
+              <div className="w-14 h-14 bg-accent/20 backdrop-blur-xl rounded-2xl flex items-center justify-center border border-accent/20">
+                <Store className="w-7 h-7 text-accent" />
               </div>
               <div>
-                <h1 className="text-3xl font-bold text-foreground">NoamSkin</h1>
-                <p className="text-muted-foreground">Salon Owner Dashboard</p>
+                <h1 className="text-4xl font-black text-white tracking-tighter">NoamSkin <span className="text-accent underline decoration-4 underline-offset-8">Station</span></h1>
+                <p className="text-slate-500 font-bold uppercase tracking-[0.3em] text-[10px] mt-1">Local Registry Environment</p>
               </div>
             </div>
-            <h2 className="text-2xl font-bold text-foreground mb-4">
-              Manage Your Salon Business
+            <h2 className="text-6xl font-black text-white tracking-tighter leading-none">
+              Control your saloon <br /> <span className="text-transparent bg-clip-text bg-gradient-to-r from-accent to-white">offline & faster.</span>
             </h2>
-            <p className="text-muted-foreground text-lg">
-              Access your complete salon management dashboard with powerful tools to grow your business.
-            </p>
           </div>
 
-          <div className="space-y-6">
-            {features.map((feature, index) => (
-              <div key={index} className="flex items-start gap-4">
-                <div className="w-10 h-10 bg-accent/10 rounded-lg flex items-center justify-center flex-shrink-0">
-                  <feature.icon className="w-5 h-5 text-accent" />
+          <div className="space-y-8">
+            {protocols.map((protocol, index) => (
+              <div key={index} className="flex items-center gap-6 group">
+                <div className="w-12 h-12 bg-slate-900 rounded-2xl flex items-center justify-center flex-shrink-0 group-hover:scale-110 transition-transform">
+                  <protocol.icon className="w-5 h-5 text-slate-400 group-hover:text-accent transition-colors" />
                 </div>
                 <div>
-                  <h3 className="font-semibold text-foreground mb-1">{feature.title}</h3>
-                  <p className="text-muted-foreground text-sm">{feature.description}</p>
+                  <h3 className="font-bold text-white text-lg">{protocol.title}</h3>
+                  <p className="text-slate-500 text-sm font-medium">{protocol.description}</p>
                 </div>
               </div>
             ))}
           </div>
         </div>
 
-        {/* Right Side - Login Form */}
-        <Card className="w-full border-border shadow-card">
-          <CardHeader className="text-center">
-            <div className="lg:hidden flex justify-center mb-4">
-              <img src={logo} alt="Salon Logo" className="h-16 w-auto" />
+        {/* Login Node */}
+        <Card className="w-full border-none shadow-[0_0_80px_rgba(0,0,0,0.5)] bg-slate-900/50 backdrop-blur-2xl rounded-[3rem] overflow-hidden border border-white/5 relative">
+          <div className="absolute top-0 right-0 w-64 h-64 bg-accent/10 blur-[100px] rounded-full -mr-20 -mt-20" />
+
+          <CardHeader className="text-center pt-14 pb-10">
+            <div className="lg:hidden flex justify-center mb-6">
+              <div className="w-16 h-16 bg-accent rounded-3xl flex items-center justify-center">
+                <Store className="w-8 h-8 text-black" />
+              </div>
             </div>
-            <CardTitle className="text-2xl font-bold">Salon Owner Login</CardTitle>
-            <CardDescription>Access your salon management dashboard</CardDescription>
+            <CardTitle className="text-4xl font-black text-white tracking-tight">System Login</CardTitle>
+            <CardDescription className="font-bold text-slate-500 uppercase tracking-widest text-[10px] mt-2">Authorization Required</CardDescription>
           </CardHeader>
-          <form onSubmit={handleLogin}>
-            <CardContent className="space-y-6">
-              <div className="space-y-2">
-                <Label htmlFor="email">Email Address</Label>
+
+          <form onSubmit={handleLogin} className="pb-16 px-12">
+            <CardContent className="space-y-8 px-0">
+              <div className="space-y-3">
+                <Label className="text-[10px] font-black uppercase text-slate-500 tracking-[0.2em] ml-2">Registry Email</Label>
                 <Input
                   id="email"
                   type="email"
-                  placeholder="Enter your registered email"
+                  placeholder="admin@local.host"
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
+                  className="h-16 bg-black/40 border-slate-800 text-white rounded-2xl font-bold px-6 focus:border-accent/50 focus:ring-accent/20 transition-all text-lg"
                   required
-                  className="h-12"
                 />
               </div>
-              <div className="space-y-2">
-                <Label htmlFor="password">Password</Label>
+              <div className="space-y-3">
+                <Label className="text-[10px] font-black uppercase text-slate-500 tracking-[0.2em] ml-2">Access Key</Label>
                 <div className="relative">
                   <Input
                     id="password"
                     type={showPassword ? "text" : "password"}
-                    placeholder="Enter your password"
+                    placeholder="••••••••••••"
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
+                    className="h-16 bg-black/40 border-slate-800 text-white rounded-2xl font-bold px-6 pr-14 focus:border-accent/50 focus:ring-accent/20 transition-all text-lg"
                     required
-                    className="h-12 pr-12"
                   />
                   <button
                     type="button"
                     onClick={() => setShowPassword(!showPassword)}
-                    className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                    className="absolute right-5 top-1/2 -translate-y-1/2 text-slate-600 hover:text-accent transition-colors"
                   >
-                    {showPassword ? <EyeOff className="h-5 w-5" /> : <Eye className="h-5 w-5" />}
+                    {showPassword ? <EyeOff className="h-6 h-6" /> : <Eye className="h-6 h-6" />}
                   </button>
                 </div>
               </div>
-
-              <div className="flex items-center justify-between">
-                <Link
-                  to="/salon-owner/forgot-password"
-                  className="text-sm text-accent hover:underline"
-                >
-                  Forgot password?
-                </Link>
-              </div>
             </CardContent>
-            <CardFooter className="flex flex-col gap-4">
+
+            <CardFooter className="flex flex-col gap-8 px-0 mt-10">
               <Button
                 type="submit"
-                className="w-full h-12 bg-accent hover:bg-accent/90 text-lg"
+                className="w-full h-20 bg-accent hover:bg-white text-black rounded-3xl font-black text-xl shadow-2xl shadow-accent/20 transition-all transform hover:scale-[1.02] active:scale-[0.98]"
                 disabled={loading}
               >
                 {loading ? (
                   <>
-                    <Loader2 className="mr-2 h-5 w-5 animate-spin" />
-                    Logging in...
+                    <Loader2 className="mr-3 h-6 w-6 animate-spin" />
+                    AUTHORIZING...
                   </>
                 ) : (
                   <>
-                    <Store className="mr-2 h-5 w-5" />
-                    Access Dashboard
+                    <ShieldCheck className="mr-3 h-6 w-6" />
+                    ACCESS DASHBOARD
                   </>
                 )}
               </Button>
 
-              <div className="text-center space-y-2">
-                <p className="text-sm text-muted-foreground">
-                  Don't have a salon owner account?{" "}
-                  <Link to="/dashboard/create-salon" className="text-accent hover:underline font-medium">
-                    Start free trial
+              <div className="space-y-6">
+                <div className="h-px bg-slate-800 w-full relative">
+                  <span className="absolute inset-x-0 -top-2 flex justify-center">
+                    <span className="bg-slate-900 px-3 text-[10px] font-black text-slate-600 uppercase tracking-widest">Network Options</span>
+                  </span>
+                </div>
+
+                <div className="grid grid-cols-2 gap-4">
+                  <Link to="/signup" className="h-14 rounded-2xl border border-slate-800 flex items-center justify-center text-xs font-black text-slate-400 hover:bg-slate-800 hover:text-white transition-all uppercase tracking-widest">
+                    Join Registry
                   </Link>
-                </p>
-                <p className="text-sm text-muted-foreground">
-                  Looking to book appointments?{" "}
-                  <Link to="/login" className="text-primary hover:underline font-medium">
-                    Customer login
+                  <Link to="/login" className="h-14 rounded-2xl border border-slate-800 flex items-center justify-center text-xs font-black text-slate-400 hover:bg-slate-800 hover:text-white transition-all uppercase tracking-widest">
+                    Client Portal
                   </Link>
-                </p>
+                </div>
               </div>
             </CardFooter>
           </form>

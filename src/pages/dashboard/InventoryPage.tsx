@@ -8,10 +8,10 @@ import { Input } from "@/components/ui/input";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useMobile } from "@/hooks/use-mobile";
 import { useToast } from "@/hooks/use-toast";
-import { 
-  Package, 
-  Plus, 
-  Search, 
+import {
+  Package,
+  Plus,
+  Search,
   AlertTriangle,
   TrendingDown,
   ShoppingCart,
@@ -20,7 +20,7 @@ import {
   Edit,
   MoreHorizontal,
   Calendar,
-  IndianRupee,
+  DollarSign,
   Truck,
   CheckCircle,
   XCircle,
@@ -51,7 +51,7 @@ const InventoryPage = () => {
     {
       id: "P002",
       name: "Hair Conditioner - Pantene",
-      category: "Hair Care", 
+      category: "Hair Care",
       stock: 5,
       minStock: 10,
       price: 380,
@@ -126,7 +126,7 @@ const InventoryPage = () => {
     },
     {
       title: "Inventory Value",
-      value: "₹45,600",
+      value: "$45,600",
       change: "+5%",
       icon: BarChart3,
       color: "from-emerald-500 to-emerald-600",
@@ -253,7 +253,7 @@ const InventoryPage = () => {
                 Track products, stock levels, and suppliers
               </p>
             </div>
-            <Button 
+            <Button
               className="bg-accent hover:bg-accent/90 gap-2"
               onClick={() => {
                 toast({
@@ -279,12 +279,10 @@ const InventoryPage = () => {
                       <p className="text-sm text-muted-foreground">{stat.title}</p>
                       <p className="text-2xl font-bold text-foreground">{stat.value}</p>
                     </div>
-                    <div className={`w-10 h-10 rounded-lg flex items-center justify-center ${
-                      stat.alert ? 'bg-orange-500/10' : 'bg-accent/10'
-                    }`}>
-                      <stat.icon className={`w-5 h-5 ${
-                        stat.alert ? 'text-orange-600' : 'text-accent'
-                      }`} />
+                    <div className={`w-10 h-10 rounded-lg flex items-center justify-center ${stat.alert ? 'bg-orange-500/10' : 'bg-accent/10'
+                      }`}>
+                      <stat.icon className={`w-5 h-5 ${stat.alert ? 'text-orange-600' : 'text-accent'
+                        }`} />
                     </div>
                   </div>
                   <div className="mt-4 flex items-center gap-1 text-sm">
@@ -381,12 +379,12 @@ const InventoryPage = () => {
                     </div>
                     <h3 className={`${isMobile ? 'text-base' : 'text-lg'} font-semibold text-foreground mb-2`}>No products found</h3>
                     <p className={`text-muted-foreground mb-4 ${isMobile ? 'text-sm' : ''}`}>
-                      {searchTerm 
+                      {searchTerm
                         ? "Try adjusting your search criteria"
                         : "Add your first product to get started"
                       }
                     </p>
-                    <Button 
+                    <Button
                       size={isMobile ? "sm" : "default"}
                       className="bg-gradient-to-r from-accent to-accent/90 text-white"
                       onClick={() => {
@@ -433,13 +431,13 @@ const InventoryPage = () => {
                                   <div className="flex items-center gap-3 text-xs text-muted-foreground">
                                     <span className="flex items-center gap-1">
                                       <Calendar className="w-3 h-3" />
-                                      {new Date(product.lastRestocked).toLocaleDateString('en-IN', { 
-                                        day: 'numeric', 
-                                        month: 'short' 
+                                      {new Date(product.lastRestocked).toLocaleDateString('en-IN', {
+                                        day: 'numeric',
+                                        month: 'short'
                                       })}
                                     </span>
                                     <span className="flex items-center gap-1">
-                                      <IndianRupee className="w-3 h-3" />
+                                      <DollarSign className="w-3 h-3" />
                                       {product.price}
                                     </span>
                                   </div>
@@ -525,12 +523,12 @@ const InventoryPage = () => {
                                   Min: {product.minStock} units
                                 </p>
                                 <p className="text-xs text-muted-foreground">
-                                  ₹{product.price} per unit
+                                  ${product.price} per unit
                                 </p>
                               </div>
                               {getStockStatus(product.stock, product.minStock)}
-                              <Button 
-                                variant="outline" 
+                              <Button
+                                variant="outline"
                                 size="sm"
                                 onClick={() => {
                                   toast({
@@ -621,7 +619,7 @@ const InventoryPage = () => {
                 <div className={`text-center ${isMobile ? 'py-8' : 'py-8'}`}>
                   <ShoppingCart className={`${isMobile ? 'w-12 h-12' : 'w-12 h-12'} mx-auto mb-3 text-muted-foreground opacity-50`} />
                   <p className="text-muted-foreground mb-4">No purchase orders yet</p>
-                  <Button 
+                  <Button
                     className="bg-accent hover:bg-accent/90 gap-2"
                     onClick={() => {
                       toast({

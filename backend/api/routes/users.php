@@ -53,6 +53,31 @@ if ($method === 'PUT' && $uriParts[1] === 'me') {
     sendResponse(['user' => $user]);
 }
 
+// GET /api/users/roles - Get user roles
+if ($method === 'GET' && $uriParts[1] === 'roles') {
+    $userId = $_GET['user_id'] ?? null;
+    $salonId = $_GET['salon_id'] ?? null;
+
+    $query = "SELECT * FROM user_roles WHERE 1=1";
+    $params = [];
+
+    if ($userId) {
+        $query .= " AND user_id = ?";
+        $params[] = $userId;
+    }
+
+    if ($salonId) {
+        $query .= " AND salon_id = ?";
+        $params[] = $salonId;
+    }
+
+    $stmt = $db->prepare($query);
+    $stmt->execute($params);
+    $roles = $stmt->fetchAll();
+
+    sendResponse(['roles' => $roles]);
+}
+
 // GET /api/profiles/:userId - Get user profile by ID
 if ($method === 'GET' && count($uriParts) === 2) {
     $userId = $uriParts[1];

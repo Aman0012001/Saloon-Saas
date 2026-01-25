@@ -55,8 +55,8 @@ export function AdminLayout({ children }: AdminLayoutProps) {
   const { isSuperAdmin, loading: adminLoading, stats } = useSuperAdmin();
 
   // Check if we're in bypass mode
-  const bypassMode = localStorage.getItem('admin-bypass') === 'true' || 
-                     window.location.href.includes('/admin');
+  const bypassMode = localStorage.getItem('admin-bypass') === 'true' ||
+    window.location.href.includes('/admin');
 
   useEffect(() => {
     // Skip authentication checks in bypass mode
@@ -87,9 +87,9 @@ export function AdminLayout({ children }: AdminLayoutProps) {
   }
 
   const NavLink = ({ item }: { item: typeof navItems[0] }) => {
-    const isActive = location.pathname === item.path || 
+    const isActive = location.pathname === item.path ||
       (item.path !== "/admin" && location.pathname.startsWith(item.path));
-    
+
     return (
       <Link
         to={item.path}

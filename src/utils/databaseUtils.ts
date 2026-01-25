@@ -1,48 +1,31 @@
-import { supabase } from "@/integrations/supabase/client";
+import api from "@/services/api";
 
-// Utility function to check and setup user profile
+// Utility function to check and setup user profile using local API
 export async function ensureUserProfile(userId: string, userType: 'customer' | 'salon_owner' = 'customer') {
   try {
-    // First, try to get existing profile
-    const { data: existingProfile, error: fetchError } = await supabase
-      .from('profiles')
-      .select('*')
-      .eq('user_id', userId)
-      .single();
+    // First, try to get existing profile via local API
+    const existingProfile = await api.profiles.getById(userId);
 
-    if (fetchError && fetchError.code !== 'PGRST116') {
-      console.error('Error fetching profile:', fetchError);
-      return null;
-    }
-
-    // If profile doesn't exist, create it
+    // If profile doesn't exist (handled by API service returning null or throwing), create it
     if (!existingProfile) {
-      const { data: newProfile, error: insertError } = await supabase
-        .from('profiles')
-        .insert({
-          user_id: userId,
-          user_type: userType,
-          full_name: 'User',
-        })
-        .select()
-        .single();
-
-      if (insertError) {
-        console.error('Error creating profile:', insertError);
-        return null;
-      }
+      // Create new profile locally
+      const newProfile = await api.profiles.create({
+        user_id: userId,
+        user_type: userType,
+        full_name: 'Local User',
+      });
 
       return newProfile;
     }
 
     return existingProfile;
   } catch (error) {
-    console.error('Error in ensureUserProfile:', error);
+    console.error('Error in local ensureUserProfile:', error);
     return null;
   }
 }
 
-// Function to update user to salon owner
+// Function to update user to salon owner via local API
 export async function makeSalonOwner(userId: string, businessData?: {
   businessName?: string;
   city?: string;
@@ -59,21 +42,12 @@ export async function makeSalonOwner(userId: string, businessData?: {
       if (businessData.experience) updateData.experience = businessData.experience;
     }
 
-    const { data, error } = await supabase
-      .from('profiles')
-      .update(updateData)
-      .eq('user_id', userId)
-      .select()
-      .single();
-
-    if (error) {
-      console.error('Error updating to salon owner:', error);
-      return null;
-    }
+    // Update locally via API
+    const data = await api.profiles.update(userId, updateData);
 
     return data;
   } catch (error) {
-    console.error('Error in makeSalonOwner:', error);
+    console.error('Error in local makeSalonOwner:', error);
     return null;
   }
 }

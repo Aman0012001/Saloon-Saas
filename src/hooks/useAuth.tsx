@@ -5,12 +5,14 @@ export interface User {
   id: string;
   email: string;
   full_name?: string;
-  user_type?: 'customer' | 'salon_owner' | 'admin';
+  user_type?: 'customer' | 'salon_owner' | 'admin' | string;
 }
 
 interface AuthContextType {
   user: User | null;
   loading: boolean;
+  login: (email: string, password: string) => Promise<void>;
+  signUp: (email: string, password: string, fullName: string, extraData?: any) => Promise<void>;
   signOut: () => Promise<void>;
   refreshUser: () => Promise<void>;
 }
@@ -45,6 +47,26 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     fetchUser();
   }, []);
 
+  const login = async (email: string, password: string) => {
+    try {
+      const data = await api.auth.login(email, password);
+      // api.auth.login already sets the token in localStorage
+      await fetchUser();
+    } catch (error) {
+      throw error;
+    }
+  };
+
+  const signUp = async (email: string, password: string, fullName: string, extraData: any = {}) => {
+    try {
+      const data = await api.auth.signup(email, password, fullName, extraData);
+      // api.auth.signup already sets the token in localStorage
+      await fetchUser();
+    } catch (error) {
+      throw error;
+    }
+  };
+
   const signOut = async () => {
     try {
       await api.auth.logout();
@@ -56,7 +78,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   };
 
   return (
-    <AuthContext.Provider value={{ user, loading, signOut, refreshUser: fetchUser }}>
+    <AuthContext.Provider value={{ user, loading, login, signUp, signOut, refreshUser: fetchUser }}>
       {children}
     </AuthContext.Provider>
   );

@@ -20,10 +20,12 @@ if ($method === 'GET' && count($uriParts) === 1) {
         }
 
         $stmt = $db->prepare("
-            SELECT b.*, s.name as service_name, s.price, s.duration_minutes,
+            SELECT b.*, s.name as service_name, s.price, s.duration_minutes, s.category,
+                   sal.name as salon_name, sal.address as salon_address, sal.city as salon_city,
                    u.email, p.full_name, p.phone
             FROM bookings b
             INNER JOIN services s ON b.service_id = s.id
+            INNER JOIN salons sal ON b.salon_id = sal.id
             INNER JOIN users u ON b.user_id = u.id
             LEFT JOIN profiles p ON u.id = p.user_id
             WHERE b.salon_id = ?
@@ -33,8 +35,8 @@ if ($method === 'GET' && count($uriParts) === 1) {
     } else {
         // Get user's bookings
         $stmt = $db->prepare("
-            SELECT b.*, s.name as service_name, s.price, s.duration_minutes,
-                   sal.name as salon_name, sal.address, sal.city, sal.phone as salon_phone
+            SELECT b.*, s.name as service_name, s.price, s.duration_minutes, s.category,
+                   sal.name as salon_name, sal.address as salon_address, sal.city as salon_city, sal.phone as salon_phone
             FROM bookings b
             INNER JOIN services s ON b.service_id = s.id
             INNER JOIN salons sal ON b.salon_id = sal.id
@@ -57,8 +59,8 @@ if ($method === 'GET' && count($uriParts) === 2) {
 
     $bookingId = $uriParts[1];
     $stmt = $db->prepare("
-        SELECT b.*, s.name as service_name, s.price, s.duration_minutes,
-               sal.name as salon_name, sal.address, sal.city, sal.phone as salon_phone,
+        SELECT b.*, s.name as service_name, s.price, s.duration_minutes, s.category,
+               sal.name as salon_name, sal.address as salon_address, sal.city as salon_city, sal.phone as salon_phone,
                u.email, p.full_name, p.phone
         FROM bookings b
         INNER JOIN services s ON b.service_id = s.id
@@ -97,7 +99,7 @@ if ($method === 'POST' && count($uriParts) === 1) {
     }
 
     $data = getRequestBody();
-    $bookingId = bin2hex(random_bytes(16));
+    $bookingId = Auth::generateUuid();
 
     // Check if slot is available
     $stmt = $db->prepare("
@@ -124,9 +126,38 @@ if ($method === 'POST' && count($uriParts) === 1) {
         $data['status'] ?? 'confirmed'
     ]);
 
-    $stmt = $db->prepare("SELECT * FROM bookings WHERE id = ?");
+    // Get booking with service name
+    $stmt = $db->prepare("
+        SELECT b.*, s.name as service_name, sal.name as salon_name
+        FROM bookings b
+        INNER JOIN services s ON b.service_id = s.id
+        INNER JOIN salons sal ON b.salon_id = sal.id
+        WHERE b.id = ?
+    ");
     $stmt->execute([$bookingId]);
     $booking = $stmt->fetch();
+
+    // Create notification for salon owner
+    $stmt = $db->prepare("SELECT user_id FROM user_roles WHERE salon_id = ? AND role = 'owner'");
+    $stmt->execute([$data['salon_id']]);
+    $owner = $stmt->fetch();
+
+    if ($owner) {
+        $notifId = Auth::generateUuid();
+        $stmt = $db->prepare("
+            INSERT INTO notifications (id, user_id, salon_id, title, message, type, link)
+            VALUES (?, ?, ?, ?, ?, ?, ?)
+        ");
+        $stmt->execute([
+            $notifId,
+            $owner['user_id'],
+            $data['salon_id'],
+            'New Appointment',
+            "New session booked for {$booking['service_name']} on " . date('M d', strtotime($booking['booking_date'])),
+            'booking',
+            '/dashboard/appointments'
+        ]);
+    }
 
     sendResponse(['booking' => $booking], 201);
 }

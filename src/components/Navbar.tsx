@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { Link } from "react-router-dom";
 import { Button } from "@/components/ui/button";
-import { User, Menu, LogOut, CalendarDays, Store } from "lucide-react";
+import { User, Menu, LogOut, CalendarDays, Store, Shield } from "lucide-react";
 import {
   Sheet,
   SheetContent,
@@ -25,7 +25,8 @@ const Navbar = () => {
 
   const navLinks = [
     { name: "Home", href: "/" },
-    { name: "All Services", href: "/salons" },
+    { name: "Salons", href: "/salons" },
+    { name: "All Services", href: "/services" },
     { name: "Pricing", href: "/pricing" },
     { name: "Contact Us", href: "/contact" },
     { name: "About Us", href: "/about" },
@@ -70,9 +71,9 @@ const Navbar = () => {
               </DropdownMenuTrigger>
               <DropdownMenuContent align="center" className="w-56">
                 <DropdownMenuItem asChild>
-                  <Link to="/dashboard/create-salon" className="w-full cursor-pointer">
+                  <Link to="/salon-owner/signup" className="w-full cursor-pointer">
                     <Store className="w-4 h-4 mr-2" />
-                    Start Free Trial
+                    Salon Owner Signup
                   </Link>
                 </DropdownMenuItem>
                 <DropdownMenuItem asChild>
@@ -82,6 +83,12 @@ const Navbar = () => {
                   </Link>
                 </DropdownMenuItem>
                 <DropdownMenuSeparator />
+                <DropdownMenuItem asChild>
+                  <Link to="/dashboard/create-salon" className="w-full cursor-pointer">
+                    <Store className="w-4 h-4 mr-2" />
+                    Start Free Trial
+                  </Link>
+                </DropdownMenuItem>
                 <DropdownMenuItem asChild>
                   <Link to="/dashboard" className="w-full cursor-pointer">
                     <CalendarDays className="w-4 h-4 mr-2" />
@@ -139,6 +146,12 @@ const Navbar = () => {
                         Customer Signup
                       </Link>
                     </DropdownMenuItem>
+                    <DropdownMenuItem asChild>
+                      <Link to="/salon-owner/signup" className="w-full cursor-pointer">
+                        <Store className="w-4 h-4 mr-2" />
+                        Salon Owner Signup
+                      </Link>
+                    </DropdownMenuItem>
                   </DropdownMenuContent>
                 </DropdownMenu>
               </>
@@ -168,6 +181,14 @@ const Navbar = () => {
                   <LogOut className="w-4 h-4" />
                   Logout
                 </Button>
+                {user.user_type === 'admin' && (
+                  <Link to="/admin">
+                    <Button variant="default" size="sm" className="rounded-full px-4 gap-2 bg-slate-900 hover:bg-slate-800 text-white border-2 border-accent/20">
+                      <Shield className="w-4 h-4 text-accent" />
+                      Platform Admin
+                    </Button>
+                  </Link>
+                )}
               </>
             ) : (
               <>
@@ -205,6 +226,12 @@ const Navbar = () => {
                       <Link to="/signup" className="w-full cursor-pointer">
                         <User className="w-4 h-4 mr-2" />
                         Customer Signup
+                      </Link>
+                    </DropdownMenuItem>
+                    <DropdownMenuItem asChild>
+                      <Link to="/salon-owner/signup" className="w-full cursor-pointer">
+                        <Store className="w-4 h-4 mr-2" />
+                        Salon Owner Signup
                       </Link>
                     </DropdownMenuItem>
                   </DropdownMenuContent>
@@ -247,6 +274,12 @@ const Navbar = () => {
                     For Salon Owners
                   </h3>
                   <div className="space-y-2">
+                    <Link to="/salon-owner/signup" onClick={() => setIsOpen(false)}>
+                      <Button variant="ghost" className="w-full justify-start gap-2">
+                        <Store className="w-4 h-4" />
+                        Salon Owner Signup
+                      </Button>
+                    </Link>
                     <Link to="/salon-owner/login" onClick={() => setIsOpen(false)}>
                       <Button variant="ghost" className="w-full justify-start gap-2">
                         <User className="w-4 h-4" />
@@ -300,6 +333,12 @@ const Navbar = () => {
                         <Button variant="outline" className="rounded-full w-full gap-2">
                           <User className="w-4 h-4" />
                           Customer Signup
+                        </Button>
+                      </Link>
+                      <Link to="/salon-owner/signup" onClick={() => setIsOpen(false)}>
+                        <Button variant="outline" className="rounded-full w-full gap-2">
+                          <Store className="w-4 h-4" />
+                          Salon Owner Signup
                         </Button>
                       </Link>
                     </>

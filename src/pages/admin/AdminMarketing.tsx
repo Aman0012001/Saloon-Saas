@@ -7,6 +7,7 @@ import {
   Trash2,
   Calendar,
   Tag,
+  Sparkles,
 } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -33,9 +34,8 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { AdminLayout } from "@/components/admin/AdminLayout";
-import { supabase } from "@/integrations/supabase/client";
+import api from "@/services/api";
 import { useToast } from "@/hooks/use-toast";
-import { format } from "date-fns";
 
 interface Banner {
   id: string;
@@ -46,8 +46,6 @@ interface Banner {
   link_text: string | null;
   position: string;
   is_active: boolean;
-  start_date: string | null;
-  end_date: string | null;
   created_at: string;
 }
 
@@ -59,9 +57,6 @@ interface Offer {
   discount_type: string;
   discount_value: number;
   is_active: boolean;
-  start_date: string | null;
-  end_date: string | null;
-  max_uses: number | null;
   used_count: number;
 }
 
@@ -71,10 +66,10 @@ export default function AdminMarketing() {
   const [banners, setBanners] = useState<Banner[]>([]);
   const [offers, setOffers] = useState<Offer[]>([]);
   const [loading, setLoading] = useState(true);
-  
+
   const [showBannerDialog, setShowBannerDialog] = useState(false);
   const [showOfferDialog, setShowOfferDialog] = useState(false);
-  
+
   const [bannerForm, setBannerForm] = useState({
     title: "",
     subtitle: "",
@@ -83,7 +78,7 @@ export default function AdminMarketing() {
     link_text: "",
     position: "home_hero",
   });
-  
+
   const [offerForm, setOfferForm] = useState({
     name: "",
     description: "",
@@ -95,15 +90,16 @@ export default function AdminMarketing() {
   const fetchData = async () => {
     setLoading(true);
     try {
-      const [bannersResult, offersResult] = await Promise.all([
-        supabase.from('platform_banners').select('*').order('sort_order'),
-        supabase.from('platform_offers').select('*').order('created_at', { ascending: false }),
+      // Fetch from local marketing API
+      const [bannersData, offersData] = await Promise.all([
+        api.admin.getBanners(),
+        api.admin.getOffers(),
       ]);
 
-      setBanners(bannersResult.data || []);
-      setOffers(offersResult.data || []);
+      setBanners(bannersData || []);
+      setOffers(offersData || []);
     } catch (error) {
-      console.error('Error fetching marketing data:', error);
+      console.error('Local marketing sync failed:', error);
     } finally {
       setLoading(false);
     }
@@ -115,335 +111,80 @@ export default function AdminMarketing() {
 
   const handleSaveBanner = async () => {
     try {
-      const { error } = await supabase.from('platform_banners').insert({
-        title: bannerForm.title,
-        subtitle: bannerForm.subtitle || null,
-        image_url: bannerForm.image_url || null,
-        link_url: bannerForm.link_url || null,
-        link_text: bannerForm.link_text || null,
-        position: bannerForm.position,
-      });
-
-      if (error) throw error;
-
-      toast({ title: "Success", description: "Banner created successfully" });
+      await api.admin.createBanner(bannerForm);
+      toast({ title: "Success", description: "Local banner policy initialized" });
       await fetchData();
       setShowBannerDialog(false);
-      setBannerForm({
-        title: "",
-        subtitle: "",
-        image_url: "",
-        link_url: "",
-        link_text: "",
-        position: "home_hero",
-      });
+      setBannerForm({ title: "", subtitle: "", image_url: "", link_url: "", link_text: "", position: "home_hero" });
     } catch (error) {
-      console.error('Error saving banner:', error);
-      toast({ title: "Error", description: "Failed to create banner", variant: "destructive" });
+      console.error('Banner persist failed:', error);
+      toast({ title: "Error", description: "Internal registry error", variant: "destructive" });
     }
   };
 
   const handleSaveOffer = async () => {
     try {
-      const { error } = await supabase.from('platform_offers').insert({
-        name: offerForm.name,
-        description: offerForm.description || null,
-        code: offerForm.code || null,
-        discount_type: offerForm.discount_type,
-        discount_value: offerForm.discount_value,
-      });
-
-      if (error) throw error;
-
-      toast({ title: "Success", description: "Offer created successfully" });
+      await api.admin.createOffer(offerForm);
+      toast({ title: "Success", description: "Promo code deployed to local node" });
       await fetchData();
       setShowOfferDialog(false);
-      setOfferForm({
-        name: "",
-        description: "",
-        code: "",
-        discount_type: "percentage",
-        discount_value: 0,
-      });
+      setOfferForm({ name: "", description: "", code: "", discount_type: "percentage", discount_value: 0 });
     } catch (error) {
-      console.error('Error saving offer:', error);
-      toast({ title: "Error", description: "Failed to create offer", variant: "destructive" });
-    }
-  };
-
-  const toggleBannerStatus = async (id: string, isActive: boolean) => {
-    try {
-      await supabase
-        .from('platform_banners')
-        .update({ is_active: isActive })
-        .eq('id', id);
-      await fetchData();
-    } catch (error) {
-      console.error('Error updating banner:', error);
-    }
-  };
-
-  const toggleOfferStatus = async (id: string, isActive: boolean) => {
-    try {
-      await supabase
-        .from('platform_offers')
-        .update({ is_active: isActive })
-        .eq('id', id);
-      await fetchData();
-    } catch (error) {
-      console.error('Error updating offer:', error);
+      console.error('Offer persist failed:', error);
+      toast({ title: "Error", variant: "destructive" });
     }
   };
 
   return (
     <AdminLayout>
-      <div className="space-y-6 bg-gray-900 text-white min-h-screen">
-        {/* Header - Dark Theme */}
-        <div className="relative overflow-hidden rounded-2xl bg-gradient-to-br from-gray-800 via-gray-700 to-black p-8 text-white">
-          <div className="absolute inset-0 bg-black/40"></div>
-          <div className="relative z-10">
-            <div className="flex items-center gap-3 mb-2">
-              <div className="h-12 w-12 rounded-xl bg-white/20 backdrop-blur-sm flex items-center justify-center">
-                <Megaphone className="h-6 w-6" />
+      <div className="space-y-8">
+        <div className="bg-slate-900 rounded-[2.5rem] p-10 text-white shadow-2xl relative overflow-hidden">
+          <div className="absolute top-0 right-0 w-80 h-80 bg-accent/20 blur-[120px] rounded-full" />
+          <div className="relative z-10 flex flex-col md:flex-row items-center justify-between gap-6">
+            <div className="flex items-center gap-5">
+              <div className="h-16 w-16 bg-white/10 backdrop-blur-md rounded-2xl flex items-center justify-center border border-white/10 text-accent">
+                <Megaphone className="h-8 h-8" />
               </div>
               <div>
-                <h1 className="text-4xl font-bold">Marketing</h1>
-                <p className="text-gray-300 text-lg">Manage banners and promotional offers</p>
+                <h1 className="text-4xl font-black tracking-tight">Growth Catalyst</h1>
+                <p className="text-slate-400 font-bold uppercase tracking-widest text-[10px]">Local Campaign Orchestration</p>
               </div>
             </div>
+            <div className="flex gap-4">
+              {activeTab === "banners" ? (
+                <Button onClick={() => setShowBannerDialog(true)} className="bg-accent text-white font-black rounded-xl h-14 px-8 shadow-lg shadow-accent/20">
+                  <Plus className="w-4 h-4 mr-2" /> CREATE ASSET
+                </Button>
+              ) : (
+                <Button onClick={() => setShowOfferDialog(true)} className="bg-blue-600 text-white font-black rounded-xl h-14 px-8 shadow-lg shadow-blue-500/20 hover:bg-blue-700">
+                  <Tag className="w-4 h-4 mr-2" /> GENERATE VOUCHER
+                </Button>
+              )}
+            </div>
           </div>
-          
-          {/* Floating Elements */}
-          <div className="absolute top-4 right-4 h-32 w-32 rounded-full bg-white/10 blur-3xl"></div>
-          <div className="absolute bottom-4 left-4 h-24 w-24 rounded-full bg-orange-400/20 blur-2xl"></div>
         </div>
 
-        {/* Tabs - Dark Theme */}
         <Tabs value={activeTab} onValueChange={setActiveTab}>
-          <div className="flex items-center justify-between">
-            <TabsList className="bg-gray-800 border border-gray-700">
-              <TabsTrigger value="banners" className="text-gray-300 data-[state=active]:bg-gray-700 data-[state=active]:text-white">Banners</TabsTrigger>
-              <TabsTrigger value="offers" className="text-gray-300 data-[state=active]:bg-gray-700 data-[state=active]:text-white">Offers</TabsTrigger>
-            </TabsList>
-            
-            {/* Banner Dialog - Dark Theme */}
-            {activeTab === "banners" ? (
-              <Dialog open={showBannerDialog} onOpenChange={setShowBannerDialog}>
-                <DialogTrigger asChild>
-                  <Button className="bg-blue-600 hover:bg-blue-700">
-                    <Plus className="h-4 w-4 mr-2" />
-                    Add Banner
-                  </Button>
-                </DialogTrigger>
-                <DialogContent className="bg-gray-800 border-gray-700 text-white">
-                  <DialogHeader>
-                    <DialogTitle className="text-white">Create Banner</DialogTitle>
-                    <DialogDescription className="text-gray-400">Add a new promotional banner</DialogDescription>
-                  </DialogHeader>
-                  <div className="space-y-4">
-                    <div className="space-y-2">
-                      <Label className="text-gray-300">Title</Label>
-                      <Input
-                        value={bannerForm.title}
-                        onChange={(e) => setBannerForm({ ...bannerForm, title: e.target.value })}
-                        placeholder="Banner title"
-                        className="bg-gray-700 border-gray-600 text-white placeholder:text-gray-400 focus:bg-gray-600 focus:border-gray-500"
-                      />
-                    </div>
-                    <div className="space-y-2">
-                      <Label className="text-gray-300">Subtitle</Label>
-                      <Input
-                        value={bannerForm.subtitle}
-                        onChange={(e) => setBannerForm({ ...bannerForm, subtitle: e.target.value })}
-                        placeholder="Optional subtitle"
-                        className="bg-gray-700 border-gray-600 text-white placeholder:text-gray-400 focus:bg-gray-600 focus:border-gray-500"
-                      />
-                    </div>
-                    <div className="space-y-2">
-                      <Label className="text-gray-300">Image URL</Label>
-                      <Input
-                        value={bannerForm.image_url}
-                        onChange={(e) => setBannerForm({ ...bannerForm, image_url: e.target.value })}
-                        placeholder="https://..."
-                        className="bg-gray-700 border-gray-600 text-white placeholder:text-gray-400 focus:bg-gray-600 focus:border-gray-500"
-                      />
-                    </div>
-                    <div className="grid grid-cols-2 gap-4">
-                      <div className="space-y-2">
-                        <Label className="text-gray-300">Link URL</Label>
-                        <Input
-                          value={bannerForm.link_url}
-                          onChange={(e) => setBannerForm({ ...bannerForm, link_url: e.target.value })}
-                          placeholder="/page or https://..."
-                          className="bg-gray-700 border-gray-600 text-white placeholder:text-gray-400 focus:bg-gray-600 focus:border-gray-500"
-                        />
-                      </div>
-                      <div className="space-y-2">
-                        <Label className="text-gray-300">Link Text</Label>
-                        <Input
-                          value={bannerForm.link_text}
-                          onChange={(e) => setBannerForm({ ...bannerForm, link_text: e.target.value })}
-                          placeholder="Learn More"
-                          className="bg-gray-700 border-gray-600 text-white placeholder:text-gray-400 focus:bg-gray-600 focus:border-gray-500"
-                        />
-                      </div>
-                    </div>
-                    <div className="space-y-2">
-                      <Label className="text-gray-300">Position</Label>
-                      <Select
-                        value={bannerForm.position}
-                        onValueChange={(v) => setBannerForm({ ...bannerForm, position: v })}
-                      >
-                        <SelectTrigger className="bg-gray-700 border-gray-600 text-white hover:bg-gray-600">
-                          <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent className="bg-gray-800 border-gray-700">
-                          <SelectItem value="home_hero" className="text-white hover:bg-gray-700 focus:bg-gray-700">Home Hero</SelectItem>
-                          <SelectItem value="home_secondary" className="text-white hover:bg-gray-700 focus:bg-gray-700">Home Secondary</SelectItem>
-                          <SelectItem value="sidebar" className="text-white hover:bg-gray-700 focus:bg-gray-700">Sidebar</SelectItem>
-                          <SelectItem value="popup" className="text-white hover:bg-gray-700 focus:bg-gray-700">Popup</SelectItem>
-                        </SelectContent>
-                      </Select>
-                    </div>
-                  </div>
-                  <DialogFooter>
-                    <Button variant="outline" onClick={() => setShowBannerDialog(false)} className="border-gray-600 text-gray-300 hover:bg-gray-700">
-                      Cancel
-                    </Button>
-                    <Button onClick={handleSaveBanner} disabled={!bannerForm.title} className="bg-blue-600 hover:bg-blue-700">
-                      Create Banner
-                    </Button>
-                  </DialogFooter>
-                </DialogContent>
-              </Dialog>
-            ) : (
-              <Dialog open={showOfferDialog} onOpenChange={setShowOfferDialog}>
-                <DialogTrigger asChild>
-                  <Button className="bg-blue-600 hover:bg-blue-700">
-                    <Plus className="h-4 w-4 mr-2" />
-                    Add Offer
-                  </Button>
-                </DialogTrigger>
-                <DialogContent className="bg-gray-800 border-gray-700 text-white">
-                  <DialogHeader>
-                    <DialogTitle className="text-white">Create Offer</DialogTitle>
-                    <DialogDescription className="text-gray-400">Add a new promotional offer</DialogDescription>
-                  </DialogHeader>
-                  <div className="space-y-4">
-                    <div className="space-y-2">
-                      <Label className="text-gray-300">Offer Name</Label>
-                      <Input
-                        value={offerForm.name}
-                        onChange={(e) => setOfferForm({ ...offerForm, name: e.target.value })}
-                        placeholder="e.g., Summer Sale"
-                        className="bg-gray-700 border-gray-600 text-white placeholder:text-gray-400 focus:bg-gray-600 focus:border-gray-500"
-                      />
-                    </div>
-                    <div className="space-y-2">
-                      <Label className="text-gray-300">Description</Label>
-                      <Textarea
-                        value={offerForm.description}
-                        onChange={(e) => setOfferForm({ ...offerForm, description: e.target.value })}
-                        placeholder="Offer details"
-                        className="bg-gray-700 border-gray-600 text-white placeholder:text-gray-400 focus:bg-gray-600 focus:border-gray-500"
-                      />
-                    </div>
-                    <div className="space-y-2">
-                      <Label className="text-gray-300">Promo Code</Label>
-                      <Input
-                        value={offerForm.code}
-                        onChange={(e) => setOfferForm({ ...offerForm, code: e.target.value.toUpperCase() })}
-                        placeholder="e.g., SUMMER20"
-                        className="bg-gray-700 border-gray-600 text-white placeholder:text-gray-400 focus:bg-gray-600 focus:border-gray-500"
-                      />
-                    </div>
-                    <div className="grid grid-cols-2 gap-4">
-                      <div className="space-y-2">
-                        <Label className="text-gray-300">Discount Type</Label>
-                        <Select
-                          value={offerForm.discount_type}
-                          onValueChange={(v) => setOfferForm({ ...offerForm, discount_type: v })}
-                        >
-                          <SelectTrigger className="bg-gray-700 border-gray-600 text-white hover:bg-gray-600">
-                            <SelectValue />
-                          </SelectTrigger>
-                          <SelectContent className="bg-gray-800 border-gray-700">
-                            <SelectItem value="percentage" className="text-white hover:bg-gray-700 focus:bg-gray-700">Percentage</SelectItem>
-                            <SelectItem value="fixed" className="text-white hover:bg-gray-700 focus:bg-gray-700">Fixed Amount</SelectItem>
-                            <SelectItem value="free_trial_days" className="text-white hover:bg-gray-700 focus:bg-gray-700">Free Trial Days</SelectItem>
-                          </SelectContent>
-                        </Select>
-                      </div>
-                      <div className="space-y-2">
-                        <Label className="text-gray-300">
-                          {offerForm.discount_type === 'percentage' ? 'Discount %' :
-                           offerForm.discount_type === 'fixed' ? 'Amount (₹)' : 'Days'}
-                        </Label>
-                        <Input
-                          type="number"
-                          value={offerForm.discount_value}
-                          onChange={(e) => setOfferForm({ ...offerForm, discount_value: Number(e.target.value) })}
-                          className="bg-gray-700 border-gray-600 text-white placeholder:text-gray-400 focus:bg-gray-600 focus:border-gray-500"
-                        />
-                      </div>
-                    </div>
-                  </div>
-                  <DialogFooter>
-                    <Button variant="outline" onClick={() => setShowOfferDialog(false)} className="border-gray-600 text-gray-300 hover:bg-gray-700">
-                      Cancel
-                    </Button>
-                    <Button onClick={handleSaveOffer} disabled={!offerForm.name} className="bg-blue-600 hover:bg-blue-700">
-                      Create Offer
-                    </Button>
-                  </DialogFooter>
-                </DialogContent>
-              </Dialog>
-            )}
-          </div>
+          <TabsList className="bg-white p-1 rounded-[2rem] border border-slate-100 shadow-sm mb-8">
+            <TabsTrigger value="banners" className="rounded-[1.5rem] px-8 h-12 font-bold data-[state=active]:bg-slate-900 data-[state=active]:text-white">Visual Assets</TabsTrigger>
+            <TabsTrigger value="offers" className="rounded-[1.5rem] px-8 h-12 font-bold data-[state=active]:bg-slate-900 data-[state=active]:text-white">Promotional Logic</TabsTrigger>
+          </TabsList>
 
-          <TabsContent value="banners" className="space-y-4">
+          <TabsContent value="banners" className="animate-in fade-in duration-500">
             {loading ? (
-              <div className="flex items-center justify-center h-64">
-                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
-              </div>
-            ) : banners.length === 0 ? (
-              <Card className="border-0 shadow-lg bg-gray-800 border border-gray-700">
-                <CardContent className="py-12 text-center">
-                  <Image className="h-12 w-12 mx-auto mb-3 text-gray-400 opacity-50" />
-                  <p className="text-gray-400">No banners created yet</p>
-                </CardContent>
-              </Card>
+              <div className="flex justify-center p-20 animate-pulse text-slate-300"><Sparkles className="w-12 h-12" /></div>
             ) : (
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                {banners.map((banner) => (
-                  <Card key={banner.id} className="border-0 shadow-lg bg-gray-800 border border-gray-700">
-                    <CardHeader className="pb-3">
-                      <div className="flex items-start justify-between">
-                        <div>
-                          <CardTitle className="text-lg text-white">{banner.title}</CardTitle>
-                          {banner.subtitle && (
-                            <CardDescription className="text-gray-400">{banner.subtitle}</CardDescription>
-                          )}
-                        </div>
-                        <Switch
-                          checked={banner.is_active}
-                          onCheckedChange={(checked) => toggleBannerStatus(banner.id, checked)}
-                        />
-                      </div>
-                    </CardHeader>
-                    <CardContent>
-                      <div className="space-y-2 text-sm">
-                        <div className="flex items-center justify-between">
-                          <span className="text-gray-400">Position</span>
-                          <Badge variant="outline" className="border-gray-600 text-gray-300">{banner.position.replace('_', ' ')}</Badge>
-                        </div>
-                        <div className="flex items-center justify-between">
-                          <span className="text-gray-400">Status</span>
-                          <Badge className={banner.is_active ? "bg-green-500/20 text-green-400 border-green-500/30" : "bg-gray-500/20 text-gray-400 border-gray-500/30"}>
-                            {banner.is_active ? 'Active' : 'Inactive'}
-                          </Badge>
-                        </div>
-                      </div>
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
+                {banners.map(banner => (
+                  <Card key={banner.id} className="border-none shadow-sm bg-white rounded-[2.5rem] overflow-hidden group hover:shadow-2xl transition-all">
+                    <div className="h-48 bg-slate-100 relative">
+                      {banner.image_url && <img src={banner.image_url} className="w-full h-full object-cover grayscale opacity-50 group-hover:grayscale-0 group-hover:opacity-100 transition-all duration-700" />}
+                      <div className="absolute top-4 right-4"><Switch checked={banner.is_active} /></div>
+                    </div>
+                    <CardContent className="p-8">
+                      <h3 className="text-xl font-black text-slate-900">{banner.title}</h3>
+                      <p className="text-xs font-bold text-slate-400 mt-1 uppercase tracking-widest">{banner.position}</p>
+                      <Button variant="ghost" className="w-full mt-6 rounded-xl border border-slate-100 font-bold hover:bg-slate-50">MANAGE REGISTRY</Button>
                     </CardContent>
                   </Card>
                 ))}
@@ -451,61 +192,49 @@ export default function AdminMarketing() {
             )}
           </TabsContent>
 
-          <TabsContent value="offers" className="space-y-4">
-            {loading ? (
-              <div className="flex items-center justify-center h-64">
-                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
-              </div>
-            ) : offers.length === 0 ? (
-              <Card className="border-0 shadow-lg bg-gray-800 border border-gray-700">
-                <CardContent className="py-12 text-center">
-                  <Tag className="h-12 w-12 mx-auto mb-3 text-gray-400 opacity-50" />
-                  <p className="text-gray-400">No offers created yet</p>
-                </CardContent>
-              </Card>
-            ) : (
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                {offers.map((offer) => (
-                  <Card key={offer.id} className="border-0 shadow-lg bg-gray-800 border border-gray-700">
-                    <CardHeader className="pb-3">
-                      <div className="flex items-start justify-between">
-                        <CardTitle className="text-lg text-white">{offer.name}</CardTitle>
-                        <Switch
-                          checked={offer.is_active}
-                          onCheckedChange={(checked) => toggleOfferStatus(offer.id, checked)}
-                        />
-                      </div>
-                      {offer.description && (
-                        <CardDescription className="text-gray-400">{offer.description}</CardDescription>
-                      )}
-                    </CardHeader>
-                    <CardContent>
-                      <div className="space-y-3">
-                        {offer.code && (
-                          <div className="flex items-center gap-2">
-                            <Badge variant="secondary" className="font-mono text-lg bg-gray-700 text-gray-300">
-                              {offer.code}
-                            </Badge>
-                          </div>
-                        )}
-                        <div className="text-2xl font-bold text-blue-400">
-                          {offer.discount_type === 'percentage' && `${offer.discount_value}% OFF`}
-                          {offer.discount_type === 'fixed' && `₹${offer.discount_value} OFF`}
-                          {offer.discount_type === 'free_trial_days' && `${offer.discount_value} Days Free`}
-                        </div>
-                        <div className="flex items-center justify-between text-sm text-gray-400">
-                          <span>Used: {offer.used_count}</span>
-                          <span>{offer.max_uses ? `Max: ${offer.max_uses}` : 'Unlimited'}</span>
-                        </div>
-                      </div>
-                    </CardContent>
-                  </Card>
-                ))}
-              </div>
-            )}
+          <TabsContent value="offers" className="animate-in fade-in duration-500 space-y-8">
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
+              {offers.map(offer => (
+                <Card key={offer.id} className="border-none shadow-sm bg-slate-50 rounded-[3rem] p-10 relative overflow-hidden group">
+                  <div className="absolute -right-5 -bottom-5 text-slate-100 opacity-20"><Tag className="w-32 h-32" /></div>
+                  <div className="flex justify-between items-start relative z-10">
+                    <div>
+                      <h4 className="text-2xl font-black text-slate-900 mb-2">{offer.name}</h4>
+                      <Badge className="bg-white text-slate-900 font-black border-none px-4 py-1 shadow-sm font-mono text-lg">{offer.code}</Badge>
+                    </div>
+                    <Switch checked={offer.is_active} />
+                  </div>
+                  <div className="mt-10 relative z-10">
+                    <p className="text-4xl font-black text-slate-900">{offer.discount_type === 'percentage' ? `${offer.discount_value}%` : `$${offer.discount_value}`}</p>
+                    <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mt-1">Deduction Protocol</p>
+                  </div>
+                </Card>
+              ))}
+            </div>
           </TabsContent>
         </Tabs>
       </div>
+
+      <Dialog open={showBannerDialog} onOpenChange={setShowBannerDialog}>
+        <DialogContent className="rounded-[3rem] border-none shadow-2xl p-10">
+          <DialogHeader>
+            <DialogTitle className="text-3xl font-black tracking-tight">Broadcast Configuration</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-6 mt-6">
+            <div className="space-y-2">
+              <Label className="text-[10px] font-black uppercase text-slate-400 tracking-widest">Campaign Title</Label>
+              <Input value={bannerForm.title} onChange={e => setBannerForm({ ...bannerForm, title: e.target.value })} className="h-14 bg-slate-50 border-none rounded-2xl font-bold px-6" />
+            </div>
+            <div className="space-y-2">
+              <Label className="text-[10px] font-black uppercase text-slate-400 tracking-widest">Image Source (URL)</Label>
+              <Input value={bannerForm.image_url} onChange={e => setBannerForm({ ...bannerForm, image_url: e.target.value })} className="h-14 bg-slate-50 border-none rounded-2xl font-bold px-6" />
+            </div>
+          </div>
+          <DialogFooter className="mt-8">
+            <Button onClick={handleSaveBanner} className="w-full h-16 bg-slate-900 text-white font-black rounded-3xl shadow-xl">PERSIST TO REGISTRY</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </AdminLayout>
   );
 }
