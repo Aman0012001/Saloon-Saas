@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
 import { useNavigate, Link } from "react-router-dom";
 import { format } from "date-fns";
-import { CalendarDays, Clock, ArrowLeft, Loader2, Plus, MapPin, Phone, Scissors, Store } from "lucide-react";
+import { CalendarDays, Clock, ArrowLeft, Loader2, Plus, MapPin, Phone, Scissors, Store, MessageSquare, Star } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -10,6 +10,9 @@ import api from "@/services/api";
 import { useAuth } from "@/hooks/useAuth";
 import { useToast } from "@/hooks/use-toast";
 import Navbar from "@/components/Navbar";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
+import { Textarea } from "@/components/ui/textarea";
+import { Label } from "@/components/ui/label";
 
 interface Booking {
   id: string;
@@ -34,6 +37,31 @@ const MyBookings = () => {
   const { user, loading: authLoading } = useAuth();
   const navigate = useNavigate();
   const { toast } = useToast();
+
+  const [reviewDialog, setReviewDialog] = useState<{ isOpen: boolean; booking: Booking | null; isEditing?: boolean }>({
+    isOpen: false,
+    booking: null,
+    isEditing: false
+  });
+  const [rating, setRating] = useState(5);
+  const [comment, setComment] = useState("");
+  const [submittingReview, setSubmittingReview] = useState(false);
+  const [reviewedBookings, setReviewedBookings] = useState<Set<string>>(new Set());
+
+  const checkReviews = async (bookingList: Booking[]) => {
+    const reviewed = new Set<string>();
+    for (const b of bookingList) {
+      if (b.status === 'completed') {
+        try {
+          const res = await api.bookings.getReview(b.id);
+          if (res?.review) reviewed.add(b.id);
+        } catch (e) {
+          console.error(e);
+        }
+      }
+    }
+    setReviewedBookings(reviewed);
+  };
 
   const getServiceImage = (category: string, serviceName?: string) => {
     const cat = (category || '').trim().toLowerCase();
@@ -101,6 +129,7 @@ const MyBookings = () => {
       // Fetch user specific bookings from the local PHP API
       const data = await api.bookings.getAll({ user_id: user.id });
       setBookings(data || []);
+      if (data) checkReviews(data);
     } catch (error) {
       console.error("Error fetching local bookings:", error);
     } finally {
@@ -126,10 +155,34 @@ const MyBookings = () => {
     }
   };
 
+  const handleReviewSubmit = async () => {
+    if (!reviewDialog.booking) return;
+    setSubmittingReview(true);
+    try {
+      if (reviewDialog.isEditing) {
+        await api.bookings.updateReview(reviewDialog.booking.id, rating, comment);
+        toast({ title: "Review Updated", description: "Your feedback has been updated." });
+      } else {
+        await api.bookings.submitReview(reviewDialog.booking.id, rating, comment);
+        toast({ title: "Feedback Received", description: "Thank you for sharing your experience!" });
+        setReviewedBookings(prev => new Set([...prev, reviewDialog.booking!.id]));
+      }
+      setReviewDialog({ isOpen: false, booking: null, isEditing: false });
+      setComment("");
+      setRating(5);
+    } catch (error: any) {
+      const msg = error.message || "Could not submit review";
+      toast({ title: "Submission Failed", description: msg, variant: "destructive" });
+    } finally {
+      setSubmittingReview(false);
+    }
+  };
+
   const getStatusBadge = (status: string) => {
     switch (status) {
       case 'confirmed': return <Badge className="bg-emerald-100 text-emerald-700 border-none font-bold">Confirmed</Badge>;
       case 'pending': return <Badge className="bg-amber-100 text-amber-700 border-none font-bold">Pending</Badge>;
+      case 'completed': return <Badge className="bg-blue-100 text-blue-700 border-none font-bold">Completed</Badge>;
       case 'cancelled': return <Badge className="bg-red-100 text-red-700 border-none font-bold">Cancelled</Badge>;
       default: return <Badge variant="secondary">{status}</Badge>;
     }
@@ -147,7 +200,7 @@ const MyBookings = () => {
     <div className="min-h-screen bg-[#FDFCFB]">
       <Navbar />
       <div className="container mx-auto px-4 pt-28 pb-12">
-        <div className="max-w-3xl mx-auto space-y-8">
+        <div className="w-full mx-auto space-y-8">
           <div className="flex flex-col md:flex-row md:items-center justify-between gap-6">
             <div>
               <h1 className="text-4xl font-black text-slate-900 tracking-tight">Your Sessions</h1>
@@ -175,52 +228,98 @@ const MyBookings = () => {
               {bookings.map(booking => (
                 <Card key={booking.id} className="border-none shadow-sm bg-white rounded-[2.5rem] overflow-hidden group hover:shadow-xl transition-all">
                   <CardContent className="p-0">
-                    <div className="p-8 flex flex-col md:flex-row md:items-center justify-between gap-6">
-                      <div className="flex items-center gap-6">
-                        <div className="w-16 h-16 bg-slate-100 rounded-2xl flex items-center justify-center text-white relative overflow-hidden">
+                    <div className="p-6 md:p-8 flex flex-col lg:flex-row lg:items-center justify-between gap-8">
+                      {/* 1. Service & Salon Info */}
+                      <div className="flex items-start gap-5 flex-grow min-w-0">
+                        <div className="w-16 h-16 md:w-20 md:h-20 bg-slate-100 rounded-3xl flex-shrink-0 relative overflow-hidden group-hover:scale-105 transition-transform duration-500">
                           <img
                             src={getServiceImage(booking.category, booking.service_name)}
                             alt={booking.service_name}
                             className="w-full h-full object-cover"
                           />
-                          <div className="absolute -top-2 -right-2">
+                          <div className="absolute top-2 right-2">
                             {getStatusBadge(booking.status)}
                           </div>
                         </div>
-                        <div>
-                          <div className="flex items-center gap-1.5 mb-1">
-                            <Store className="w-3 h-3 text-accent" />
-                            <p className="text-[10px] font-black uppercase text-accent tracking-[0.2em]">{booking.salon_name}</p>
+
+                        <div className="min-w-0 space-y-1">
+                          <div className="flex items-center gap-2">
+                            <Store className="w-3.5 h-3.5 text-accent" />
+                            <p className="text-[11px] font-black uppercase text-accent tracking-widest truncate">{booking.salon_name}</p>
                           </div>
-                          <h3 className="text-xl font-black text-slate-900">{booking.service_name}</h3>
-                          <div className="flex items-center gap-2 text-slate-400 mt-1">
-                            <MapPin className="w-3.5 h-3.5" />
-                            <p className="text-xs font-bold leading-none">{booking.salon_address}{booking.salon_city ? `, ${booking.salon_city}` : ''}</p>
+                          <h3 className="text-xl md:text-2xl font-black text-slate-900 truncate tracking-tight">{booking.service_name}</h3>
+                          <div className="flex items-center gap-2 text-slate-400 mt-1.5">
+                            <MapPin className="w-4 h-4 flex-shrink-0" />
+                            <p className="text-sm font-medium truncate">{booking.salon_address}{booking.salon_city ? `, ${booking.salon_city}` : ''}</p>
                           </div>
                         </div>
                       </div>
 
-                      <div className="flex items-center gap-8 bg-slate-50 rounded-3xl px-8 py-5">
-                        <div className="text-center border-r border-slate-200 pr-8">
-                          <p className="text-[10px] font-black uppercase text-slate-400 tracking-widest">Reserved On</p>
-                          <p className="font-black text-slate-800">{format(new Date(booking.booking_date), "MMM dd")}</p>
-                        </div>
+                      {/* 2. Date & Time Pill */}
+                      <div className="flex-shrink-0 bg-slate-50 border border-slate-100/50 rounded-3xl px-8 py-4 flex items-center gap-8 justify-center lg:justify-start">
                         <div className="text-center">
-                          <p className="text-[10px] font-black uppercase text-slate-400 tracking-widest">Session Slot</p>
-                          <p className="font-black text-slate-800">{booking.booking_time}</p>
+                          <p className="text-[10px] font-black uppercase text-slate-400 tracking-widest mb-1">Session Date</p>
+                          <p className="text-lg font-black text-slate-800">{format(new Date(booking.booking_date), "MMM dd")}</p>
+                        </div>
+                        <div className="w-px h-8 bg-slate-200" />
+                        <div className="text-center">
+                          <p className="text-[10px] font-black uppercase text-slate-400 tracking-widest mb-1">Start Time</p>
+                          <p className="text-lg font-black text-slate-800">{booking.booking_time.slice(0, 5)}</p>
                         </div>
                       </div>
 
-                      <div className="flex items-center gap-4">
-                        <div className="text-right">
-                          <p className="text-2xl font-black text-slate-900">${booking.price}</p>
-                          <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest leading-none mt-1">{booking.duration_minutes} MINS</p>
+                      {/* 3. Price & Actions */}
+                      <div className="flex items-center justify-between lg:justify-end gap-6 flex-shrink-0 pt-4 lg:pt-0 border-t lg:border-t-0 border-slate-100">
+                        <div>
+                          <p className="text-3xl font-black text-slate-900 tracking-tight">${booking.price}</p>
+                          <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest text-right">{booking.duration_minutes} MINS</p>
                         </div>
-                        {booking.status === 'pending' && (
-                          <Button variant="ghost" onClick={() => cancelBooking(booking.id)} className="h-12 w-12 rounded-2xl bg-red-50 text-red-600 hover:bg-red-100 flex items-center justify-center p-0">
-                            <Loader2 className="w-5 h-5" />
-                          </Button>
-                        )}
+
+                        <div className="flex items-center gap-3">
+                          {booking.status === 'completed' && !reviewedBookings.has(booking.id) && (
+                            <Button
+                              onClick={() => {
+                                setReviewDialog({ isOpen: true, booking, isEditing: false });
+                                setRating(5);
+                                setComment("");
+                              }}
+                              className="bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-2xl h-11 px-6 shadow-lg shadow-blue-600/20"
+                            >
+                              <MessageSquare className="w-4 h-4 mr-2" /> Leave Feedback
+                            </Button>
+                          )}
+
+                          {reviewedBookings.has(booking.id) && (
+                            <Button
+                              variant="secondary"
+                              onClick={async () => {
+                                try {
+                                  const res = await api.bookings.getReview(booking.id);
+                                  if (res?.review) {
+                                    setRating(res.review.rating);
+                                    setComment(res.review.comment);
+                                    setReviewDialog({ isOpen: true, booking, isEditing: true });
+                                  }
+                                } catch (e) {
+                                  console.error("Failed to fetch review", e);
+                                }
+                              }}
+                              className="bg-slate-100 hover:bg-slate-200 text-slate-600 font-bold h-12 px-5 rounded-2xl"
+                            >
+                              <Star className="w-4 h-4 mr-2 text-amber-500 fill-amber-500" /> My Review
+                            </Button>
+                          )}
+
+                          {booking.status === 'pending' && (
+                            <Button
+                              variant="outline"
+                              onClick={() => cancelBooking(booking.id)}
+                              className="h-12 border-2 border-red-50 text-red-500 hover:bg-red-50 hover:text-red-600 hover:border-red-100 rounded-2xl font-bold px-6 transition-colors"
+                            >
+                              Cancel
+                            </Button>
+                          )}
+                        </div>
                       </div>
                     </div>
                     {booking.notes && (
@@ -235,6 +334,56 @@ const MyBookings = () => {
           )}
         </div>
       </div>
+
+      <Dialog open={reviewDialog.isOpen} onOpenChange={(open) => !open && setReviewDialog({ isOpen: false, booking: null })}>
+        <DialogContent className="rounded-[3rem] border-none shadow-2xl p-10 max-w-lg">
+          <DialogHeader>
+            <DialogTitle className="text-3xl font-black text-slate-900 tracking-tighter">Session Feedback</DialogTitle>
+            <DialogDescription className="text-slate-500 font-medium text-lg">
+              How was your experience with {reviewDialog.booking?.service_name} at {reviewDialog.booking?.salon_name}?
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="py-8 space-y-8">
+            <div className="space-y-4">
+              <Label className="text-sm font-black uppercase tracking-widest text-slate-400">Experience Rating</Label>
+              <div className="flex gap-4">
+                {[1, 2, 3, 4, 5].map((star) => (
+                  <button
+                    key={star}
+                    onClick={() => setRating(star)}
+                    className={`w-14 h-14 rounded-2xl flex items-center justify-center transition-all ${rating >= star ? 'bg-amber-100 text-amber-500 scale-110 shadow-lg shadow-amber-500/10' : 'bg-slate-50 text-slate-300'
+                      }`}
+                  >
+                    <Star className={`w-7 h-7 ${rating >= star ? 'fill-current' : ''}`} />
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            <div className="space-y-4">
+              <Label className="text-sm font-black uppercase tracking-widest text-slate-400">Your Comments</Label>
+              <Textarea
+                placeholder="Details about your visit (service quality, environment, etc.)..."
+                className="bg-slate-50 border-none rounded-[2rem] p-6 min-h-[160px] focus-visible:ring-blue-500 transition-all font-medium text-slate-700"
+                value={comment}
+                onChange={(e) => setComment(e.target.value)}
+              />
+            </div>
+          </div>
+
+          <DialogFooter className="sm:justify-between gap-4">
+            <Button variant="ghost" onClick={() => setReviewDialog({ isOpen: false, booking: null })} className="font-bold text-slate-400 h-14 px-8 rounded-2xl">Skip for now</Button>
+            <Button
+              onClick={handleReviewSubmit}
+              disabled={submittingReview}
+              className="bg-slate-900 hover:bg-black text-white font-black h-14 px-10 rounded-2xl shadow-xl transition-all hover:scale-105 active:scale-95"
+            >
+              {submittingReview ? <Loader2 className="w-5 h-5 animate-spin" /> : "Publish Feedback"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 };

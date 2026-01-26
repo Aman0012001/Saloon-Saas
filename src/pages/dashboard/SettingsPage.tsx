@@ -8,6 +8,8 @@ import {
   Receipt,
   Save,
   Loader2,
+  Upload,
+  Image as ImageIcon,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -31,6 +33,8 @@ export default function SettingsPage() {
   const { user, loading: authLoading } = useAuth();
   const { currentSalon, loading: salonLoading, isOwner, refreshSalons } = useSalon();
   const [saving, setSaving] = useState(false);
+  const [uploadingLogo, setUploadingLogo] = useState(false);
+  const [uploadingCover, setUploadingCover] = useState(false);
   const [formData, setFormData] = useState({
     name: "",
     description: "",
@@ -41,7 +45,31 @@ export default function SettingsPage() {
     phone: "",
     email: "",
     gst_number: "",
+    logo_url: "",
+    cover_image_url: "",
   });
+
+  const handleFileUpload = async (file: File, type: 'logo' | 'cover') => {
+    if (type === 'logo') setUploadingLogo(true);
+    else setUploadingCover(true);
+
+    try {
+      const response = await api.uploads.upload(file);
+      if (type === 'logo') {
+        setFormData({ ...formData, logo_url: response.url });
+      } else {
+        setFormData({ ...formData, cover_image_url: response.url });
+      }
+      toast({ title: "Success", description: "Image uploaded successfully" });
+    } catch (error: any) {
+      console.error("Upload error:", error);
+      toast({ title: "Upload Failed", description: error.message, variant: "destructive" });
+    } finally {
+      if (type === 'logo') setUploadingLogo(false);
+      else setUploadingCover(false);
+    }
+  };
+
   const [businessHours, setBusinessHours] = useState<Record<string, { open: string; close: string; closed: boolean }>>({});
   const [notifications, setNotifications] = useState({
     email_bookings: true,
@@ -73,6 +101,8 @@ export default function SettingsPage() {
         phone: currentSalon.phone || "",
         email: currentSalon.email || "",
         gst_number: currentSalon.gst_number || "",
+        logo_url: currentSalon.logo_url || "",
+        cover_image_url: currentSalon.cover_image_url || "",
       });
 
       // Initialize business hours
@@ -116,6 +146,8 @@ export default function SettingsPage() {
         phone: formData.phone || null,
         email: formData.email || null,
         gst_number: formData.gst_number || null,
+        logo_url: formData.logo_url || null,
+        cover_image_url: formData.cover_image_url || null,
       });
 
       toast({ title: "Success", description: "Salon profile updated locally" });
@@ -287,6 +319,82 @@ export default function SettingsPage() {
                     className="h-12 bg-secondary/30 border-none rounded-xl"
                   />
                 </div>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+                  <div className="space-y-4">
+                    <Label className="text-xs font-black uppercase tracking-widest text-muted-foreground ml-1">Salon Logo</Label>
+
+                    <div className="relative group w-32 h-32">
+                      <div className="w-full h-full rounded-full border-4 border-white shadow-xl overflow-hidden bg-slate-50 relative">
+                        {formData.logo_url ? (
+                          <img src={formData.logo_url} className="w-full h-full object-cover" alt="Logo" />
+                        ) : (
+                          <div className="w-full h-full flex items-center justify-center text-slate-300">
+                            <ImageIcon className="w-10 h-10" />
+                          </div>
+                        )}
+
+                        {uploadingLogo && (
+                          <div className="absolute inset-0 bg-white/80 backdrop-blur-sm flex items-center justify-center">
+                            <div className="w-6 h-6 border-2 border-accent border-t-transparent rounded-full animate-spin" />
+                          </div>
+                        )}
+                      </div>
+
+                      <Label htmlFor="logo-upload" className="absolute -bottom-1 -right-1 w-10 h-10 bg-accent text-white rounded-full flex items-center justify-center cursor-pointer shadow-lg hover:scale-110 transition-transform">
+                        <Upload className="w-4 h-4" />
+                      </Label>
+                      <input
+                        id="logo-upload"
+                        type="file"
+                        accept="image/*"
+                        className="hidden"
+                        onChange={(e) => e.target.files?.[0] && handleFileUpload(e.target.files[0], 'logo')}
+                        disabled={uploadingLogo}
+                      />
+                    </div>
+                  </div>
+
+                  <div className="space-y-4">
+                    <Label className="text-xs font-black uppercase tracking-widest text-muted-foreground ml-1">Cover Banner</Label>
+
+                    <div className="relative group aspect-video rounded-3xl overflow-hidden border-2 border-dashed border-slate-200 hover:border-accent/40 bg-slate-50 transition-all">
+                      {formData.cover_image_url ? (
+                        <>
+                          <img src={formData.cover_image_url} className="w-full h-full object-cover" alt="Cover" />
+                          <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+                            <Label htmlFor="cover-upload" className="cursor-pointer bg-white text-slate-900 px-6 py-2 rounded-xl font-bold flex items-center gap-2 transform translate-y-2 group-hover:translate-y-0 transition-transform">
+                              <Upload className="w-4 h-4" /> Change Banner
+                            </Label>
+                          </div>
+                        </>
+                      ) : (
+                        <Label htmlFor="cover-upload" className="absolute inset-0 cursor-pointer flex flex-col items-center justify-center gap-3">
+                          <div className="w-12 h-12 rounded-2xl bg-white shadow-sm flex items-center justify-center text-slate-400 group-hover:scale-110 transition-all">
+                            <ImageIcon className="w-6 h-6" />
+                          </div>
+                          <p className="text-sm font-bold text-slate-600">Select Booth Banner</p>
+                        </Label>
+                      )}
+
+                      {uploadingCover && (
+                        <div className="absolute inset-0 bg-white/80 backdrop-blur-sm flex flex-col items-center justify-center gap-2">
+                          <div className="w-8 h-8 border-2 border-accent border-t-transparent rounded-full animate-spin" />
+                          <p className="text-[10px] font-black uppercase tracking-widest text-accent">Uploading...</p>
+                        </div>
+                      )}
+
+                      <input
+                        id="cover-upload"
+                        type="file"
+                        accept="image/*"
+                        className="hidden"
+                        onChange={(e) => e.target.files?.[0] && handleFileUpload(e.target.files[0], 'cover')}
+                        disabled={uploadingCover}
+                      />
+                    </div>
+                  </div>
+                </div>
+
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                   <Input
                     placeholder="City"

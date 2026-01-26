@@ -57,6 +57,7 @@ const ServicesSection = () => {
   ];
 
   const formatSalonData = (salon: Salon, index: number) => ({
+    id: salon.id,
     name: salon.name,
     location: `${salon.city || "India"}${salon.state ? `, ${salon.state}` : ""}`,
     rating: 4 + Math.floor(Math.random() * 2), // Random rating 4-5

@@ -16,6 +16,8 @@ import {
   List,
   Eye,
   EyeOff,
+  Upload,
+  Image as ImageIcon,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -79,6 +81,8 @@ export default function ServicesPage() {
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
   const [saving, setSaving] = useState(false);
   const [editingService, setEditingService] = useState<Service | null>(null);
+  const [uploadingImage, setUploadingImage] = useState(false);
+  const [uploadingLogo, setUploadingLogo] = useState(false);
   const [viewMode, setViewMode] = useState<"grid" | "list">("grid");
   const [formData, setFormData] = useState({
     name: "",
@@ -86,6 +90,7 @@ export default function ServicesPage() {
     price: "",
     duration_minutes: "30",
     category: "",
+    image_url: "",
     is_active: true,
   });
 
@@ -125,9 +130,45 @@ export default function ServicesPage() {
       price: "",
       duration_minutes: "30",
       category: "",
+      image_url: "",
       is_active: true,
     });
     setEditingService(null);
+  };
+
+  const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    setUploadingImage(true);
+    try {
+      const response = await api.uploads.upload(file);
+      setFormData({ ...formData, image_url: response.url });
+      toast({ title: "Success", description: "Service image uploaded" });
+    } catch (error: any) {
+      console.error("Upload error:", error);
+      toast({ title: "Upload Failed", description: error.message, variant: "destructive" });
+    } finally {
+      setUploadingImage(false);
+    }
+  };
+
+  const handleSalonLogoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file || !currentSalon) return;
+
+    setUploadingLogo(true);
+    try {
+      const response = await api.uploads.upload(file);
+      await api.salons.update(currentSalon.id, { logo_url: response.url });
+      toast({ title: "Branding Updated", description: "Salon logo updated successfully" });
+      // Optionally refresh the salon data here if useSalon doesn't auto-update
+    } catch (error: any) {
+      console.error("Logo Upload error:", error);
+      toast({ title: "Update Failed", description: error.message, variant: "destructive" });
+    } finally {
+      setUploadingLogo(false);
+    }
   };
 
   const openEditDialog = (service: Service) => {
@@ -138,6 +179,7 @@ export default function ServicesPage() {
       price: service.price.toString(),
       duration_minutes: service.duration_minutes.toString(),
       category: service.category || "",
+      image_url: service.image_url || "",
       is_active: service.is_active,
     });
     setIsAddDialogOpen(true);
@@ -154,6 +196,7 @@ export default function ServicesPage() {
         price: parseFloat(formData.price),
         duration_minutes: parseInt(formData.duration_minutes),
         category: formData.category || null,
+        image_url: formData.image_url || null,
         is_active: formData.is_active,
         salon_id: currentSalon.id,
       };
@@ -333,7 +376,7 @@ export default function ServicesPage() {
                     </DialogHeader>
                   </div>
 
-                  <div className="p-6 space-y-5">
+                  <div className="max-h-[60vh] overflow-y-auto px-6 py-2 space-y-5 custom-scrollbar">
                     <div className="space-y-2">
                       <Label htmlFor="name" className="text-xs font-black uppercase tracking-widest text-muted-foreground ml-1">Service Name</Label>
                       <div className="relative">
@@ -402,6 +445,88 @@ export default function ServicesPage() {
                             <SelectItem value="120" className="rounded-lg">2 hours</SelectItem>
                           </SelectContent>
                         </Select>
+                      </div>
+                    </div>
+
+                    <div className="space-y-3">
+                      <Label className="text-xs font-black uppercase tracking-widest text-muted-foreground ml-1">Service Image</Label>
+
+                      <div className="group relative aspect-video rounded-2xl overflow-hidden border-2 border-dashed border-slate-200 hover:border-accent/40 bg-slate-50/50 transition-all">
+                        {formData.image_url ? (
+                          <>
+                            <img src={formData.image_url} className="w-full h-full object-cover" alt="Preview" />
+                            <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+                              <Label htmlFor="image-upload" className="cursor-pointer bg-white text-slate-900 px-4 py-2 rounded-xl font-bold flex items-center gap-2 transform translate-y-2 group-hover:translate-y-0 transition-transform">
+                                <Upload className="w-4 h-4" /> Change Image
+                              </Label>
+                            </div>
+                          </>
+                        ) : (
+                          <Label htmlFor="image-upload" className="absolute inset-0 cursor-pointer flex flex-col items-center justify-center gap-3">
+                            <div className="w-12 h-12 rounded-2xl bg-white shadow-sm flex items-center justify-center text-slate-400 group-hover:text-accent group-hover:scale-110 transition-all">
+                              <ImageIcon className="w-6 h-6" />
+                            </div>
+                            <div className="text-center">
+                              <p className="text-sm font-bold text-slate-600">Select Treatment Photo</p>
+                              <p className="text-[10px] text-slate-400 font-medium">PNG, JPG or WebP (Max 5MB)</p>
+                            </div>
+                          </Label>
+                        )}
+
+                        {uploadingImage && (
+                          <div className="absolute inset-0 bg-white/80 backdrop-blur-sm flex flex-col items-center justify-center gap-3">
+                            <div className="w-8 h-8 border-2 border-accent border-t-transparent rounded-full animate-spin" />
+                            <p className="text-[10px] font-black uppercase tracking-widest text-accent">Uploading to Vault...</p>
+                          </div>
+                        )}
+                      </div>
+
+                      <input
+                        id="image-upload"
+                        type="file"
+                        accept="image/*"
+                        className="hidden"
+                        onChange={handleImageUpload}
+                        disabled={uploadingImage}
+                      />
+                    </div>
+
+                    <div className="h-px bg-slate-100 my-2" />
+
+                    <div className="space-y-4">
+                      <Label className="text-xs font-black uppercase tracking-widest text-muted-foreground ml-1">Salon Logo Branding</Label>
+                      <div className="flex items-center gap-6 p-4 rounded-2xl bg-slate-50 border border-slate-100">
+                        <div className="relative w-20 h-20 flex-shrink-0">
+                          <div className="w-full h-full rounded-full overflow-hidden border-2 border-white shadow-md bg-white">
+                            {currentSalon?.logo_url ? (
+                              <img src={currentSalon.logo_url} className="w-full h-full object-cover" alt="Salon Logo" />
+                            ) : (
+                              <div className="w-full h-full flex items-center justify-center text-slate-300">
+                                <ImageIcon className="w-6 h-6" />
+                              </div>
+                            )}
+                          </div>
+                          <Label htmlFor="salon-logo-upload" className="absolute -bottom-1 -right-1 w-8 h-8 bg-slate-900 text-white rounded-full flex items-center justify-center cursor-pointer shadow-lg hover:scale-110 transition-transform">
+                            <Upload className="w-3 h-3" />
+                          </Label>
+                          {uploadingLogo && (
+                            <div className="absolute inset-0 bg-white/60 backdrop-blur-[2px] rounded-full flex items-center justify-center">
+                              <div className="w-5 h-5 border-2 border-accent border-t-transparent rounded-full animate-spin" />
+                            </div>
+                          )}
+                        </div>
+                        <div className="space-y-1">
+                          <p className="text-sm font-bold text-slate-700">Establishment Logo</p>
+                          <p className="text-[10px] text-slate-400 font-medium leading-tight">This logo appears on all your services in the public registry.</p>
+                        </div>
+                        <input
+                          id="salon-logo-upload"
+                          type="file"
+                          accept="image/*"
+                          className="hidden"
+                          onChange={handleSalonLogoUpload}
+                          disabled={uploadingLogo}
+                        />
                       </div>
                     </div>
 
@@ -651,9 +776,13 @@ export default function ServicesPage() {
                 {/* Card Header/Image Area */}
                 <div className={`relative overflow-hidden ${viewMode === "list" ? "w-24 h-24 rounded-2xl flex-shrink-0" : "h-44"}`}>
                   <div className={`absolute inset-0 bg-gradient-to-br ${getCategoryColor(service.category || 'Other')} opacity-20 group-hover:opacity-30 transition-opacity`} />
-                  <div className={`absolute inset-0 flex items-center justify-center ${viewMode === "list" ? "text-3xl" : "text-7xl"} group-hover:scale-110 transition-transform duration-500`}>
-                    {getCategoryIcon(service.category || 'Other')}
-                  </div>
+                  {service.image_url ? (
+                    <img src={service.image_url} className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-110" alt={service.name} />
+                  ) : (
+                    <div className={`absolute inset-0 flex items-center justify-center ${viewMode === "list" ? "text-3xl" : "text-7xl"} group-hover:scale-110 transition-transform duration-500`}>
+                      {getCategoryIcon(service.category || 'Other')}
+                    </div>
+                  )}
                   {viewMode === "grid" && (
                     <>
                       <div className="absolute top-4 right-4">

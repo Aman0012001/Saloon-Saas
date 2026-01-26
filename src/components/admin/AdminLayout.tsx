@@ -40,7 +40,6 @@ interface AdminLayoutProps {
 const navItems = [
   { icon: LayoutDashboard, label: "Dashboard", path: "/admin" },
   { icon: Building2, label: "Salons", path: "/admin/salons" },
-  { icon: Calendar, label: "Bookings", path: "/admin/bookings" },
   { icon: Users, label: "Users", path: "/admin/users" },
   { icon: CreditCard, label: "Payments", path: "/admin/payments" },
   { icon: Megaphone, label: "Marketing", path: "/admin/marketing" },

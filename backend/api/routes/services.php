@@ -39,7 +39,21 @@ if ($method === 'GET' && count($uriParts) === 1) {
 // GET /api/services/:id - Get service by ID
 if ($method === 'GET' && count($uriParts) === 2) {
     $serviceId = $uriParts[1];
-    $stmt = $db->prepare("SELECT * FROM services WHERE id = ?");
+    $stmt = $db->prepare("
+        SELECT s.*, 
+               sln.name as salon_name, 
+               sln.address as salon_address, 
+               sln.city as salon_city, 
+               sln.state as salon_state,
+               sln.pincode as salon_pincode,
+               sln.phone as salon_phone,
+               sln.email as salon_email,
+               sln.logo_url as salon_logo_url,
+               sln.cover_image_url as salon_cover_url
+        FROM services s
+        JOIN salons sln ON s.salon_id = sln.id
+        WHERE s.id = ?
+    ");
     $stmt->execute([$serviceId]);
     $service = $stmt->fetch();
 

@@ -2,6 +2,7 @@ import { Star } from "lucide-react";
 import { Button } from "@/components/ui/button";
 
 interface SalonCardProps {
+  id: string;
   name: string;
   location: string;
   rating: number;
@@ -14,6 +15,7 @@ interface SalonCardProps {
 import { useNavigate } from "react-router-dom";
 
 const SalonCard = ({
+  id,
   name,
   location,
   rating,
@@ -26,7 +28,7 @@ const SalonCard = ({
 
   return (
     <div
-      onClick={() => navigate("/salons")}
+      onClick={() => navigate(`/salons/${id}`)}
       className="group bg-card rounded-2xl overflow-hidden shadow-card hover:shadow-card-hover transition-all duration-300 cursor-pointer"
     >
       {/* Cover Image */}

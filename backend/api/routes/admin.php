@@ -112,25 +112,6 @@ if ($method === 'PUT' && $uriParts[1] === 'salons' && isset($uriParts[3]) && $ur
     sendResponse(['message' => 'Salon rejected']);
 }
 
-// GET /api/admin/bookings - Get all bookings
-if ($method === 'GET' && $uriParts[1] === 'bookings') {
-    $stmt = $db->prepare("
-        SELECT b.*, s.name as service_name, sal.name as salon_name,
-               u.email, p.full_name, s.price
-        FROM bookings b
-        INNER JOIN services s ON b.service_id = s.id
-        INNER JOIN salons sal ON b.salon_id = sal.id
-        INNER JOIN users u ON b.user_id = u.id
-        LEFT JOIN profiles p ON u.id = p.user_id
-        ORDER BY b.created_at DESC
-        LIMIT 100
-    ");
-    $stmt->execute();
-    $bookings = $stmt->fetchAll();
-
-    sendResponse($bookings);
-}
-
 // GET /api/admin/users - Get all users
 if ($method === 'GET' && $uriParts[1] === 'users') {
     $stmt = $db->prepare("

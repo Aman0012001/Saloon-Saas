@@ -157,6 +157,12 @@ try {
         case 'notifications':
             require_once __DIR__ . '/routes/notifications.php';
             break;
+        case 'uploads':
+            require_once __DIR__ . '/routes/uploads.php';
+            break;
+        case 'reviews':
+            require_once __DIR__ . '/routes/reviews.php';
+            break;
         default:
             sendResponse([
                 'error' => 'Route not found',

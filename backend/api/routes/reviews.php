@@ -1,0 +1,67 @@
+<?php
+// Reviews routes
+require_once __DIR__ . '/../../Auth.php';
+
+// GET /api/reviews?service_id=xxx OR ?salon_id=xxx
+if ($method === 'GET' && count($uriParts) === 1) {
+    if (isset($_GET['service_id'])) {
+        $stmt = $db->prepare("
+            SELECT r.*, p.full_name as user_name, p.avatar_url as user_avatar, s.name as service_name
+            FROM reviews r
+            JOIN profiles p ON r.user_id = p.user_id
+            LEFT JOIN services s ON r.service_id = s.id
+            WHERE r.service_id = ? AND r.is_active = 1
+            ORDER BY r.created_at DESC
+        ");
+        $stmt->execute([$_GET['service_id']]);
+    } else if (isset($_GET['salon_id'])) {
+        $stmt = $db->prepare("
+            SELECT r.*, p.full_name as user_name, p.avatar_url as user_avatar, s.name as service_name
+            FROM reviews r
+            JOIN profiles p ON r.user_id = p.user_id
+            LEFT JOIN services s ON r.service_id = s.id
+            WHERE r.salon_id = ? AND r.is_active = 1
+            ORDER BY r.created_at DESC
+        ");
+        $stmt->execute([$_GET['salon_id']]);
+    } else {
+        sendResponse(['reviews' => []]);
+    }
+
+    $reviews = $stmt->fetchAll();
+    sendResponse(['reviews' => $reviews]);
+}
+
+// POST /api/reviews - Add a review
+if ($method === 'POST' && count($uriParts) === 1) {
+    $userData = Auth::getUserFromToken();
+    if (!$userData) {
+        sendResponse(['error' => 'Unauthorized'], 401);
+    }
+
+    $data = getRequestBody();
+    $reviewId = Auth::generateUuid();
+
+    try {
+        $stmt = $db->prepare("
+            INSERT INTO reviews (id, user_id, salon_id, service_id, rating, comment)
+            VALUES (?, ?, ?, ?, ?, ?)
+        ");
+        $stmt->execute([
+            $reviewId,
+            $userData['user_id'],
+            $data['salon_id'],
+            $data['service_id'],
+            $data['rating'],
+            $data['comment'] ?? null
+        ]);
+
+        $stmt = $db->prepare("SELECT * FROM reviews WHERE id = ?");
+        $stmt->execute([$reviewId]);
+        $review = $stmt->fetch();
+
+        sendResponse(['review' => $review], 201);
+    } catch (Exception $e) {
+        sendResponse(['error' => 'Failed to add review: ' . $e->getMessage()], 500);
+    }
+}

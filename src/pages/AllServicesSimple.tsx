@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Link } from "react-router-dom";
+import { useNavigate, Link } from "react-router-dom";
 import {
   Search,
   Clock,
@@ -52,6 +52,7 @@ const AllServicesSimple = () => {
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 12;
   const { toast } = useToast();
+  const navigate = useNavigate();
 
   useEffect(() => {
     fetchSimpleServices();
@@ -112,7 +113,7 @@ const AllServicesSimple = () => {
   };
 
   const handleBookService = (service: SimpleService) => {
-    window.location.href = `/book?salonId=${service.salon_id}`;
+    window.location.href = `/book?salonId=${service.salon_id}&serviceId=${service.id}`;
   };
 
   const getServiceImage = (category: string, serviceName?: string) => {
@@ -260,7 +261,10 @@ const AllServicesSimple = () => {
                     >
                       <Card className="group border-none bg-white rounded-[2.5rem] overflow-hidden shadow-sm hover:shadow-2xl hover:-translate-y-1 transition-all duration-500 h-full flex flex-col">
                         {/* Professional Image */}
-                        <div className="h-56 w-full overflow-hidden relative">
+                        <div
+                          className="h-56 w-full overflow-hidden relative cursor-pointer"
+                          onClick={() => navigate(`/services/${service.id}`)}
+                        >
                           <img
                             src={getServiceImage(service.category || 'Other', service.name)}
                             alt={service.name}
@@ -279,7 +283,10 @@ const AllServicesSimple = () => {
                               <span className="text-2xl font-black">{service.price}</span>
                             </div>
                           </div>
-                          <CardTitle className="text-2xl font-black text-slate-900 group-hover:text-accent transition-colors leading-tight mb-2">
+                          <CardTitle
+                            className="text-2xl font-black text-slate-900 group-hover:text-accent transition-colors leading-tight mb-2 cursor-pointer"
+                            onClick={() => navigate(`/services/${service.id}`)}
+                          >
                             {service.name}
                           </CardTitle>
                           <div className="flex flex-col gap-2">

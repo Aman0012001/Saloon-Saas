@@ -203,4 +203,111 @@ if ($method === 'PUT' && count($uriParts) === 2) {
     sendResponse(['booking' => $booking]);
 }
 
+// GET /api/bookings/:id/review - Get review for booking
+if ($method === 'GET' && count($uriParts) === 3 && $uriParts[2] === 'review') {
+    $bookingId = $uriParts[1];
+    $stmt = $db->prepare("SELECT * FROM booking_reviews WHERE booking_id = ?");
+    $stmt->execute([$bookingId]);
+    $review = $stmt->fetch();
+    sendResponse(['review' => $review]);
+}
+
+// POST /api/bookings/:id/review - Submit review
+if ($method === 'POST' && count($uriParts) === 3 && $uriParts[2] === 'review') {
+    try {
+        $userData = Auth::getUserFromToken();
+        if (!$userData)
+            sendResponse(['error' => 'Unauthorized - No valid session found.'], 401);
+
+        $bookingId = $uriParts[1];
+        $data = getRequestBody();
+
+        if (!$data)
+            sendResponse(['error' => 'Empty or invalid request payload.'], 400);
+
+        $rating = intval($data['rating'] ?? 5);
+        $comment = $data['comment'] ?? '';
+
+        // 1. Verify booking existence and ownership
+        $stmt = $db->prepare("SELECT * FROM bookings WHERE id = ? AND user_id = ?");
+        $stmt->execute([$bookingId, $userData['user_id']]);
+        $booking = $stmt->fetch();
+
+        if (!$booking)
+            sendResponse(['error' => 'Booking not found or you do not have permission to review it.'], 404);
+        if ($booking['status'] !== 'completed')
+            sendResponse(['error' => 'You can only leave feedback for completed sessions.'], 400);
+
+        // 3. Check for existing review
+        $stmt = $db->prepare("SELECT id FROM booking_reviews WHERE booking_id = ?");
+        $stmt->execute([$bookingId]);
+        if ($stmt->fetch()) {
+            sendResponse(['error' => 'Feedback has already been submitted for this appointment.'], 409);
+        }
+
+        // 4. Insert Review
+        $reviewId = Auth::generateUuid();
+        $stmt = $db->prepare("INSERT INTO booking_reviews (id, booking_id, user_id, salon_id, rating, comment) VALUES (?, ?, ?, ?, ?, ?)");
+        $success = $stmt->execute([$reviewId, $bookingId, $userData['user_id'], $booking['salon_id'], $rating, $comment]);
+
+        if (!$success) {
+            $err = $stmt->errorInfo();
+            throw new Exception("Database insertion failed: " . ($err[2] ?? 'Unknown registry error'));
+        }
+
+        sendResponse(['success' => true, 'message' => 'Thank you! Your feedback has been published.']);
+
+    } catch (Exception $e) {
+        sendResponse(['error' => 'Transmission Error: ' . $e->getMessage()], 500);
+    }
+}
+
+// PUT /api/bookings/:id/review - Update review
+if ($method === 'PUT' && count($uriParts) === 3 && $uriParts[2] === 'review') {
+    try {
+        $userData = Auth::getUserFromToken();
+        if (!$userData)
+            sendResponse(['error' => 'Unauthorized - No valid session found.'], 401);
+
+        $bookingId = $uriParts[1];
+        $data = getRequestBody();
+
+        if (!$data)
+            sendResponse(['error' => 'Empty or invalid request payload.'], 400);
+
+        $rating = intval($data['rating'] ?? 5);
+        $comment = $data['comment'] ?? '';
+
+        // 1. Verify booking ownership
+        $stmt = $db->prepare("SELECT * FROM bookings WHERE id = ? AND user_id = ?");
+        $stmt->execute([$bookingId, $userData['user_id']]);
+        $booking = $stmt->fetch();
+
+        if (!$booking)
+            sendResponse(['error' => 'Booking not found or you do not have permission to review it.'], 404);
+
+        // 2. Check for existing review
+        $stmt = $db->prepare("SELECT id FROM booking_reviews WHERE booking_id = ?");
+        $stmt->execute([$bookingId]);
+        $existingReview = $stmt->fetch();
+
+        if (!$existingReview) {
+            sendResponse(['error' => 'Review not found to update.'], 404);
+        }
+
+        // 3. Update Review
+        $stmt = $db->prepare("UPDATE booking_reviews SET rating = ?, comment = ? WHERE booking_id = ?");
+        $success = $stmt->execute([$rating, $comment, $bookingId]);
+
+        if (!$success) {
+            throw new Exception("Database update failed");
+        }
+
+        sendResponse(['success' => true, 'message' => 'Review updated successfully.']);
+
+    } catch (Exception $e) {
+        sendResponse(['error' => 'Transmission Error: ' . $e->getMessage()], 500);
+    }
+}
+
 sendResponse(['error' => 'Booking route not found'], 404);

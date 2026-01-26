@@ -29,15 +29,44 @@ const fetchWithAuth = async (url: string, options: RequestInit = {}) => {
         });
 
         if (!response.ok) {
-            const error = await response.json().catch(() => ({ error: 'Request failed' }));
-            console.error(`[API Error] Status: ${response.status}`, error);
-            throw new Error(error.error || `HTTP ${response.status}`);
+            const resJson = await response.json().catch(() => ({ error: 'Request failed' }));
+            const errorData = resJson.data || resJson;
+            console.error(`[API Error] Status: ${response.status}`, errorData);
+            throw new Error(errorData.error || `HTTP ${response.status}`);
         }
 
         const json = await response.json();
         return json.data !== undefined ? json.data : json;
     } catch (err: any) {
         console.error(`[API Network Error] ${err.message}`);
+        throw err;
+    }
+};
+
+const fetchWithFileUpload = async (url: string, formData: FormData) => {
+    const token = getAuthToken();
+    const headers: HeadersInit = {};
+    if (token) {
+        headers['Authorization'] = `Bearer ${token}`;
+    }
+
+    try {
+        const response = await fetch(`${API_BASE_URL}${url}`, {
+            method: 'POST',
+            body: formData,
+            headers,
+        });
+
+        if (!response.ok) {
+            const resJson = await response.json().catch(() => ({ error: 'Upload failed' }));
+            const errorData = resJson.data || resJson;
+            throw new Error(errorData.error || `HTTP ${response.status}`);
+        }
+
+        const json = await response.json();
+        return json.data !== undefined ? json.data : json;
+    } catch (err: any) {
+        console.error(`[API Upload Error] ${err.message}`);
         throw err;
     }
 };
@@ -107,6 +136,10 @@ export const salonsAPI = {
             body: JSON.stringify(salonData),
         });
         return data?.salon || data;
+    },
+
+    async getAnalytics(id: string) {
+        return await fetchWithAuth(`/salons/${id}/analytics`);
     },
 };
 
@@ -178,6 +211,24 @@ export const bookingsAPI = {
         return await fetchWithAuth(`/bookings/${id}`, {
             method: 'PUT',
             body: JSON.stringify(bookingData),
+        });
+    },
+
+    async getReview(bookingId: string) {
+        return await fetchWithAuth(`/bookings/${bookingId}/review`);
+    },
+
+    async submitReview(bookingId: string, rating: number, comment: string) {
+        return await fetchWithAuth(`/bookings/${bookingId}/review`, {
+            method: 'POST',
+            body: JSON.stringify({ rating, comment }),
+        });
+    },
+
+    async updateReview(bookingId: string, rating: number, comment: string) {
+        return await fetchWithAuth(`/bookings/${bookingId}/review`, {
+            method: 'PUT',
+            body: JSON.stringify({ rating, comment }),
         });
     }
 };
@@ -333,6 +384,15 @@ export const notificationsAPI = {
     },
 };
 
+// Uploads API
+export const uploadAPI = {
+    async upload(file: File) {
+        const formData = new FormData();
+        formData.append('file', file);
+        return await fetchWithFileUpload('/uploads', formData);
+    },
+};
+
 // Export all APIs
 export const api = {
     auth: authAPI,
@@ -345,6 +405,15 @@ export const api = {
     subscriptions: subscriptionsAPI,
     profiles: profilesAPI,
     notifications: notificationsAPI,
+    uploads: uploadAPI,
+    reviews: {
+        getByService: (serviceId: string) => fetchWithAuth(`/reviews?service_id=${serviceId}`),
+        getBySalon: (salonId: string) => fetchWithAuth(`/reviews?salon_id=${salonId}`),
+        create: (data: any) => fetchWithAuth('/reviews', {
+            method: 'POST',
+            body: JSON.stringify(data),
+        }),
+    },
 };
 
 export default api;

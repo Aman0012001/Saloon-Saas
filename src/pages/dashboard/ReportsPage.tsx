@@ -12,305 +12,269 @@ import {
   Users,
   DollarSign,
   Clock,
-  Star,
-  FileText,
-  PieChart,
-  Loader2
+  MessageSquare,
+  PieChart as PieIcon,
+  Loader2,
+  Activity,
+  Zap
 } from "lucide-react";
+import {
+  BarChart,
+  Bar,
+  XAxis,
+  YAxis,
+  CartesianGrid,
+  Tooltip,
+  ResponsiveContainer,
+  PieChart,
+  Pie,
+  Cell,
+  AreaChart,
+  Area,
+  Legend
+} from "recharts";
 import { useSalon } from "@/hooks/useSalon";
+import { Badge } from "@/components/ui/badge";
 import api from "@/services/api";
 import { format } from "date-fns";
 
+const COLORS = ["#3b82f6", "#10b981", "#f59e0b", "#ef4444", "#8b5cf6"];
+
 export default function ReportsPage() {
   const { currentSalon } = useSalon();
-  const [activeTab, setActiveTab] = useState("revenue");
-  const [dateRange, setDateRange] = useState("30days");
+  const [activeTab, setActiveTab] = useState("overview");
   const [loading, setLoading] = useState(true);
+  const [analytics, setAnalytics] = useState<any>(null);
 
-  // Stats State
-  const [stats, setStats] = useState({
-    totalRevenue: 0,
-    totalAppointments: 0,
-    newCustomers: 0,
-    avgServiceTime: 0,
-    revenueChange: "+12%",
-    appointmentsChange: "+5%",
-  });
-
-  const [topServices, setTopServices] = useState<any[]>([]);
-  const [paymentMethods, setPaymentMethods] = useState<any[]>([]);
-
-  const fetchReports = useCallback(async () => {
+  const fetchAnalytics = useCallback(async () => {
     if (!currentSalon) return;
     setLoading(true);
-
     try {
-      const now = new Date();
-      let startDate = new Date();
-
-      switch (dateRange) {
-        case "7days": startDate.setDate(now.getDate() - 7); break;
-        case "30days": startDate.setDate(now.getDate() - 30); break;
-        case "90days": startDate.setDate(now.getDate() - 90); break;
-        case "1year": startDate.setFullYear(now.getFullYear() - 1); break;
-        default: startDate.setDate(now.getDate() - 30);
-      }
-
-      // Fetch all bookings for reports from the local API
-      const bookings = await api.bookings.getAll({
-        salon_id: currentSalon.id,
-        start_date: format(startDate, "yyyy-MM-dd")
-      });
-
-      if (!bookings || bookings.length === 0) {
-        setStats({
-          totalRevenue: 0,
-          totalAppointments: 0,
-          newCustomers: 0,
-          avgServiceTime: 0,
-          revenueChange: "0%",
-          appointmentsChange: "0%",
-        });
-        setLoading(false);
-        return;
-      }
-
-      // Process Data
-      const completedBookings = bookings.filter((b: any) => b.status === "completed" || b.status === "confirmed");
-      const totalRevenue = completedBookings.reduce((sum: number, b: any) => sum + Number(b.price || 0), 0);
-      const totalAppointments = bookings.length;
-
-      // Calculate Avg Service Time
-      const totalTime = completedBookings.reduce((sum: number, b: any) => sum + Number(b.duration_minutes || 30), 0);
-      const avgServiceTime = completedBookings.length > 0 ? Math.round(totalTime / completedBookings.length) : 0;
-
-      // Unique Customers
-      const uniqueCustomers = new Set(bookings.map((b: any) => b.user_id)).size;
-
-      // Top Services
-      const serviceCount: Record<string, { count: number; revenue: number }> = {};
-      completedBookings.forEach((b: any) => {
-        const name = b.service_name || "Unknown";
-        if (!serviceCount[name]) serviceCount[name] = { count: 0, revenue: 0 };
-        serviceCount[name].count++;
-        serviceCount[name].revenue += Number(b.price || 0);
-      });
-
-      const sortedServices = Object.entries(serviceCount)
-        .map(([name, data]) => ({ name, bookings: data.count, revenue: data.revenue }))
-        .sort((a, b) => b.bookings - a.bookings)
-        .slice(0, 5);
-
-      setTopServices(sortedServices);
-
-      setStats({
-        totalRevenue,
-        totalAppointments,
-        newCustomers: uniqueCustomers,
-        avgServiceTime,
-        revenueChange: "+12%",
-        appointmentsChange: "+5%",
-      });
-
-      // Mock Payment Methods locally
-      setPaymentMethods([
-        { method: "UPI", percentage: 45, amount: Math.round(totalRevenue * 0.45) },
-        { method: "Cash", percentage: 35, amount: Math.round(totalRevenue * 0.35) },
-        { method: "Card", percentage: 20, amount: Math.round(totalRevenue * 0.20) },
-      ]);
-
+      const data = await api.salons.getAnalytics(currentSalon.id);
+      setAnalytics(data);
     } catch (error) {
-      console.error("Error fetching report data locally:", error);
+      console.error("Error fetching analytics:", error);
     } finally {
       setLoading(false);
     }
-  }, [currentSalon, dateRange]);
+  }, [currentSalon]);
 
   useEffect(() => {
-    fetchReports();
-  }, [fetchReports]);
+    fetchAnalytics();
+  }, [fetchAnalytics]);
 
-  const revenueStats = [
-    {
-      title: "Local Revenue",
-      value: `$${stats.totalRevenue.toLocaleString()}`,
-      change: stats.revenueChange,
-      icon: DollarSign
-    },
-    {
-      title: "Total Bookings",
-      value: stats.totalAppointments.toString(),
-      change: stats.appointmentsChange,
-      icon: Calendar
-    },
-    {
-      title: "Total Clients",
-      value: stats.newCustomers.toString(),
-      change: "Active",
-      icon: Users
-    },
-    {
-      title: "Efficiency",
-      value: `${stats.avgServiceTime}m avg`,
-      change: "Time",
-      icon: Clock
-    }
-  ];
-
-  if (loading) {
+  if (loading || !analytics) {
     return (
       <ResponsiveDashboardLayout showBackButton={true}>
         <div className="flex flex-col items-center justify-center h-[60vh] gap-4">
           <Loader2 className="w-10 h-10 animate-spin text-accent" />
-          <p className="text-muted-foreground font-bold">Synthesizing local insights...</p>
+          <p className="text-muted-foreground font-bold text-lg">Generating Analytical Dossier...</p>
         </div>
       </ResponsiveDashboardLayout>
-    )
+    );
   }
 
+  const totalRevenue = analytics.revenue_monthly.reduce((sum: number, r: any) => sum + Number(r.revenue), 0);
+  const totalBookings = analytics.popular_treatments.reduce((sum: number, s: any) => sum + Number(s.count), 0);
+
   return (
-    <ResponsiveDashboardLayout
-      showBackButton={true}
-    >
-      <div className="space-y-6">
-        {/* Header */}
-        <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
-          <div>
-            <h1 className="text-3xl font-black text-foreground tracking-tight">Analytics Center</h1>
-            <p className="text-muted-foreground font-medium">
-              Performance metrics fetched from your local <span className="text-foreground font-bold">XAMPP</span> database.
-            </p>
-          </div>
-          <div className="flex items-center gap-3">
-            <Select value={dateRange} onValueChange={setDateRange}>
-              <SelectTrigger className="w-44 bg-white border-none shadow-sm rounded-xl font-bold">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent className="rounded-xl">
-                <SelectItem value="7days">Past Week</SelectItem>
-                <SelectItem value="30days">Past Month</SelectItem>
-                <SelectItem value="90days">Past Quarter</SelectItem>
-                <SelectItem value="1year">Past Year</SelectItem>
-              </SelectContent>
-            </Select>
-            <Button variant="outline" className="gap-2 bg-white border-none shadow-sm rounded-xl font-bold">
-              <Download className="w-4 h-4" />
-              CSV Export
-            </Button>
+    <ResponsiveDashboardLayout showBackButton={true}>
+      <div className="space-y-8">
+        {/* Header Section */}
+        <div className="bg-slate-900 rounded-[2.5rem] p-10 text-white shadow-2xl relative overflow-hidden">
+          <div className="absolute top-0 right-0 w-80 h-80 bg-accent/20 blur-[120px] rounded-full" />
+          <div className="relative z-10 flex flex-col md:flex-row items-center justify-between gap-6">
+            <div className="flex items-center gap-5">
+              <div className="h-16 w-16 bg-white/10 backdrop-blur-md rounded-2xl flex items-center justify-center border border-white/10 text-accent">
+                <BarChart3 className="h-8 h-8" />
+              </div>
+              <div>
+                <h1 className="text-4xl font-black tracking-tight">Intelligence Hub</h1>
+                <p className="text-slate-400 font-bold uppercase tracking-widest text-[10px]">Data-Driven Salon Optimization</p>
+              </div>
+            </div>
+            <div className="flex gap-4">
+              <Button onClick={fetchAnalytics} variant="outline" className="bg-white/10 border-white/10 text-white font-bold h-12 rounded-xl">
+                <Calendar className="w-4 h-4 mr-2" /> REFRESH FEED
+              </Button>
+              <Button className="bg-accent text-white font-black rounded-xl h-12 px-8 shadow-lg shadow-accent/20">
+                <Download className="w-4 h-4 mr-2" /> EXPORT REPORT
+              </Button>
+            </div>
           </div>
         </div>
 
-        {/* Stats Grid */}
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-          {revenueStats.map((stat, index) => (
-            <Card key={index} className="border-none shadow-sm hover:shadow-lg transition-all duration-300 bg-white rounded-2xl">
-              <CardContent className="p-6">
-                <div className="flex items-start justify-between">
-                  <div className="space-y-1">
-                    <p className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">{stat.title}</p>
-                    <p className="text-2xl font-black text-slate-900">{stat.value}</p>
-                  </div>
-                  <div className="w-10 h-10 rounded-xl bg-accent/10 flex items-center justify-center">
-                    <stat.icon className="w-5 h-5 text-accent" />
-                  </div>
+        {/* Global Key Metrics */}
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
+          {[
+            { label: "Gross Volume", value: `$${totalRevenue.toLocaleString()}`, icon: DollarSign, color: "text-emerald-500", bg: "bg-emerald-50" },
+            { label: "Successful Visits", value: totalBookings, icon: Zap, color: "text-blue-500", bg: "bg-blue-50" },
+            { label: "Top Performer", value: analytics.popular_treatments[0]?.name || 'N/A', icon: TrendingUp, color: "text-amber-500", bg: "bg-amber-50" },
+            { label: "Total Reach", value: analytics.recent_activity.length, icon: Users, color: "text-purple-500", bg: "bg-purple-50" },
+          ].map((stat, i) => (
+            <Card key={i} className="border-none shadow-sm bg-white rounded-3xl p-6 group hover:shadow-xl transition-all">
+              <div className="flex justify-between items-start">
+                <div>
+                  <p className="text-[10px] font-black uppercase text-slate-400 tracking-widest leading-none">{stat.label}</p>
+                  <p className="text-2xl font-black text-slate-900 mt-3 truncate max-w-[150px]">{stat.value}</p>
                 </div>
-                <div className="mt-4 flex items-center gap-1 text-xs font-bold text-emerald-600">
-                  <TrendingUp className="w-3.5 h-3.5" />
-                  <span>{stat.change}</span>
+                <div className={`w-12 h-12 rounded-xl ${stat.bg} ${stat.color} flex items-center justify-center group-hover:scale-110 transition-transform`}>
+                  <stat.icon className="w-6 h-6" />
                 </div>
-              </CardContent>
+              </div>
             </Card>
           ))}
         </div>
 
-        <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
-          <TabsList className="bg-secondary/50 p-1 rounded-2xl">
-            <TabsTrigger value="revenue" className="rounded-xl h-10 data-[state=active]:bg-white data-[state=active]:shadow-sm px-8 font-bold">Financials</TabsTrigger>
-            <TabsTrigger value="services" className="rounded-xl h-10 data-[state=active]:bg-white data-[state=active]:shadow-sm px-8 font-bold">Service Rankings</TabsTrigger>
+        <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-8">
+          <TabsList className="bg-slate-100 p-1.5 rounded-[1.5rem] w-full md:w-auto h-auto grid grid-cols-2 md:inline-flex">
+            <TabsTrigger value="overview" className="rounded-2xl py-3 px-8 data-[state=active]:bg-white data-[state=active]:shadow-lg font-black text-xs uppercase tracking-widest">Performance Dashboard</TabsTrigger>
+            <TabsTrigger value="customers" className="rounded-2xl py-3 px-8 data-[state=active]:bg-white data-[state=active]:shadow-lg font-black text-xs uppercase tracking-widest">Demographic Analysis</TabsTrigger>
           </TabsList>
 
-          <TabsContent value="revenue" className="space-y-6">
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-              <Card className="border-none shadow-sm bg-white rounded-[2rem]">
-                <CardHeader>
-                  <CardTitle className="text-xl font-bold flex items-center gap-2">
-                    <BarChart3 className="w-5 h-5 text-accent" />
-                    Revenue Trend
-                  </CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <div className="h-64 flex flex-col items-center justify-center bg-slate-50 rounded-3xl border border-dashed border-slate-200">
-                    <BarChart3 className="w-12 h-12 mb-3 text-slate-300" />
-                    <p className="text-slate-500 font-bold">Chart visualization is coming soon.</p>
-                    <p className="text-xs text-slate-400 mt-1">Collecting data from your local records.</p>
+          <TabsContent value="overview" className="space-y-8">
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+              {/* Revenue Area Chart */}
+              <Card className="lg:col-span-2 border-none shadow-sm bg-white rounded-[2.5rem] p-8">
+                <div className="flex justify-between items-center mb-8">
+                  <div>
+                    <h3 className="text-2xl font-black text-slate-900 tracking-tight leading-none">Revenue Trajectory</h3>
+                    <p className="text-xs font-bold text-slate-400 uppercase tracking-widest mt-2">Historical income metrics (12 Months)</p>
                   </div>
-                </CardContent>
+                </div>
+                <div className="h-[400px]">
+                  <ResponsiveContainer width="100%" height="100%">
+                    <AreaChart data={analytics.revenue_monthly}>
+                      <defs>
+                        <linearGradient id="revenueGradient" x1="0" y1="0" x2="0" y2="1">
+                          <stop offset="5%" stopColor="#3b82f6" stopOpacity={0.2} />
+                          <stop offset="95%" stopColor="#3b82f6" stopOpacity={0} />
+                        </linearGradient>
+                      </defs>
+                      <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
+                      <XAxis dataKey="month" axisLine={false} tickLine={false} tick={{ fill: '#94a3b8', fontSize: 11, fontWeight: 700 }} dy={15} />
+                      <YAxis axisLine={false} tickLine={false} tick={{ fill: '#94a3b8', fontSize: 11, fontWeight: 700 }} dx={-15} />
+                      <Tooltip contentStyle={{ borderRadius: '20px', border: 'none', boxShadow: '0 10px 40px rgba(0,0,0,0.05)' }} />
+                      <Area type="monotone" dataKey="revenue" stroke="#3b82f6" strokeWidth={4} fillOpacity={1} fill="url(#revenueGradient)" />
+                    </AreaChart>
+                  </ResponsiveContainer>
+                </div>
               </Card>
 
-              <Card className="border-none shadow-sm bg-white rounded-[2rem]">
-                <CardHeader>
-                  <CardTitle className="text-xl font-bold flex items-center gap-2">
-                    <PieChart className="w-5 h-5 text-accent" />
-                    Payment Sources
-                  </CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <div className="space-y-6">
-                    {paymentMethods.map((method, i) => (
-                      <div key={i} className="space-y-2">
-                        <div className="flex items-center justify-between">
-                          <span className="text-sm font-black text-slate-700">{method.method}</span>
-                          <span className="font-black text-accent text-sm">{method.percentage}% (${method.amount.toLocaleString()})</span>
-                        </div>
-                        <div className="h-2.5 w-full bg-slate-100 rounded-full overflow-hidden">
-                          <div
-                            className="h-full bg-accent transition-all duration-700 rounded-full"
-                            style={{ width: `${method.percentage}%` }}
-                          />
-                        </div>
+              {/* Popular Treatments Bar Chart */}
+              <Card className="border-none shadow-sm bg-white rounded-[2.5rem] p-8">
+                <h3 className="text-2xl font-black text-slate-900 tracking-tight leading-none mb-2">Service Ranking</h3>
+                <p className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-8">Most popular treatments</p>
+                <div className="space-y-6">
+                  {analytics.popular_treatments.slice(0, 5).map((service: any, i: number) => (
+                    <div key={i} className="space-y-2">
+                      <div className="flex justify-between items-center text-sm font-black">
+                        <span className="text-slate-700 truncate w-32">{service.name}</span>
+                        <span className="text-accent">{service.count} Times</span>
                       </div>
-                    ))}
-                  </div>
-                </CardContent>
+                      <div className="h-3 w-full bg-slate-50 rounded-full overflow-hidden">
+                        <div
+                          className="h-full bg-accent transition-all duration-1000 rounded-full"
+                          style={{ width: `${(service.count / (analytics.popular_treatments[0]?.count || 1)) * 100}%` }}
+                        />
+                      </div>
+                    </div>
+                  ))}
+                  {analytics.popular_treatments.length === 0 && <p className="text-center py-20 text-slate-300 font-bold">No sessions logged.</p>}
+                </div>
               </Card>
             </div>
+
+            {/* Customer Activity Logs */}
+            <Card className="border-none shadow-sm bg-white rounded-[2.5rem] p-8">
+              <div className="flex items-center gap-3 mb-8">
+                <Activity className="w-6 h-6 text-accent" />
+                <h3 className="text-2xl font-black text-slate-900 tracking-tight">Activity Stream</h3>
+              </div>
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                {analytics.recent_activity.map((activity: any, i: number) => (
+                  <div key={i} className="p-5 rounded-3xl bg-slate-50 border border-transparent hover:border-slate-200 transition-all group">
+                    <div className="flex items-center gap-4">
+                      <div className="w-10 h-10 rounded-xl bg-white shadow-sm flex items-center justify-center text-slate-900 font-black text-xs">
+                        {activity.full_name?.[0] || 'U'}
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <p className="font-black text-slate-900 truncate uppercase text-[11px] tracking-widest">{activity.full_name}</p>
+                        <p className="text-xs font-bold text-slate-500 mt-0.5 truncate">{activity.service_name}</p>
+                      </div>
+                      <Badge className={`rounded-lg font-black text-[9px] uppercase ${activity.status === 'completed' ? 'bg-emerald-100 text-emerald-600' : 'bg-blue-100 text-blue-600'
+                        }`}>
+                        {activity.status}
+                      </Badge>
+                    </div>
+                    <div className="mt-4 pt-4 border-t border-slate-200/50 flex justify-between items-center text-[10px] font-black text-slate-400">
+                      <span className="flex items-center gap-1.5"><Calendar className="w-3 h-3" /> {format(new Date(activity.booking_date), "MMM dd")}</span>
+                      <span className="flex items-center gap-1.5"><Clock className="w-3 h-3" /> {format(new Date(activity.created_at), "h:mm a")}</span>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </Card>
           </TabsContent>
 
-          <TabsContent value="services" className="space-y-4">
-            <Card className="border-none shadow-sm bg-white rounded-[2rem]">
-              <CardHeader>
-                <CardTitle className="text-xl font-bold">Most Profitable Services</CardTitle>
-                <CardDescription className="font-medium">Ranked by volume and earnings</CardDescription>
-              </CardHeader>
-              <CardContent>
-                <div className="space-y-3">
-                  {topServices.length === 0 ? (
-                    <div className="text-center py-20 text-muted-foreground">No local service logs yet.</div>
-                  ) : topServices.map((service, index) => (
-                    <div
-                      key={index}
-                      className="flex items-center justify-between p-5 rounded-2xl bg-slate-50 hover:bg-slate-100 transition-all group"
-                    >
-                      <div className="flex items-center gap-5">
-                        <div className="w-10 h-10 rounded-xl bg-white shadow-sm flex items-center justify-center font-black text-slate-900 text-sm">
-                          #{index + 1}
-                        </div>
-                        <div>
-                          <p className="font-black text-slate-900 text-lg leading-tight">{service.name}</p>
-                          <p className="text-xs text-muted-foreground font-bold uppercase tracking-wider mt-1">
-                            {service.bookings} Complete Appointments
-                          </p>
-                        </div>
+          <TabsContent value="customers" className="space-y-8">
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+              {/* New vs Existing Pie Chart */}
+              <Card className="border-none shadow-sm bg-white rounded-[2.5rem] p-8">
+                <div className="mb-8">
+                  <h3 className="text-2xl font-black text-slate-900 tracking-tight leading-none">Retention Ratio</h3>
+                  <p className="text-xs font-bold text-slate-400 uppercase tracking-widest mt-2">New vs Existing Client Base</p>
+                </div>
+                <div className="h-[350px]">
+                  <ResponsiveContainer width="100%" height="100%">
+                    <PieChart>
+                      <Pie
+                        data={analytics.customer_ratio}
+                        dataKey="customer_count"
+                        nameKey="type"
+                        cx="50%"
+                        cy="50%"
+                        innerRadius={80}
+                        outerRadius={120}
+                        paddingAngle={8}
+                        stroke="none"
+                      >
+                        {analytics.customer_ratio.map((_: any, index: number) => (
+                          <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
+                        ))}
+                      </Pie>
+                      <Tooltip
+                        contentStyle={{ borderRadius: '20px', border: 'none', background: '#0f172a', color: '#fff' }}
+                        itemStyle={{ color: '#fff' }}
+                      />
+                      <Legend />
+                    </PieChart>
+                  </ResponsiveContainer>
+                </div>
+              </Card>
+
+              {/* Service Distribution */}
+              <Card className="border-none shadow-sm bg-white rounded-[2.5rem] p-8 overflow-hidden relative">
+                <div className="absolute top-0 right-0 p-8 opacity-5">
+                  <PieIcon className="w-64 h-64" />
+                </div>
+                <h3 className="text-2xl font-black text-slate-900 tracking-tight leading-none mb-8">Profit Sources</h3>
+                <div className="space-y-6 relative z-10">
+                  {analytics.popular_treatments.map((service: any, i: number) => (
+                    <div key={i} className="flex items-center justify-between p-4 rounded-2xl bg-slate-50 transition-all hover:scale-[1.02]">
+                      <div className="flex items-center gap-4">
+                        <div className="w-2 h-2 rounded-full" style={{ backgroundColor: COLORS[i % COLORS.length] }} />
+                        <p className="font-black text-slate-700">{service.name}</p>
                       </div>
                       <div className="text-right">
-                        <p className="font-black text-accent text-xl">${service.revenue.toLocaleString()}</p>
-                        <p className="text-[10px] text-muted-foreground font-black uppercase tracking-widest">Earnings</p>
+                        <p className="font-black text-slate-900">${Number(service.total_earned).toLocaleString()}</p>
+                        <p className="text-[10px] font-bold text-slate-400 uppercase">Contribution</p>
                       </div>
                     </div>
                   ))}
                 </div>
-              </CardContent>
-            </Card>
+              </Card>
+            </div>
           </TabsContent>
         </Tabs>
       </div>

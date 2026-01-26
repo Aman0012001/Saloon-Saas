@@ -107,6 +107,16 @@ const BookAppointment = () => {
 
       const servicesData = await api.services.getBySalon(salonId);
       setServices(servicesData || []);
+
+      // Auto-select service if ID provided in URL
+      const serviceId = searchParams.get("serviceId");
+      if (serviceId && servicesData) {
+        const preselected = servicesData.find((s: any) => s.id === serviceId);
+        if (preselected) {
+          setSelectedService(preselected);
+          setStep(2); // Jump straight to time selection if service is known
+        }
+      }
     } catch (error) {
       console.error("Error fetching local salon data:", error);
       toast({ title: "Local Database Error", description: "Could not sync with XAMPP backend.", variant: "destructive" });

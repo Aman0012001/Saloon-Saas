@@ -202,7 +202,7 @@ export default function SalonListing() {
                     transition={{ duration: 0.5, delay: index * 0.05 }}
                   >
                     <div
-                      onClick={() => navigate(`/book?salonId=${salon.id}`)}
+                      onClick={() => navigate(`/salons/${salon.id}`)}
                       className="group cursor-pointer bg-white rounded-[1.5rem] border border-slate-100 p-2 hover:shadow-[0_20px_40px_-10px_rgba(0,0,0,0.05)] transition-all duration-500 flex flex-col h-full"
                     >
                       {/* Image Container */}

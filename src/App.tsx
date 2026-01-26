@@ -30,8 +30,10 @@ import OffersPage from "./pages/dashboard/OffersPage";
 import SalonOwnerLogin from "./pages/SalonOwnerLogin";
 import AboutUs from "./pages/AboutUs";
 import SalonListing from "./pages/SalonListing";
+import SalonServices from "./pages/SalonServices";
 import AdminSetup from "./pages/AdminSetup";
 import AllServicesSimple from "./pages/AllServicesSimple";
+import ServiceDetail from "./pages/ServiceDetail";
 import Pricing from "./pages/Pricing";
 import ContactUs from "./pages/ContactUs";
 // Super Admin Pages
@@ -40,7 +42,6 @@ import AdminDashboardEnhanced from "./pages/admin/AdminDashboardEnhanced";
 import AdminSalons from "./pages/admin/AdminSalons";
 import AdminUsers from "./pages/admin/AdminUsers";
 import AdminUsersEnhanced from "./pages/admin/AdminUsersEnhanced";
-import AdminBookings from "./pages/admin/AdminBookings";
 import AdminPayments from "./pages/admin/AdminPayments";
 import AdminPaymentsEnhanced from "./pages/admin/AdminPaymentsEnhanced";
 import AdminMarketing from "./pages/admin/AdminMarketing";
@@ -74,7 +75,9 @@ const App = () => (
                 <Route path="/" element={<Index />} />
                 <Route path="/about" element={<AboutUs />} />
                 <Route path="/salons" element={<SalonListing />} />
+                <Route path="/salons/:id" element={<SalonServices />} />
                 <Route path="/services" element={<AllServicesSimple />} />
+                <Route path="/services/:id" element={<ServiceDetail />} />
                 <Route path="/services-simple" element={<AllServicesSimple />} />
                 <Route path="/pricing" element={<Pricing />} />
                 <Route path="/contact" element={<ContactUs />} />
@@ -108,7 +111,6 @@ const App = () => (
                 <Route path="/admin" element={<AdminDashboardEnhanced />} />
                 <Route path="/admin/salons" element={<AdminSalons />} />
                 <Route path="/admin/users" element={<AdminUsersEnhanced />} />
-                <Route path="/admin/bookings" element={<AdminBookings />} />
                 <Route path="/admin/payments" element={<AdminPaymentsEnhanced />} />
                 <Route path="/admin/marketing" element={<AdminMarketing />} />
                 <Route path="/admin/reports" element={<AdminReports />} />

@@ -103,21 +103,7 @@ export default function AdminDashboardEnhanced() {
       // Fetch data from local admin API
       const stats = await api.admin.getStats();
       const salons = await api.admin.getAllSalons();
-      const bookings = await api.admin.getAllBookings();
       const users = await api.admin.getAllUsers();
-
-      // Aggregate data locally for a rich dashboard experience
-      const todayStr = format(new Date(), "yyyy-MM-dd");
-
-      // Revenue Calculation
-      const monthlyRevenueMap = new Map<string, number>();
-      bookings.forEach((b: any) => {
-        const month = format(new Date(b.booking_date), "MMM");
-        const price = Number(b.price || 0);
-        if (b.status === 'completed' || b.status === 'confirmed') {
-          monthlyRevenueMap.set(month, (monthlyRevenueMap.get(month) || 0) + price);
-        }
-      });
 
       const topCitiesMap = new Map<string, number>();
       salons.forEach((s: any) => {
@@ -132,25 +118,19 @@ export default function AdminDashboardEnhanced() {
         .slice(0, 5);
 
       setDashboardStats({
-        totalSalons: stats.total_salons,
-        activeSalons: stats.active_salons,
-        pendingSalons: stats.pending_salons,
-        totalUsers: stats.total_users,
+        totalSalons: stats.total_salons || 0,
+        activeSalons: stats.active_salons || 0,
+        pendingSalons: stats.pending_salons || 0,
+        totalUsers: stats.total_users || 0,
         totalOwners: users.filter((u: any) => u.role === 'owner' || u.is_owner).length,
-        todayBookings: bookings.filter((b: any) => b.booking_date === todayStr).length,
-        weeklyBookings: bookings.length, // Simplified
-        monthlyRevenue: stats.total_revenue,
+        todayBookings: 0, // Bookings removed from governance
+        weeklyBookings: 0,
+        monthlyRevenue: stats.total_revenue || 0,
         topCities,
-        recentActivity: bookings.slice(0, 10).map((b: any) => ({
-          id: b.id,
-          type: 'booking',
-          description: `Booking for ${b.service_name} at ${b.salon_name}`,
-          timestamp: b.created_at,
-          status: b.status
-        })),
+        recentActivity: [], // Active bookings feed removed
         revenueData: {
-          monthly: Array.from(monthlyRevenueMap.entries()).map(([name, value]) => ({ name, value })),
-          annual: [{ name: "2024", value: stats.total_revenue }]
+          monthly: [],
+          annual: [{ name: "2024", value: stats.total_revenue || 0 }]
         },
         popularTreatments: [],
         customerStats: {
