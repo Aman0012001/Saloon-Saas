@@ -77,7 +77,7 @@ const TrialBenefits = () => {
 
             <div className="mt-8 p-4 bg-accent/10 rounded-lg text-center">
               <p className="text-sm text-muted-foreground">
-                <span className="font-semibold text-accent">After 14 days:</span> Continue with our affordable plans starting at $999/month
+                <span className="font-semibold text-accent">After 14 days:</span> Continue with our affordable plans starting at RM 999/month
               </p>
             </div>
           </CardContent>

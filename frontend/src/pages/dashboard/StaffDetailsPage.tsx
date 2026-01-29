@@ -313,7 +313,7 @@ export default function StaffDetailsPage() {
                                                 {[
                                                     { label: 'Clients Handled', value: stats?.customers || 0, icon: Users, color: 'bg-blue-500', trend: '+12%' },
                                                     { label: 'Force Output (Hrs)', value: `${stats?.total_hours || 0}h`, icon: Clock, color: 'bg-[#F2A93B]', trend: '+5h' },
-                                                    { label: 'Settled Earnings', value: `$${stats?.earnings?.toLocaleString() || 0}`, icon: DollarSign, color: 'bg-emerald-500', trend: '+18%' },
+                                                    { label: 'Settled Earnings', value: `RM ${stats?.earnings?.toLocaleString() || 0}`, icon: DollarSign, color: 'bg-emerald-500', trend: '+18%' },
                                                     { label: 'Remaining Leaves', value: stats?.leave_days || 0, icon: Calendar, color: 'bg-rose-500', trend: 'Healthy' },
                                                 ].map((stat, i) => (
                                                     <Card key={i} className="rounded-3xl border-none shadow-sm bg-white overflow-hidden group hover:shadow-xl transition-all duration-300">
@@ -352,7 +352,7 @@ export default function StaffDetailsPage() {
                                                                         )}
                                                                     />
                                                                     <div className="absolute -top-10 left-1/2 -translate-x-1/2 bg-slate-900 text-white text-[8px] font-black px-2 py-1 rounded opacity-0 group-hover:opacity-100 transition-opacity">
-                                                                        ${(h * 15).toLocaleString()}
+                                                                        RM {(h * 15).toLocaleString()}
                                                                     </div>
                                                                 </div>
                                                             ))}
@@ -407,20 +407,20 @@ export default function StaffDetailsPage() {
                                                             </div>
                                                             <div>
                                                                 <p className="text-[10px] font-black uppercase tracking-[0.2em] text-[#F2A93B] mb-2">Net Allocation</p>
-                                                                <h4 className="text-4xl font-black">${stats?.earnings?.toLocaleString() || 0}</h4>
+                                                                <h4 className="text-4xl font-black">RM {stats?.earnings?.toLocaleString() || 0}</h4>
                                                             </div>
                                                             <div className="pt-6 border-t border-white/10 space-y-4">
                                                                 <div className="flex justify-between items-center">
                                                                     <span className="text-[9px] font-bold text-white/50 uppercase tracking-widest">Base Rate</span>
-                                                                    <span className="text-xs font-black">$2,400.00</span>
+                                                                    <span className="text-xs font-black">RM 2,400.00</span>
                                                                 </div>
                                                                 <div className="flex justify-between items-center">
                                                                     <span className="text-[9px] font-bold text-white/50 uppercase tracking-widest">Commission {staff.commission_percentage}%</span>
-                                                                    <span className="text-xs font-black text-emerald-400">+${stats?.earnings?.toLocaleString()}</span>
+                                                                    <span className="text-xs font-black text-emerald-400">+RM {stats?.earnings?.toLocaleString()}</span>
                                                                 </div>
                                                                 <div className="flex justify-between items-center">
                                                                     <span className="text-[9px] font-bold text-white/50 uppercase tracking-widest">Tax Provision</span>
-                                                                    <span className="text-xs font-black text-rose-400">-$240.00</span>
+                                                                    <span className="text-xs font-black text-rose-400">-RM 240.00</span>
                                                                 </div>
                                                             </div>
                                                             <Button className="w-full h-14 bg-white text-slate-900 font-black text-[10px] uppercase tracking-widest rounded-2xl hover:bg-slate-100 transition-all mt-6 shadow-xl shadow-white/5 uppercase">
@@ -483,10 +483,10 @@ export default function StaffDetailsPage() {
                                                                             <span className="font-black text-slate-900 uppercase text-[11px]">{log.service_name}</span>
                                                                             <p className="text-[10px] font-bold text-slate-400 mt-1 uppercase tracking-tighter">{log.full_name || "Unknown Identity"} • {format(new Date(log.booking_date), "MMM dd")}</p>
                                                                         </TableCell>
-                                                                        <TableCell className="px-6 py-6 font-bold text-slate-600">${log.price}</TableCell>
+                                                                        <TableCell className="px-6 py-6 font-bold text-slate-600">RM {log.price}</TableCell>
                                                                         <TableCell className="px-6 py-6 font-bold text-slate-400">{staff.commission_percentage}%</TableCell>
                                                                         <TableCell className="px-10 py-6 text-right font-black text-emerald-500">
-                                                                            +${(log.price * (staff.commission_percentage / 100)).toFixed(2)}
+                                                                            +RM {(log.price * (staff.commission_percentage / 100)).toFixed(2)}
                                                                         </TableCell>
                                                                     </TableRow>
                                                                 ))}
@@ -723,7 +723,7 @@ export default function StaffDetailsPage() {
                                                                     </div>
                                                                 </TableCell>
                                                                 <TableCell className="px-10 py-8 text-right">
-                                                                    <p className="text-xl font-black text-slate-900 tracking-tight">${log.price}</p>
+                                                                    <p className="text-xl font-black text-slate-900 tracking-tight">RM {log.price}</p>
                                                                     <p className="text-[9px] font-black text-emerald-500 uppercase tracking-widest mt-1">Captured</p>
                                                                 </TableCell>
                                                             </TableRow>

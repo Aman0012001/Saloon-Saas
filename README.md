@@ -10,47 +10,39 @@ A comprehensive salon booking and management system with dark-themed admin panel
 - **Responsive Design**: Works on desktop, tablet, and mobile devices
 - **Real-time Updates**: Live booking notifications and status updates
 
-## How to run this project?
-
-**Prerequisites**: Node.js & npm installed - [install with nvm](https://github.com/nvm-sh/nvm#installing-and-updating)
-
-Follow these steps:
-
-```sh
-# Step 1: Clone the repository
-git clone <YOUR_GIT_URL>
-
-# Step 2: Navigate to the project directory
-cd salon-style-clone
-
-# Step 3: Install the necessary dependencies
-npm i
-
-# Step 4: Start the development server
-npm run dev
-```
-
-The application will be available at `http://localhost:8081`
-
-## Admin Panel Access
-
-Access the super admin panel directly at: `http://localhost:8081/admin`
-- No login required (bypass mode enabled)
-- Complete dark theme interface
-- Manage salons, users, bookings, payments, marketing, reports, and settings
-
 ## Project Structure
 
 ```
-src/
-├── components/          # Reusable UI components
-├── pages/              # Application pages
-│   ├── admin/          # Admin panel pages
-│   └── dashboard/      # Salon owner dashboard
-├── hooks/              # Custom React hooks
-├── integrations/       # External service integrations
-├── styles/             # CSS and styling files
-└── utils/              # Utility functions
+.
+├── frontend/           # React setup, Vite, and frontend assets
+│   ├── src/           # Component logic, pages, and hooks
+│   ├── public/        # Static assets for the frontend
+│   └── package.json   # Frontend-specific dependencies
+├── backend/            # PHP API and Core logic
+│   ├── api/           # Entry point for backend routes
+│   ├── scripts/       # Utility and diagnostic scripts
+│   └── Services/      # Business logic and database services
+├── database/           # Database related files
+│   ├── sql/           # SQL Migrations and setup scripts
+│   └── *.sql          # Initial database schema files
+├── uploads/            # Central storage for all user-uploaded files
+├── document/           # Technical documentation, logs, and text files
+└── router.php          # PHP server entry point
+```
+
+## How to run this project?
+
+**Prerequisites**: Node.js & PHP installed.
+
+```sh
+# Step 1: Install frontend dependencies
+cd frontend && npm install
+
+# Step 2: Start the PHP Backend (from root)
+php -S 127.0.0.1:8000 router.php
+
+# Step 3: Start the Vite Frontend (from root or frontend)
+npm run dev
 ```
 
 ## Technologies Used

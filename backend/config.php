@@ -27,7 +27,7 @@ define('ALLOWED_ORIGINS', [
 ]);
 
 // File Upload Settings
-define('UPLOAD_DIR', __DIR__ . '/uploads/');
+define('UPLOAD_DIR', dirname(__DIR__) . '/uploads/');
 define('MAX_FILE_SIZE', 5242880); // 5MB
 
 // Timezone

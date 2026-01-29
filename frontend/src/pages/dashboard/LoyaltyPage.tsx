@@ -188,7 +188,7 @@ export default function LoyaltyPage() {
                                             />
                                             <span className="absolute right-3 top-2.5 text-slate-400 text-sm">Spent</span>
                                         </div>
-                                        <p className="text-[10px] text-slate-400">Example: 1 = 1 point per $1. 0.5 = 1 point per $2.</p>
+                                        <p className="text-[10px] text-slate-400">Example: 1 = 1 point per RM 1. 0.5 = 1 point per RM 2.</p>
                                     </div>
 
                                     <div className="space-y-2">

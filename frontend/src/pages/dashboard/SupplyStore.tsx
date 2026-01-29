@@ -147,7 +147,10 @@ export default function SupplyStore() {
                     ) : (
                         filteredProducts.map(product => (
                             <Card key={product.id} className="group border-0 bg-white rounded-[2.5rem] overflow-hidden shadow-[0_20px_50px_rgba(0,0,0,0.03)] hover:shadow-2xl transition-all duration-500 hover:-translate-y-2 flex flex-col h-full">
-                                <div className="h-64 relative overflow-hidden bg-slate-50">
+                                <div
+                                    className="h-32 relative overflow-hidden bg-slate-50 cursor-pointer"
+                                    onClick={() => navigate(`/dashboard/store/${product.id}`)}
+                                >
                                     {product.image_url ? (
                                         <img src={product.image_url} alt={product.name} className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-[1.5s]" />
                                     ) : (
@@ -157,7 +160,7 @@ export default function SupplyStore() {
                                     )}
                                     <div className="absolute top-6 right-6">
                                         <Badge className="bg-white/90 backdrop-blur-md text-slate-900 border-0 font-black px-4 py-2 text-sm shadow-xl rounded-full italic tracking-tighter">
-                                            ${product.price}
+                                            RM {product.price}
                                         </Badge>
                                     </div>
                                     <div className="absolute inset-0 bg-indigo-900/20 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-3">
