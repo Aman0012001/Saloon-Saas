@@ -3,7 +3,7 @@ import {
   CreditCard,
   Search,
   TrendingUp,
-  DollarSign,
+  Banknote,
   Receipt,
   Calendar,
   Sparkles,
@@ -156,11 +156,11 @@ export default function AdminPayments() {
                   </div>
                   <div className="grid grid-cols-2 gap-4">
                     <div className="space-y-2">
-                      <Label className="text-[10px] font-black uppercase text-slate-400 tracking-widest">Monthly Rate ($)</Label>
+                      <Label className="text-[10px] font-black uppercase text-slate-400 tracking-widest">Monthly Rate (RM)</Label>
                       <Input type="number" value={planForm.price_monthly} onChange={e => setPlanForm({ ...planForm, price_monthly: Number(e.target.value) })} className="h-14 bg-slate-50 border-none rounded-xl font-black" />
                     </div>
                     <div className="space-y-2">
-                      <Label className="text-[10px] font-black uppercase text-slate-400 tracking-widest">Yearly Rate ($)</Label>
+                      <Label className="text-[10px] font-black uppercase text-slate-400 tracking-widest">Yearly Rate (RM)</Label>
                       <Input type="number" value={planForm.price_yearly} onChange={e => setPlanForm({ ...planForm, price_yearly: Number(e.target.value) })} className="h-14 bg-slate-50 border-none rounded-xl font-black" />
                     </div>
                   </div>
@@ -175,7 +175,7 @@ export default function AdminPayments() {
 
         <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
           {[
-            { label: "Gross Local Intake", value: "$0", icon: DollarSign, color: "text-emerald-500", bg: "bg-emerald-50" },
+            { label: "Gross Local Intake", value: "RM 0", icon: Banknote, color: "text-emerald-500", bg: "bg-emerald-50" },
             { label: "Active Nodes", value: plans.length, icon: Zap, color: "text-blue-500", bg: "bg-blue-50" },
             { label: "Registry Tiers", value: plans.filter(p => p.is_active).length, icon: Receipt, color: "text-purple-500", bg: "bg-purple-50" },
             { label: "Tax Protocol", value: "10%", icon: TrendingUp, color: "text-amber-500", bg: "bg-amber-50" }
@@ -209,7 +209,7 @@ export default function AdminPayments() {
                   <p className="text-xs font-bold text-slate-400 uppercase tracking-widest">{plan.description}</p>
 
                   <div className="my-10">
-                    <p className="text-5xl font-black text-slate-900 tracking-tighter">${plan.price_monthly}<span className="text-sm text-slate-400 font-bold ml-2">/ CYCLE</span></p>
+                    <p className="text-5xl font-black text-slate-900 tracking-tighter">RM {plan.price_monthly}<span className="text-sm text-slate-400 font-bold ml-2">/ CYCLE</span></p>
                   </div>
 
                   <div className="space-y-4 mb-10">

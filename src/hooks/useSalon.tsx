@@ -23,6 +23,8 @@ interface Salon {
   is_active: boolean | null;
   approval_status: 'pending' | 'approved' | 'rejected' | null;
   rejection_reason: string | null;
+  upi_id: string | null;
+  bank_details: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -46,6 +48,7 @@ interface SalonContextType {
   isOwner: boolean;
   isManager: boolean;
   isStaff: boolean;
+  subscription: SubscriptionDetails | null;
 }
 
 interface CreateSalonData {
@@ -62,6 +65,17 @@ interface CreateSalonData {
   cover_image_url?: string;
 }
 
+interface SubscriptionDetails {
+  plan_name: string;
+  max_staff: number;
+  max_services: number;
+  current_staff_count: number;
+  current_service_count: number;
+  status: string;
+  subscription_end_date: string;
+  is_valid: boolean;
+}
+
 const SalonContext = createContext<SalonContextType | undefined>(undefined);
 
 export const SalonProvider = ({ children }: { children: ReactNode }) => {
@@ -71,6 +85,8 @@ export const SalonProvider = ({ children }: { children: ReactNode }) => {
   const [currentSalon, setCurrentSalon] = useState<Salon | null>(null);
   const [userRole, setUserRole] = useState<UserRole | null>(null);
   const [loading, setLoading] = useState(true);
+
+  const [subscription, setSubscription] = useState<SubscriptionDetails | null>(null);
 
   const fetchSalons = async () => {
     if (authLoading) {
@@ -83,36 +99,45 @@ export const SalonProvider = ({ children }: { children: ReactNode }) => {
       setSalons([]);
       setCurrentSalon(null);
       setUserRole(null);
+      setSubscription(null);
       setLoading(false);
       return;
     }
 
     try {
-      // 1. Fetch user's salons and roles directly from the new API
+      // 1. Fetch user's salons
       const mySalons = await api.salons.getMySalons();
-
-      // The backend returns salons with roles attached in mySalons query
-      // or we can fetch roles separately. Let's assume roles are needed.
       const rolesData = await api.userRoles.getByUser(user.id);
 
-      const formattedSalons: Salon[] = mySalons.map((s: any) => ({
+      const formattedSalons: Salon[] = (mySalons as any[]).map((s: any) => ({
         ...s,
         approval_status: s.approval_status as 'pending' | 'approved' | 'rejected' | null
       }));
 
       setSalons(formattedSalons);
 
-      // 2. Set current salon from localStorage or first salon
+      // 2. Set current salon
       const savedSalonId = localStorage.getItem('currentSalonId');
       const savedSalon = formattedSalons.find(s => s.id === savedSalonId);
       const initialSalon = savedSalon || formattedSalons[0] || null;
 
       setCurrentSalon(initialSalon);
 
-      // 3. Set user role for current salon
+      // 3. Set user role & subscription for current salon
       if (initialSalon) {
         const role = rolesData.find((r: any) => r.salon_id === initialSalon.id);
         setUserRole(role || null);
+
+        // Fetch subscription details
+        try {
+          const subData: any = await api.subscriptions.getMySalonSubscriptions(initialSalon.id);
+          // Backend now returns { subscription: ... } object or list. API service unwraps it.
+          // If the backend returns a single object from 'subscription' key:
+          setSubscription(subData?.subscription || subData || null);
+        } catch (e) {
+          console.error("Failed to load subscription status", e);
+          setSubscription(null);
+        }
       }
     } catch (error) {
       console.error('Error fetching salons:', error);
@@ -126,54 +151,48 @@ export const SalonProvider = ({ children }: { children: ReactNode }) => {
     }
   };
 
+  // When switching salon, update limits
+  const handleSetCurrentSalon = async (salon: Salon | null) => {
+    setCurrentSalon(salon);
+    if (salon) {
+      localStorage.setItem('currentSalonId', salon.id);
+
+      // Update role
+      const roles = await api.userRoles.getByUser(user?.id || '');
+      const role = roles.find((r: any) => r.salon_id === salon.id);
+      setUserRole(role || null);
+
+      // Update subscription
+      try {
+        const subData: any = await api.subscriptions.getMySalonSubscriptions(salon.id);
+        setSubscription(subData?.subscription || subData || null);
+      } catch (e) {
+        setSubscription(null);
+      }
+    } else {
+      localStorage.removeItem('currentSalonId');
+      setUserRole(null);
+      setSubscription(null);
+    }
+  };
+
   const refreshSalons = async () => {
     await fetchSalons();
   };
 
   const createSalon = async (data: CreateSalonData): Promise<Salon | null> => {
     if (!user) {
-      toast({
-        title: "Error",
-        description: "You must be logged in to create a salon",
-        variant: "destructive",
-      });
+      toast({ title: "Error", description: "Login required", variant: "destructive" });
       return null;
     }
-
     try {
       const newSalon = await api.salons.create(data);
-
-      toast({
-        title: "Salon Submitted Successfully!",
-        description: "Your salon is pending admin approval. You'll be notified once it's reviewed.",
-      });
-
+      toast({ title: "Success", description: "Salon submitted for approval." });
       await refreshSalons();
       return newSalon as Salon;
-
     } catch (error: any) {
-      console.error('Error creating salon:', error);
-      toast({
-        title: "Error",
-        description: error.message || "Failed to create salon",
-        variant: "destructive",
-      });
+      toast({ title: "Error", description: error.message, variant: "destructive" });
       return null;
-    }
-  };
-
-  const handleSetCurrentSalon = (salon: Salon | null) => {
-    setCurrentSalon(salon);
-    if (salon) {
-      localStorage.setItem('currentSalonId', salon.id);
-      // Update user role for new salon
-      api.userRoles.getByUser(user?.id || '').then((roles) => {
-        const role = roles.find((r: any) => r.salon_id === salon.id);
-        setUserRole(role || null);
-      });
-    } else {
-      localStorage.removeItem('currentSalonId');
-      setUserRole(null);
     }
   };
 
@@ -198,6 +217,7 @@ export const SalonProvider = ({ children }: { children: ReactNode }) => {
         isOwner,
         isManager,
         isStaff,
+        subscription,
       }}
     >
       {children}

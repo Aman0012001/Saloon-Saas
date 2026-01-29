@@ -29,12 +29,13 @@ class Auth
         return password_verify($password, $hash);
     }
 
-    public static function generateToken($userId, $email)
+    public static function generateToken($userId, $email, $role = 'customer')
     {
         $header = json_encode(['typ' => 'JWT', 'alg' => 'HS256']);
         $payload = json_encode([
             'user_id' => $userId,
             'email' => $email,
+            'role' => $role,
             'iat' => time(),
             'exp' => time() + JWT_EXPIRY
         ]);

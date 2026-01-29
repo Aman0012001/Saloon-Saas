@@ -32,7 +32,7 @@ const TestimonialsSection = () => {
         <h2 className="text-2xl sm:text-3xl md:text-4xl font-bold text-center mb-8 md:mb-12">
           Customers love using Salon.
         </h2>
-        
+
         {/* Mobile: Horizontal scroll */}
         <div className="flex md:hidden gap-4 overflow-x-auto pb-4 -mx-4 px-4 snap-x snap-mandatory scrollbar-hide">
           {testimonials.map((testimonial, index) => (

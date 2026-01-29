@@ -1,5 +1,5 @@
 import { ReactNode, useState } from "react";
-import { useNavigate, useLocation } from "react-router-dom";
+import { useNavigate, useLocation, Link } from "react-router-dom";
 import {
   ArrowLeft,
   Bell,
@@ -9,6 +9,7 @@ import {
   Store,
   ChevronDown,
   MoreHorizontal,
+  User,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -53,7 +54,8 @@ const getPageConfig = (pathname: string) => {
     '/dashboard/inventory',
     '/dashboard/reports',
     '/dashboard/offers',
-    '/dashboard/settings'
+    '/dashboard/settings',
+    '/dashboard/profile'
   ];
 
   const isMainPage = mainPages.includes(pathname);
@@ -78,6 +80,7 @@ const getPageTitle = (pathname: string): string => {
     '/dashboard/offers': 'Offers',
     '/dashboard/settings': 'Settings',
     '/dashboard/inventory': 'Inventory',
+    '/dashboard/profile': 'My Profile',
     '/dashboard/create-salon': 'Create Salon',
   };
 
@@ -151,20 +154,26 @@ export const MobileLayout = ({
               </SheetHeader>
 
               {/* Profile Section */}
-              <div className="flex items-center gap-3 p-4 rounded-xl bg-secondary/30 mb-6">
-                <Avatar className="w-12 h-12 ring-2 ring-accent/20">
-                  <AvatarImage src="" />
-                  <AvatarFallback className="bg-gradient-to-br from-accent to-accent/80 text-white">
-                    {user?.email ? getInitials(user.email) : "U"}
-                  </AvatarFallback>
-                </Avatar>
-                <div>
-                  <p className="font-medium">{user?.email?.split("@")[0]}</p>
-                  <p className="text-sm text-muted-foreground">
-                    {isOwner ? "Owner" : isManager ? "Manager" : "Staff"}
-                  </p>
-                </div>
-              </div>
+              {!isOwner && (
+                <Link
+                  to="/dashboard/profile"
+                  className="flex items-center gap-3 p-4 rounded-xl bg-secondary/30 mb-6 active:scale-95 transition-transform"
+                >
+                  <Avatar className="w-12 h-12 ring-2 ring-accent/20">
+                    <AvatarImage src="" />
+                    <AvatarFallback className="bg-gradient-to-br from-accent to-accent/80 text-white">
+                      {user?.email ? getInitials(user.email) : "U"}
+                    </AvatarFallback>
+                  </Avatar>
+                  <div className="flex-1">
+                    <p className="font-medium">{user?.email?.split("@")[0]}</p>
+                    <p className="text-sm text-muted-foreground">
+                      {isOwner ? "Owner" : isManager ? "Manager" : "Staff"}
+                    </p>
+                  </div>
+                  <User className="w-4 h-4 text-muted-foreground" />
+                </Link>
+              )}
 
               {/* Salon Selector */}
               {salons.length > 0 && (

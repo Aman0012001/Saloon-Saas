@@ -3,7 +3,7 @@ import { useNavigate } from "react-router-dom";
 import {
   Search, MapPin, Star, Filter, ArrowRight,
   Scissors, Sparkles, Clock, Heart, Loader2,
-  Navigation, Zap, Award, CheckCircle2, User
+  Navigation, Zap, Award, CheckCircle2, User, Banknote
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -69,7 +69,7 @@ export default function SalonListing() {
         distance: (Math.random() * 5).toFixed(1) + " km",
         categories: salon.categories ? salon.categories.split(',') : ["Beauty", "Spa"],
         status: "Open locally",
-        priceRange: "$$",
+        priceRange: "RM",
         isFeatured: Math.random() > 0.5
       }));
 
@@ -153,20 +153,7 @@ export default function SalonListing() {
               </div>
             </div>
 
-            <div className="flex flex-wrap items-center justify-center gap-3 pt-4">
-              {categories.map((cat) => (
-                <button
-                  key={cat}
-                  onClick={() => setActiveCategory(cat)}
-                  className={`px-6 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all duration-300 ${activeCategory === cat
-                    ? 'bg-slate-900 text-white shadow-xl'
-                    : 'bg-white text-slate-400 border border-slate-100 hover:border-accent/40'
-                    }`}
-                >
-                  {cat}
-                </button>
-              ))}
-            </div>
+
           </div>
         </div>
       </div>
@@ -176,7 +163,7 @@ export default function SalonListing() {
           <div className="flex items-center gap-2">
             <div className="w-2 h-2 bg-accent rounded-full animate-pulse" />
             <span className="font-black text-slate-900 text-xs uppercase tracking-widest">
-              {filteredSalons.length} Premium results found
+              {filteredSalons.length} Premium results
             </span>
           </div>
           <div className="flex items-center gap-2 text-[10px] font-bold text-slate-400 uppercase tracking-widest">
@@ -228,7 +215,8 @@ export default function SalonListing() {
                         </div>
 
                         <div className="absolute bottom-4 left-4">
-                          <Badge className="bg-slate-900 text-white border-none font-black px-3 py-1 rounded-lg text-[8px] uppercase tracking-widest">
+                          <Badge className="bg-slate-900 text-white border-none font-black px-3 py-1 rounded-lg text-[8px] uppercase tracking-widest flex items-center gap-1">
+                            <Banknote className="w-3 h-3 text-accent" />
                             {salon.priceRange}
                           </Badge>
                         </div>
@@ -241,12 +229,11 @@ export default function SalonListing() {
                             <div className="flex items-center gap-2 mb-1">
                               {salon.isFeatured && (
                                 <span className="text-[6px] font-black uppercase tracking-[0.3em] text-accent bg-accent/5 px-2 py-0.5 rounded border border-accent/10">
-                                  Elite selection
                                 </span>
                               )}
-                              <span className="text-[6px] font-black uppercase tracking-[0.3em] text-slate-300">
+                              {/* <span className="text-[6px] font-black uppercase tracking-[0.3em] text-slate-300">
                                 {salon.reviews} Local Reviews
-                              </span>
+                              </span> */}
                             </div>
                             <h3 className="text-lg font-black text-slate-900 tracking-tight leading-tight group-hover:text-accent transition-colors truncate">
                               {salon.name}
@@ -267,14 +254,11 @@ export default function SalonListing() {
                                 </div>
                               </div>
                               <div className="flex flex-col">
-                                <span className="text-[6px] font-black uppercase tracking-widest text-slate-300">Managing Owner</span>
-                                <p className="text-[10px] font-black text-slate-900 uppercase truncate max-w-[80px]">{salon.owner_name || "Boutique Owner"}</p>
+                                <span className="text-[9.5px] font-black uppercase tracking-widest text-black">Managing By Owner</span>
+                                {/* <p className="text-[10px] font-black text-slate-900 uppercase">{salon.owner_name || "Boutique Owner"}</p> */}
                               </div>
                             </div>
-                            <div className="text-right">
-                              <span className="text-[6px] font-black uppercase tracking-widest text-accent/50 underline underline-offset-4">Distance</span>
-                              <p className="text-[10px] font-black text-slate-900">{salon.distance}</p>
-                            </div>
+
                           </div>
                         </div>
 

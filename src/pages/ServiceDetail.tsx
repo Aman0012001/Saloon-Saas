@@ -42,11 +42,21 @@ interface Review {
     created_at: string;
 }
 
+interface KnowledgeItem {
+    id: string;
+    salon_id: string;
+    category: 'Skin Care' | 'FAQ';
+    title: string;
+    content: string;
+    is_active: boolean;
+}
+
 export default function ServiceDetail() {
     const { id } = useParams<{ id: string }>();
     const navigate = useNavigate();
     const [service, setService] = useState<Service | null>(null);
     const [reviews, setReviews] = useState<Review[]>([]);
+    const [knowledgeItems, setKnowledgeItems] = useState<KnowledgeItem[]>([]);
     const [loading, setLoading] = useState(true);
     const [submittingReview, setSubmittingReview] = useState(false);
     const [newReview, setNewReview] = useState({ rating: 5, comment: "" });
@@ -61,12 +71,16 @@ export default function ServiceDetail() {
                 const serviceData = data?.service || data;
                 setService(serviceData);
 
-                // Fetch reviews safely
+                // Fetch reviews and knowledge base safely
                 try {
-                    const reviewsData = await api.reviews.getByService(id);
+                    const [reviewsData, knowledgeData] = await Promise.all([
+                        api.reviews.getByService(id),
+                        api.knowledgeBase.getBySalon(serviceData.salon_id, "Skin Care", id)
+                    ]);
                     setReviews(reviewsData?.reviews || []);
-                } catch (reviewErr) {
-                    console.warn("Could not fetch reviews:", reviewErr);
+                    setKnowledgeItems(knowledgeData || []);
+                } catch (dataErr) {
+                    console.warn("Could not fetch auxiliary data:", dataErr);
                 }
             } catch (err: any) {
                 console.error("Error fetching details:", err);
@@ -135,7 +149,7 @@ export default function ServiceDetail() {
 
                         <div className="space-y-1">
                             <h1 className="text-3xl md:text-3xl font-bold text-slate-900 flex items-center">
-                                <span className="bg-slate-200/50 px-2 rounded mr-2 h-8 inline-flex items-center text-slate-700">
+                                <span className="px-2 rounded mr-2 h-8 inline-flex items-center text-slate-700">
                                     {service.name.split(' ')[0]}
                                 </span>
                                 {service.name.split(' ').slice(1).join(' ')}
@@ -191,7 +205,7 @@ export default function ServiceDetail() {
                                     </div>
                                     <div>
                                         <p className="text-[10px] font-bold uppercase text-slate-400 tracking-widest leading-none">Investment</p>
-                                        <p className="text-lg font-bold text-slate-900 mt-1">${service.price}</p>
+                                        <p className="text-lg font-bold text-slate-900 mt-1">RM {service.price}</p>
                                     </div>
                                 </div>
 
@@ -343,6 +357,37 @@ export default function ServiceDetail() {
                         </div>
                     </div>
                 </div>
+
+                {/* Skin Care Tips Section */}
+                {knowledgeItems.filter(i => i.category === 'Skin Care' && i.is_active).length > 0 && (
+                    <div className="mt-20 border-t border-slate-100 pt-20">
+                        <div className="flex flex-col md:flex-row md:items-end justify-between gap-6 mb-12">
+                            <div className="max-w-2xl">
+                                <h2 className="text-3xl font-black text-slate-900 mb-4 flex items-center gap-3">
+                                    <Sparkles className="w-8 h-8 text-blue-500" />
+                                    Professional Skin Care Tips
+                                </h2>
+                                <p className="text-slate-500 font-medium">Expert advice from {service.salon_name} to help you maintain your glow and ensure lasting results.</p>
+                            </div>
+                        </div>
+
+                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                            {knowledgeItems.filter(i => i.category === 'Skin Care' && i.is_active).map((item) => (
+                                <Card key={item.id} className="border-none shadow-sm hover:shadow-md transition-all bg-blue-50/30 rounded-[2rem] overflow-hidden group">
+                                    <CardContent className="p-8">
+                                        <div className="w-12 h-12 rounded-2xl bg-blue-100 flex items-center justify-center text-blue-600 mb-6 group-hover:scale-110 transition-transform">
+                                            <ShieldCheck className="w-6 h-6" />
+                                        </div>
+                                        <h3 className="text-lg font-bold text-slate-900 mb-3">{item.title}</h3>
+                                        <p className="text-sm text-slate-500 leading-relaxed italic">
+                                            "{item.content}"
+                                        </p>
+                                    </CardContent>
+                                </Card>
+                            ))}
+                        </div>
+                    </div>
+                )}
             </main>
 
             <Footer />

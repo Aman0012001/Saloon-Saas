@@ -24,7 +24,7 @@ const UnifiedSignup = () => {
     const [signupType, setSignupType] = useState<SignupType>("customer");
     const [fullName, setFullName] = useState("");
     const [email, setEmail] = useState("");
-    const [countryCode, setCountryCode] = useState("+91");
+    const [countryCode, setCountryCode] = useState("+60");
     const [phone, setPhone] = useState("");
     const [password, setPassword] = useState("");
     const [confirmPassword, setConfirmPassword] = useState("");
@@ -103,7 +103,7 @@ const UnifiedSignup = () => {
             if (signupType === "salon_owner") {
                 toast({
                     title: "Station Registered!",
-                    description: "Your salon station has been initialized in the local registry.",
+                    description: "Your salon has been initialized. Please wait for super admin approval.",
                 });
                 navigate("/dashboard");
             } else {
@@ -142,7 +142,7 @@ const UnifiedSignup = () => {
                             <img src={logo} alt="Salon Logo" className="h-14 w-auto" />
                         </Link>
                         <CardTitle className="text-4xl font-black text-slate-900 tracking-tight">
-                            {signupType === "customer" ? "Join the Network" : "Salon Partner Enrollment"}
+                            {signupType === "customer" ? "Join the Network" : "Partner Enrollment"}
                         </CardTitle>
                         <CardDescription className="font-bold text-slate-400 uppercase tracking-widest text-[10px] mt-2">
                             {signupType === "customer" ? "Create your premium customer profile" : "Initialize your local management node"}
@@ -156,23 +156,23 @@ const UnifiedSignup = () => {
                                 type="button"
                                 onClick={() => setSignupType("customer")}
                                 className={`flex-1 flex items-center justify-center gap-2 py-4 px-6 rounded-[1.5rem] font-black text-sm uppercase tracking-tight transition-all ${signupType === "customer"
-                                        ? "bg-white text-slate-900 shadow-lg"
-                                        : "text-slate-400 hover:text-slate-600"
+                                    ? "bg-white text-slate-900 shadow-lg"
+                                    : "text-slate-400 hover:text-slate-600"
                                     }`}
                             >
                                 <User className="w-4 h-4" />
-                                Customer Login
+                                Customer Account
                             </button>
                             <button
                                 type="button"
                                 onClick={() => setSignupType("salon_owner")}
                                 className={`flex-1 flex items-center justify-center gap-2 py-4 px-6 rounded-[1.5rem] font-black text-sm uppercase tracking-tight transition-all ${signupType === "salon_owner"
-                                        ? "bg-gradient-to-r from-orange-500 to-orange-600 text-white shadow-lg shadow-orange-500/30"
-                                        : "text-slate-400 hover:text-slate-600"
+                                    ? "bg-gradient-to-r from-orange-500 to-orange-600 text-white shadow-lg shadow-orange-500/30"
+                                    : "text-slate-400 hover:text-slate-600"
                                     }`}
                             >
                                 <Store className="w-4 h-4" />
-                                Salon Owner Login
+                                Salon Partner
                             </button>
                         </div>
                     </div>
@@ -347,7 +347,12 @@ const UnifiedSignup = () => {
                                 )}
                             </Button>
 
-                            <div className="text-center">
+                            <div className="text-center space-y-4">
+                                <p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest max-w-[80%] mx-auto leading-relaxed">
+                                    By creating an account, you agree to our{" "}
+                                    <Link to="/terms" className="text-slate-600 underline">Terms of Service</Link> and{" "}
+                                    <Link to="/privacy" className="text-slate-600 underline">Privacy Policy</Link>
+                                </p>
                                 <p className="text-xs text-slate-400 font-bold uppercase tracking-widest">
                                     {signupType === "salon_owner" ? "Existing Partner?" : "Already a member?"}{" "}
                                     <Link to="/login" className="text-accent underline font-black">

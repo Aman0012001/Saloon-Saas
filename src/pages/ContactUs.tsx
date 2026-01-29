@@ -29,6 +29,7 @@ import {
 import Navbar from "@/components/Navbar";
 import Footer from "@/components/Footer";
 import { useToast } from "@/hooks/use-toast";
+import api from "@/services/api";
 
 const ContactUs = () => {
   const [formData, setFormData] = useState({
@@ -86,8 +87,16 @@ const ContactUs = () => {
     setLoading(true);
 
     try {
-      // Simulate form submission
-      await new Promise(resolve => setTimeout(resolve, 2000));
+      await api.contactEnquiries.create({
+        name: formData.name,
+        email: formData.email,
+        phone: formData.phone,
+        subject: formData.subject,
+        message: formData.message,
+        // inquiryType is also available if the backend supports it, 
+        // but the current migration used 'subject' for the main topic.
+        // We'll combine them or just send subject.
+      });
 
       toast({
         title: "Message Sent Successfully! 🎉",
@@ -103,10 +112,10 @@ const ContactUs = () => {
         message: "",
         inquiryType: ""
       });
-    } catch (error) {
+    } catch (error: any) {
       toast({
         title: "Error",
-        description: "Failed to send message. Please try again.",
+        description: error.message || "Failed to send message. Please try again.",
         variant: "destructive",
       });
     } finally {
@@ -338,7 +347,7 @@ const ContactUs = () => {
               </Card>
 
               {/* Business Hours */}
-              <Card className="border-0 shadow-xl overflow-hidden">
+              {/* <Card className="border-0 shadow-xl overflow-hidden">
                 <div className="h-2 w-full bg-gradient-to-r from-accent to-purple-500" />
                 <CardHeader>
                   <CardTitle className="flex items-center gap-2">
@@ -360,19 +369,10 @@ const ContactUs = () => {
                     <span className="text-muted-foreground bg-secondary/50 px-3 py-1 rounded-full text-sm">Closed</span>
                   </div>
                 </CardContent>
-              </Card>
+              </Card> */}
 
               {/* CTA */}
-              <Card className="border-0 shadow-xl bg-gradient-to-br from-accent to-purple-600 text-white overflow-hidden relative">
-                <div className="absolute top-0 right-0 w-32 h-32 bg-white/10 rounded-full -translate-y-1/2 translate-x-1/2 blur-2xl" />
-                <CardContent className="p-6 relative z-10 text-center">
-                  <h3 className="font-bold text-xl mb-2">Ready to Transform?</h3>
-                  <p className="text-white/90 text-sm mb-4">Book your appointment now and experience the best.</p>
-                  <Button variant="secondary" className="w-full text-accent font-semibold hover:bg-white/90">
-                    Book Appointment <ArrowRight className="w-4 h-4 ml-2" />
-                  </Button>
-                </CardContent>
-              </Card>
+
             </div>
           </div>
         </div>

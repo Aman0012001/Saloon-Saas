@@ -14,6 +14,10 @@ import {
   LogOut,
   Bell,
   ChevronDown,
+  MessageSquare,
+  Package,
+  Plus,
+  Zap,
 } from "lucide-react";
 import { useAuth } from "@/hooks/useAuth";
 import { useSuperAdmin } from "@/hooks/useSuperAdmin";
@@ -40,11 +44,14 @@ interface AdminLayoutProps {
 const navItems = [
   { icon: LayoutDashboard, label: "Dashboard", path: "/admin" },
   { icon: Building2, label: "Salons", path: "/admin/salons" },
-  { icon: Users, label: "Users", path: "/admin/users" },
+  { icon: Users, label: "Manage Members", path: "/admin/members" },
+  { icon: Zap, label: "Membership Plans", path: "/admin/plans" },
+  { icon: MessageSquare, label: "Contact Enquiries", path: "/admin/contact-enquiries" },
+  { icon: Plus, label: "Add Product", path: "/admin/products/add" },
+  { icon: Package, label: "Products", path: "/admin/products" },
   { icon: CreditCard, label: "Payments", path: "/admin/payments" },
-  { icon: Megaphone, label: "Marketing", path: "/admin/marketing" },
   { icon: BarChart3, label: "Reports", path: "/admin/reports" },
-  { icon: Settings, label: "Settings", path: "/admin/settings" },
+  { icon: Megaphone, label: "Marketing", path: "/admin/marketing" },
 ];
 
 export function AdminLayout({ children }: AdminLayoutProps) {
@@ -53,9 +60,8 @@ export function AdminLayout({ children }: AdminLayoutProps) {
   const { user, loading: authLoading, signOut } = useAuth();
   const { isSuperAdmin, loading: adminLoading, stats } = useSuperAdmin();
 
-  // Check if we're in bypass mode
-  const bypassMode = localStorage.getItem('admin-bypass') === 'true' ||
-    window.location.href.includes('/admin');
+  // No bypass mode for security
+  const bypassMode = false;
 
   useEffect(() => {
     // Skip authentication checks in bypass mode
@@ -80,14 +86,12 @@ export function AdminLayout({ children }: AdminLayoutProps) {
     );
   }
 
-  // Skip admin check in bypass mode
-  if (!bypassMode && !isSuperAdmin) {
+  if (!isSuperAdmin) {
     return null;
   }
 
   const NavLink = ({ item }: { item: typeof navItems[0] }) => {
-    const isActive = location.pathname === item.path ||
-      (item.path !== "/admin" && location.pathname.startsWith(item.path));
+    const isActive = location.pathname === item.path;
 
     return (
       <Link
@@ -133,14 +137,28 @@ export function AdminLayout({ children }: AdminLayoutProps) {
         </nav>
       </ScrollArea>
 
-      <div className="p-4 border-t border-gray-700 bg-gray-800/50">
-        <div className="flex items-center justify-between p-3 rounded-lg bg-gradient-to-r from-orange-500/10 to-red-500/10 border border-orange-500/20">
-          <div className="flex items-center gap-2">
-            <div className="h-2 w-2 rounded-full bg-orange-500 animate-pulse"></div>
-            <span className="text-sm font-medium text-orange-300">Pending Approvals</span>
+      <div className="p-4 border-t border-gray-700 bg-gray-800/50 space-y-3">
+        {(stats?.pendingSalons || 0) > 0 && (
+          <div className="flex items-center justify-between p-3 rounded-lg bg-gradient-to-r from-orange-500/10 to-red-500/10 border border-orange-500/20">
+            <div className="flex items-center gap-2">
+              <div className="h-2 w-2 rounded-full bg-orange-500 animate-pulse"></div>
+              <span className="text-sm font-medium text-orange-300">Pending Approvals</span>
+            </div>
+            <Badge className="bg-orange-500 text-white shadow-lg">{stats?.pendingSalons || 0}</Badge>
           </div>
-          <Badge className="bg-orange-500 text-white shadow-lg">{stats?.pendingSalons || 0}</Badge>
-        </div>
+        )}
+
+        <Link
+          to="/admin/notifications"
+          className="flex items-center justify-between p-3 rounded-lg bg-blue-500/5 border border-blue-500/10 hover:bg-blue-500/10 transition-colors"
+        >
+          <div className="flex items-center gap-2 text-blue-300">
+            <Bell className="w-4 h-4" />
+            <span className="text-sm font-medium">System Alerts</span>
+          </div>
+          {/* We can use a small portion of stats if unread count exists for admin */}
+          <Badge className="bg-blue-600 text-white shadow-lg">Live</Badge>
+        </Link>
       </div>
     </div>
   );
@@ -189,10 +207,17 @@ export function AdminLayout({ children }: AdminLayoutProps) {
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <Button variant="ghost" className="gap-2 hover:bg-gray-700 text-gray-300">
-                <Avatar className="h-9 w-9 ring-2 ring-blue-500/20">
-                  <AvatarImage src="" />
-                  <AvatarFallback className="bg-gradient-to-br from-blue-500 to-purple-600 text-white font-bold">SA</AvatarFallback>
-                </Avatar>
+                <div className="relative">
+                  <Avatar className="h-9 w-9 ring-2 ring-blue-500/20">
+                    <AvatarImage src="" />
+                    <AvatarFallback className="bg-gradient-to-br from-blue-500 to-purple-600 text-white font-bold">SA</AvatarFallback>
+                  </Avatar>
+                  {(stats?.pendingSalons || 0) > 0 && (
+                    <span className="absolute -top-1 -right-1 flex h-4 w-4 items-center justify-center rounded-full bg-orange-500 text-[8px] font-black text-white border-2 border-gray-800 animate-pulse shadow-lg">
+                      {stats?.pendingSalons}
+                    </span>
+                  )}
+                </div>
                 <span className="hidden md:inline-block font-medium text-white">Super Admin</span>
                 <ChevronDown className="h-4 w-4" />
               </Button>

@@ -38,8 +38,7 @@ export const SuperAdminProvider = ({ children }: { children: ReactNode }) => {
   const [stats, setStats] = useState<PlatformStats | null>(null);
 
   const checkSuperAdmin = useCallback(async () => {
-    const bypassMode = localStorage.getItem('admin-bypass') === 'true' ||
-      window.location.href.includes('/admin');
+    const bypassMode = false;
 
     if (bypassMode) {
       setIsSuperAdmin(true);
@@ -55,7 +54,7 @@ export const SuperAdminProvider = ({ children }: { children: ReactNode }) => {
 
     try {
       // Local PHP backend check
-      if (user.user_type === 'admin' || user.role === 'admin') {
+      if (user.user_type === 'admin') {
         setIsSuperAdmin(true);
       } else {
         setIsSuperAdmin(false);

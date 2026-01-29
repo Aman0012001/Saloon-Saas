@@ -38,7 +38,7 @@ export default function AdminSettings() {
     platform_commission: 10,
     trial_days: 14,
     support_email: "support@local.host",
-    currency: "USD",
+    currency: "MYR",
     auto_approve_salons: false,
   });
 
@@ -47,7 +47,7 @@ export default function AdminSettings() {
     try {
       // In local backend, we might have a specific settings endpoint or generic config
       // For now, let's try to get from local admin API if implemented, else keep defaults
-      const data = await api.admin.getPlatformSettings();
+      const data = await api.admin.getSettings();
       if (data) {
         setSettings({
           platform_name: data.platform_name || settings.platform_name,
@@ -72,7 +72,7 @@ export default function AdminSettings() {
   const handleSave = async () => {
     setSaving(true);
     try {
-      await api.admin.updatePlatformSettings(settings);
+      await api.admin.updateSettings(settings);
       toast({ title: "Success", description: "Local registry settings updated" });
     } catch (error) {
       console.error('Error saving local settings:', error);

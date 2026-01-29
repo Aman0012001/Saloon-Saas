@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
 import { useNavigate, Link } from "react-router-dom";
 import { format } from "date-fns";
-import { CalendarDays, Clock, ArrowLeft, Loader2, Plus, MapPin, Phone, Scissors, Store, MessageSquare, Star } from "lucide-react";
+import { CalendarDays, Clock, ArrowLeft, Loader2, Plus, MapPin, Phone, Scissors, Store, MessageSquare, Star, FileText } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -150,8 +150,9 @@ const MyBookings = () => {
       await api.bookings.update(bookingId, { status: 'cancelled' });
       toast({ title: "Booking Cancelled", description: "Updated in local records." });
       fetchBookings();
-    } catch (error) {
-      toast({ title: "Error", description: "Failed to update record", variant: "destructive" });
+    } catch (error: any) {
+      const msg = error.message || "Failed to update record";
+      toast({ title: "Error", description: msg, variant: "destructive" });
     }
   };
 
@@ -271,22 +272,35 @@ const MyBookings = () => {
                       {/* 3. Price & Actions */}
                       <div className="flex items-center justify-between lg:justify-end gap-6 flex-shrink-0 pt-4 lg:pt-0 border-t lg:border-t-0 border-slate-100">
                         <div>
-                          <p className="text-3xl font-black text-slate-900 tracking-tight">${booking.price}</p>
+                          <p className="text-3xl font-black text-slate-900 tracking-tight">RM {booking.price}</p>
                           <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest text-right">{booking.duration_minutes} MINS</p>
                         </div>
 
                         <div className="flex items-center gap-3">
-                          {booking.status === 'completed' && !reviewedBookings.has(booking.id) && (
-                            <Button
-                              onClick={() => {
-                                setReviewDialog({ isOpen: true, booking, isEditing: false });
-                                setRating(5);
-                                setComment("");
-                              }}
-                              className="bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-2xl h-11 px-6 shadow-lg shadow-blue-600/20"
-                            >
-                              <MessageSquare className="w-4 h-4 mr-2" /> Leave Feedback
-                            </Button>
+                          {booking.status === 'completed' && (
+                            <div className="flex flex-col gap-2">
+                              {!reviewedBookings.has(booking.id) && (
+                                <Button
+                                  onClick={() => {
+                                    setReviewDialog({ isOpen: true, booking, isEditing: false });
+                                    setRating(5);
+                                    setComment("");
+                                  }}
+                                  className="bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-2xl h-11 px-6 shadow-lg shadow-blue-600/20"
+                                >
+                                  <MessageSquare className="w-4 h-4 mr-2" /> Leave Feedback
+                                </Button>
+                              )}
+                              <Button
+                                asChild
+                                variant="outline"
+                                className="h-11 rounded-2xl font-bold border-slate-200 text-slate-600"
+                              >
+                                <Link to="/my-sessions">
+                                  <FileText className="w-4 h-4 mr-2" /> View Clinical Details
+                                </Link>
+                              </Button>
+                            </div>
                           )}
 
                           {reviewedBookings.has(booking.id) && (
@@ -310,7 +324,7 @@ const MyBookings = () => {
                             </Button>
                           )}
 
-                          {booking.status === 'pending' && (
+                          {(booking.status === 'pending' || booking.status === 'confirmed') && (
                             <Button
                               variant="outline"
                               onClick={() => cancelBooking(booking.id)}

@@ -65,7 +65,7 @@ const Index = () => {
             rating: 4.8,
             reviews: 120,
             distance: "0.8 km",
-            price: "$499+"
+            price: "RM 499+"
           }));
           console.log("Featured salons:", featured);
           setFeaturedSalons(featured);

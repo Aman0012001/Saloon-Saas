@@ -1,9 +1,19 @@
-import { Link } from "react-router-dom";
+import { useState } from "react";
+import { Link, useNavigate } from "react-router-dom";
 import { Search, Star, CalendarCheck, Store } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 
 const HeroSection = () => {
+  const navigate = useNavigate();
+  const [searchQuery, setSearchQuery] = useState("");
+
+  const handleSearch = () => {
+    if (searchQuery.trim()) {
+      navigate(`/salons?search=${encodeURIComponent(searchQuery.trim())}`);
+    }
+  };
+
   return (
     <section className="pt-24 pb-8 md:pt-28 md:pb-16 px-4">
       <div className="container mx-auto">
@@ -25,9 +35,13 @@ const HeroSection = () => {
                 type="text"
                 placeholder="Search by Service, Salon Name..."
                 className="pl-4 pr-14 py-6 rounded-full border-border bg-background text-sm"
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                onKeyDown={(e) => e.key === 'Enter' && handleSearch()}
               />
-              <Button 
-                size="icon" 
+              <Button
+                size="icon"
+                onClick={handleSearch}
                 className="absolute right-2 top-1/2 -translate-y-1/2 rounded-full w-10 h-10"
               >
                 <Search className="w-4 h-4" />
@@ -36,12 +50,7 @@ const HeroSection = () => {
 
             {/* Action Buttons */}
             <div className="flex flex-col sm:flex-row gap-3 justify-center lg:justify-start">
-              <Link to="/dashboard/create-salon">
-                <Button size="lg" className="rounded-full px-8 gap-2 bg-foreground text-background hover:bg-foreground/90">
-                  <Store className="w-5 h-5" />
-                  Start Free Trial
-                </Button>
-              </Link>
+
               <Link to="/salons">
                 <Button size="lg" variant="outline" className="rounded-full px-8 gap-2 border-2 border-foreground/20 text-foreground hover:bg-foreground/5">
                   <CalendarCheck className="w-5 h-5" />
@@ -52,13 +61,13 @@ const HeroSection = () => {
 
             {/* Trust Badge */}
             <div className="space-y-2">
-              <p className="text-sm font-medium">Trusted by 500+ salons across India</p>
+              <p className="text-sm font-medium">Trusted by 500+ salons across Malaysia</p>
               <div className="flex items-center gap-2 justify-center lg:justify-start">
                 <div className="flex">
                   {[1, 2, 3, 4, 5].map((i) => (
-                    <Star 
-                      key={i} 
-                      className={`w-4 h-4 md:w-5 md:h-5 ${i <= 4 ? 'fill-gold text-gold' : 'fill-gold/50 text-gold/50'}`} 
+                    <Star
+                      key={i}
+                      className={`w-4 h-4 md:w-5 md:h-5 ${i <= 4 ? 'fill-gold text-gold' : 'fill-gold/50 text-gold/50'}`}
                     />
                   ))}
                 </div>

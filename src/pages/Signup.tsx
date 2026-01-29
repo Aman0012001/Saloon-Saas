@@ -21,7 +21,7 @@ import { countryCodes } from "@/utils/countryCodes";
 const Signup = () => {
   const [fullName, setFullName] = useState("");
   const [email, setEmail] = useState("");
-  const [countryCode, setCountryCode] = useState("+91");
+  const [countryCode, setCountryCode] = useState("+60");
   const [phone, setPhone] = useState("");
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");

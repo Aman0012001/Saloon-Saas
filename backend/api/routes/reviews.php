@@ -7,20 +7,22 @@ if ($method === 'GET' && count($uriParts) === 1) {
     if (isset($_GET['service_id'])) {
         $stmt = $db->prepare("
             SELECT r.*, p.full_name as user_name, p.avatar_url as user_avatar, s.name as service_name
-            FROM reviews r
+            FROM booking_reviews r
             JOIN profiles p ON r.user_id = p.user_id
-            LEFT JOIN services s ON r.service_id = s.id
-            WHERE r.service_id = ? AND r.is_active = 1
+            JOIN bookings b ON r.booking_id = b.id
+            JOIN services s ON b.service_id = s.id
+            WHERE b.service_id = ?
             ORDER BY r.created_at DESC
         ");
         $stmt->execute([$_GET['service_id']]);
     } else if (isset($_GET['salon_id'])) {
         $stmt = $db->prepare("
             SELECT r.*, p.full_name as user_name, p.avatar_url as user_avatar, s.name as service_name
-            FROM reviews r
+            FROM booking_reviews r
             JOIN profiles p ON r.user_id = p.user_id
-            LEFT JOIN services s ON r.service_id = s.id
-            WHERE r.salon_id = ? AND r.is_active = 1
+            JOIN bookings b ON r.booking_id = b.id
+            JOIN services s ON b.service_id = s.id
+            WHERE r.salon_id = ?
             ORDER BY r.created_at DESC
         ");
         $stmt->execute([$_GET['salon_id']]);

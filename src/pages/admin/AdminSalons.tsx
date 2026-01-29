@@ -3,54 +3,39 @@ import { useSearchParams } from "react-router-dom";
 import {
   Building2,
   Search,
-  Filter,
-  MoreVertical,
   CheckCircle,
   XCircle,
-  Ban,
   Eye,
-  Calendar,
   MapPin,
-  Phone,
-  Mail,
   Clock,
   RefreshCw,
-  Zap
+  Zap,
+  Trash2,
+  Plus
 } from "lucide-react";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
-import {
   Dialog,
   DialogContent,
-  DialogDescription,
-  DialogFooter,
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
-import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { AdminLayout } from "@/components/admin/AdminLayout";
 import { useSuperAdmin } from "@/hooks/useSuperAdmin";
 import { useToast } from "@/hooks/use-toast";
 import api from "@/services/api";
-import { format } from "date-fns";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
 
 interface Salon {
   id: string;
@@ -72,7 +57,7 @@ interface Salon {
 
 export default function AdminSalons() {
   const [searchParams, setSearchParams] = useSearchParams();
-  const { approveSalon, rejectSalon, blockSalon, unblockSalon } = useSuperAdmin();
+  const { approveSalon, rejectSalon } = useSuperAdmin();
   const { toast } = useToast();
 
   const [salons, setSalons] = useState<Salon[]>([]);
@@ -82,10 +67,21 @@ export default function AdminSalons() {
 
   const [selectedSalon, setSelectedSalon] = useState<Salon | null>(null);
   const [showRejectDialog, setShowRejectDialog] = useState(false);
-  const [showBlockDialog, setShowBlockDialog] = useState(false);
   const [showDetailsDialog, setShowDetailsDialog] = useState(false);
+  const [showCreateDialog, setShowCreateDialog] = useState(false);
   const [actionReason, setActionReason] = useState("");
   const [actionLoading, setActionLoading] = useState(false);
+
+  // Creation Form State
+  const [newSalon, setNewSalon] = useState({
+    name: '',
+    slug: '',
+    description: '',
+    city: '',
+    state: '',
+    owner_email: '',
+    owner_password: ''
+  });
 
   const fetchSalons = async () => {
     setLoading(true);
@@ -106,8 +102,27 @@ export default function AdminSalons() {
   const handleApprove = async (salon: Salon) => {
     setActionLoading(true);
     const success = await approveSalon(salon.id);
-    if (success) await fetchSalons();
+    if (success) {
+      await fetchSalons();
+      if (selectedSalon?.id === salon.id) setShowDetailsDialog(false);
+    }
     setActionLoading(false);
+  };
+
+  const handleCreateSalon = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setActionLoading(true);
+    try {
+      await api.admin.createSalon(newSalon);
+      toast({ title: "Salon Created", description: "New salon has been added successfully." });
+      setShowCreateDialog(false);
+      setNewSalon({ name: '', slug: '', description: '', city: '', state: '', owner_email: '', owner_password: '' });
+      fetchSalons();
+    } catch (error: any) {
+      toast({ title: "Creation Failed", description: error.message || "Failed to create salon", variant: "destructive" });
+    } finally {
+      setActionLoading(false);
+    }
   };
 
   const handleReject = async () => {
@@ -117,16 +132,29 @@ export default function AdminSalons() {
     if (success) {
       await fetchSalons();
       setShowRejectDialog(false);
+      setShowDetailsDialog(false);
       setActionReason("");
     }
     setActionLoading(false);
+  };
+
+  const handleDelete = async (salon: Salon) => {
+    if (!confirm(`Are you sure you want to PERMANENTLY DELETE ${salon.name}? This will remove all bookings, services, and staff associated with this salon. This cannot be undone.`)) return;
+
+    try {
+      await api.admin.deleteSalon(salon.id);
+      toast({ title: "Salon Deleted", description: "The salon has been permanently removed." });
+      setSalons(salons.filter(s => s.id !== salon.id));
+      setShowDetailsDialog(false);
+    } catch (error: any) {
+      toast({ title: "Error", description: error.message, variant: "destructive" });
+    }
   };
 
   const statusCounts = {
     all: salons.length,
     pending: salons.filter(s => s.approval_status === 'pending').length,
     approved: salons.filter(s => s.approval_status === 'approved').length,
-    blocked: salons.filter(s => !s.is_active).length,
   };
 
   const filteredSalons = salons.filter(salon => {
@@ -137,11 +165,10 @@ export default function AdminSalons() {
     if (statusFilter === "all") return matchesSearch;
     if (statusFilter === "pending") return matchesSearch && salon.approval_status === "pending";
     if (statusFilter === "approved") return matchesSearch && salon.approval_status === "approved";
-    if (statusFilter === "blocked") return matchesSearch && !salon.is_active;
 
     return matchesSearch;
   });
-  console.log(salons);
+
   return (
     <AdminLayout>
       <div className="space-y-8">
@@ -159,6 +186,9 @@ export default function AdminSalons() {
               </div>
             </div>
             <div className="flex gap-3">
+              <Button onClick={() => setShowCreateDialog(true)} className="bg-accent hover:bg-accent/90 text-white rounded-xl font-bold border-none">
+                <Plus className="w-4 h-4 mr-2" /> Add Saloon
+              </Button>
               <Button onClick={fetchSalons} className="bg-white/10 hover:bg-white/20 border-white/5 rounded-xl font-bold">
                 <RefreshCw className={`w-4 h-4 mr-2 ${loading ? 'animate-spin' : ''}`} /> Sync Data
               </Button>
@@ -167,7 +197,7 @@ export default function AdminSalons() {
         </div>
 
         {/* Stats Selector Grid */}
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-6">
+        <div className="grid grid-cols-2 md:grid-cols-3 gap-6">
           {Object.entries(statusCounts).map(([status, count]) => (
             <button
               key={status}
@@ -197,68 +227,93 @@ export default function AdminSalons() {
           </div>
         </div>
 
-        {/* Salons Grid */}
-        {loading ? (
-          <div className="grid grid-cols-3 gap-6 animate-pulse">
-            {[1, 2, 3].map(i => <div key={i} className="h-64 bg-slate-100 rounded-[2rem]" />)}
-          </div>
-        ) : filteredSalons.length === 0 ? (
-          <div className="py-32 text-center text-slate-400 font-black text-xl">No local saloons match your search.</div>
-        ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
-            {filteredSalons.map(salon => (
-              <Card key={salon.id} className="border-none shadow-sm hover:shadow-2xl transition-all duration-500 rounded-[2.5rem] bg-white group overflow-hidden">
-                <CardContent className="p-0">
-                  <div className="h-24 bg-slate-900 relative overflow-hidden px-8 flex items-center justify-between">
-                    <div className="absolute top-0 right-0 w-32 h-32 bg-accent/20 blur-3xl opacity-50" />
-                    <h3 className="text-white font-black text-xl relative z-10 truncate max-w-[200px]">{salon.name}</h3>
-                    <Badge className="bg-white/10 text-white border-none backdrop-blur-md rounded-full px-4 py-1 font-bold text-[10px] uppercase tracking-tighter">
-                      {salon.approval_status}
-                    </Badge>
-                  </div>
-                  <div className="p-8 space-y-6">
-                    <div className="flex items-center gap-2">
-                      <div className="w-10 h-10 rounded-xl bg-slate-50 flex items-center justify-center text-accent">
-                        <MapPin className="w-5 h-5" />
-                      </div>
-                      <div>
-                        <p className="text-[10px] font-black uppercase text-slate-400 leading-none">Location</p>
-                        <p className="font-bold text-slate-700">{salon.city || 'Undisclosed'}</p>
-                      </div>
-                    </div>
+        {/* Salons Table List */}
+        <Card className="border-none shadow-sm bg-white rounded-[2rem] overflow-hidden">
+          <CardContent className="p-0">
+            {loading ? (
+              <div className="py-20 text-center"><div className="animate-spin rounded-full h-10 w-10 border-4 border-accent border-t-transparent mx-auto" /></div>
+            ) : filteredSalons.length === 0 ? (
+              <div className="py-20 text-center text-slate-400 font-bold">No saloons match your search.</div>
+            ) : (
+              <div className="max-h-[450px] overflow-y-auto custom-scrollbar">
+                <Table>
+                  <TableHeader className="bg-slate-50/50 sticky top-0 z-10 backdrop-blur-sm">
+                    <TableRow>
+                      <TableHead className="font-black text-slate-900 h-14 px-8">SALOON DETAILS</TableHead>
+                      <TableHead className="font-black text-slate-900">LOCATION</TableHead>
+                      <TableHead className="font-black text-slate-900">STATUS</TableHead>
+                      <TableHead className="font-black text-slate-900">PERFORMANCE</TableHead>
+                      <TableHead className="font-black text-slate-900 text-right px-8">ACTIONS</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {filteredSalons.map(salon => (
+                      <TableRow key={salon.id} className="hover:bg-slate-50/50 transition-colors border-slate-100">
+                        <TableCell className="px-8 py-4">
+                          <div>
+                            <p className="font-black text-slate-900 text-lg">{salon.name}</p>
+                            <p className="text-xs text-slate-500 font-medium">Owner: {salon.owner_name || 'Unclaimed'}</p>
+                          </div>
+                        </TableCell>
+                        <TableCell className="font-medium text-slate-600">
+                          <div className="flex items-center gap-2">
+                            <MapPin className="w-4 h-4 text-slate-400" />
+                            {salon.city || 'Unknown City'}
+                          </div>
+                        </TableCell>
+                        <TableCell>
+                          <Badge className={`border-none font-bold px-3 py-1 ${salon.approval_status === 'approved' ? 'bg-green-100 text-green-700' :
+                            salon.approval_status === 'pending' ? 'bg-amber-100 text-amber-700' :
+                              'bg-red-100 text-red-700'
+                            }`}>
+                            {salon.approval_status.toUpperCase()}
+                          </Badge>
+                        </TableCell>
+                        <TableCell>
+                          <div className="flex items-center gap-2">
+                            <Zap className="w-4 h-4 text-slate-400" />
+                            <span className="font-bold text-slate-700">{salon.booking_count || 0} Bookings</span>
+                          </div>
+                        </TableCell>
+                        <TableCell className="text-right px-8">
+                          <div className="flex justify-end gap-2">
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => { setSelectedSalon(salon); setShowDetailsDialog(true); }}
+                              className="rounded-xl font-bold hover:bg-slate-100"
+                            >
+                              <Eye className="w-4 h-4 mr-2" /> View
+                            </Button>
 
-                    <div className="flex items-center gap-2">
-                      <div className="w-10 h-10 rounded-xl bg-slate-50 flex items-center justify-center text-blue-500">
-                        <Zap className="w-5 h-5" />
-                      </div>
-                      <div>
-                        <p className="text-[10px] font-black uppercase text-slate-400 leading-none">Performance</p>
-                        <p className="font-bold text-slate-700">{salon.booking_count} Bookings Processed</p>
-                      </div>
-                    </div>
-
-                    <div className="pt-6 border-t border-slate-50 flex gap-2">
-                      <Button
-                        onClick={() => { setSelectedSalon(salon); setShowDetailsDialog(true); }}
-                        className="flex-1 bg-slate-50 hover:bg-slate-100 text-slate-900 font-black rounded-2xl h-12 shadow-none"
-                      >
-                        Details
-                      </Button>
-                      {salon.approval_status === 'pending' && (
-                        <Button
-                          onClick={() => handleApprove(salon)}
-                          className="bg-accent text-white font-black rounded-2xl h-12 px-8 shadow-lg shadow-accent/20"
-                        >
-                          <CheckCircle className="w-4 h-4" />
-                        </Button>
-                      )}
-                    </div>
-                  </div>
-                </CardContent>
-              </Card>
-            ))}
-          </div>
-        )}
+                            {salon.approval_status === 'pending' ? (
+                              <Button
+                                size="sm"
+                                onClick={() => handleApprove(salon)}
+                                className="rounded-xl font-bold bg-accent text-white hover:bg-accent/90 shadow-sm"
+                              >
+                                <CheckCircle className="w-4 h-4 mr-2" /> Approve
+                              </Button>
+                            ) : (
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                onClick={() => handleDelete(salon)}
+                                className="rounded-xl font-bold text-red-600 hover:bg-red-50 hover:text-red-700"
+                              >
+                                <Trash2 className="w-4 h-4 mr-2" /> Delete
+                              </Button>
+                            )}
+                          </div>
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </div>
+            )}
+          </CardContent>
+        </Card>
       </div>
 
       {/* Details Dialog */}
@@ -268,7 +323,9 @@ export default function AdminSalons() {
             <div className="space-y-8">
               <div>
                 <h2 className="text-4xl font-black text-slate-900 tracking-tighter">{selectedSalon.name}</h2>
-                <p className="text-accent font-bold mt-1 uppercase tracking-widest text-xs">Legacy Application Request</p>
+                <Badge className={`mt-2 border-none font-bold px-3 py-1 ${selectedSalon.approval_status === 'approved' ? 'bg-green-100 text-green-700' : 'bg-amber-100 text-amber-700'}`}>
+                  {selectedSalon.approval_status.toUpperCase()}
+                </Badge>
               </div>
 
               <div className="grid grid-cols-2 gap-5">
@@ -287,18 +344,61 @@ export default function AdminSalons() {
                 <p className="font-medium text-slate-600 leading-relaxed">{selectedSalon.address}, {selectedSalon.city}, {selectedSalon.state}</p>
               </div>
 
-              <div className="flex gap-4">
+              <div className="flex gap-4 pt-4 border-t border-slate-100">
                 {selectedSalon.approval_status === 'pending' ? (
                   <>
                     <Button onClick={() => handleApprove(selectedSalon)} className="flex-1 bg-accent text-white font-black h-14 rounded-2xl text-lg shadow-xl shadow-accent/20">Verify & Approve</Button>
                     <Button onClick={() => setShowRejectDialog(true)} variant="ghost" className="bg-red-50 text-red-600 font-black h-14 rounded-2xl px-8">Reject</Button>
                   </>
                 ) : (
-                  <Button className="w-full bg-slate-900 text-white font-black h-14 rounded-2xl text-lg">Manage Compliance</Button>
+                  <Button onClick={() => handleDelete(selectedSalon)} className="w-full bg-red-50 hover:bg-red-100 text-red-600 font-black h-14 rounded-2xl text-lg">
+                    <Trash2 className="w-5 h-5 mr-2" /> Delete Saloon Permanently
+                  </Button>
                 )}
               </div>
             </div>
           )}
+        </DialogContent>
+      </Dialog>
+
+      {/* Create Salon Dialog */}
+      <Dialog open={showCreateDialog} onOpenChange={setShowCreateDialog}>
+        <DialogContent className="rounded-[2.5rem] p-8 max-w-lg">
+          <DialogHeader>
+            <DialogTitle className="text-2xl font-black">Register New Salon</DialogTitle>
+          </DialogHeader>
+          <form onSubmit={handleCreateSalon} className="space-y-4 mt-4">
+            <div className="space-y-2">
+              <Label>Salon Name</Label>
+              <Input required value={newSalon.name} onChange={e => setNewSalon({ ...newSalon, name: e.target.value })} className="rounded-xl h-12" placeholder="e.g. Luxe Studio" />
+            </div>
+            <div className="space-y-2">
+              <Label>Unique Slug (URL)</Label>
+              <Input required value={newSalon.slug} onChange={e => setNewSalon({ ...newSalon, slug: e.target.value })} className="rounded-xl h-12" placeholder="e.g. luxe-studio-nyc" />
+            </div>
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label>City</Label>
+                <Input value={newSalon.city} onChange={e => setNewSalon({ ...newSalon, city: e.target.value })} className="rounded-xl h-12" placeholder="e.g. New York" />
+              </div>
+              <div className="space-y-2">
+                <Label>State</Label>
+                <Input value={newSalon.state} onChange={e => setNewSalon({ ...newSalon, state: e.target.value })} className="rounded-xl h-12" placeholder="e.g. NY" />
+              </div>
+            </div>
+            <div className="space-y-2">
+              <Label>Owner Email (Optional)</Label>
+              <Input type="email" value={newSalon.owner_email} onChange={e => setNewSalon({ ...newSalon, owner_email: e.target.value })} className="rounded-xl h-12" placeholder="new.owner@email.com" />
+            </div>
+            <div className="space-y-2">
+              <Label>Owner Password (Optional)</Label>
+              <Input type="password" value={newSalon.owner_password} onChange={e => setNewSalon({ ...newSalon, owner_password: e.target.value })} className="rounded-xl h-12" placeholder="********" />
+              <p className="text-xs text-slate-400">Required if creating a new user.</p>
+            </div>
+            <Button disabled={actionLoading} type="submit" className="w-full h-12 rounded-xl bg-accent text-white font-bold mt-4">
+              {actionLoading ? 'Creating...' : 'Create Registration'}
+            </Button>
+          </form>
         </DialogContent>
       </Dialog>
     </AdminLayout>

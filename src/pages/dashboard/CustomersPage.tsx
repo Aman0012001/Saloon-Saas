@@ -6,7 +6,7 @@ import {
   Mail,
   Phone,
   Calendar,
-  DollarSign,
+  Banknote,
   ChevronRight,
   Plus,
   Filter,
@@ -94,7 +94,7 @@ export default function CustomersPage() {
   const handleExport = () => {
     if (customers.length === 0) return;
 
-    const headers = ["Name", "Phone", "Visits", "Total Spent ($)", "Last Visit"];
+    const headers = ["Name", "Phone", "Visits", "Total Spent (RM)", "Last Visit"];
     const csvContent = [
       headers.join(","),
       ...filteredCustomers.map(c => [
@@ -158,7 +158,10 @@ export default function CustomersPage() {
   };
 
   const fetchCustomers = async () => {
-    if (!currentSalon) return;
+    if (!currentSalon) {
+      if (!salonLoading) setLoading(false);
+      return;
+    }
 
     setLoading(true);
     try {
@@ -181,9 +184,10 @@ export default function CustomersPage() {
         if (!customerMap.has(userId)) {
           customerMap.set(userId, {
             user_id: userId,
-            full_name: booking.user_name || "Unknown",
-            phone: booking.user_phone || null,
-            avatar_url: null,
+            full_name: booking.full_name || booking.email || "Client #" + userId.slice(0, 4),
+            phone: booking.phone || null,
+            email: booking.email || null,
+            avatar_url: booking.avatar_url || null,
             total_visits: 0,
             total_spent: 0,
             last_visit: null,
@@ -305,14 +309,6 @@ export default function CustomersPage() {
             >
               <Search className="w-5 h-5" />
             </Button>
-            <Button
-              size="sm"
-              className="bg-accent text-white px-3 rounded-full"
-              onClick={() => setIsAddDialogOpen(true)}
-            >
-              <Plus className="w-4 h-4 mr-1" />
-              Add
-            </Button>
           </div>
         ) : undefined
       }
@@ -347,15 +343,15 @@ export default function CustomersPage() {
             </Card>
             <Card className="border-0 shadow-sm bg-gradient-to-br from-emerald-50 to-emerald-100">
               <CardContent className="p-3 text-center">
-                <DollarSign className="w-5 h-5 text-emerald-600 mx-auto mb-1" />
-                <p className="text-lg font-bold text-emerald-700">${Math.round(totalRevenue / 1000)}K</p>
+                <Banknote className="w-5 h-5 text-emerald-600 mx-auto mb-1" />
+                <p className="text-xl font-bold text-emerald-700">RM {Math.round(totalRevenue / 1000)}K</p>
                 <p className="text-xs text-emerald-600 font-medium">Revenue</p>
               </CardContent>
             </Card>
             <Card className="border-0 shadow-sm bg-gradient-to-br from-amber-50 to-amber-100">
               <CardContent className="p-3 text-center">
                 <TrendingUp className="w-5 h-5 text-amber-600 mx-auto mb-1" />
-                <p className="text-lg font-bold text-amber-700">${Math.round(avgSpentPerCustomer)}</p>
+                <p className="text-lg font-bold text-amber-700">RM {Math.round(avgSpentPerCustomer)}</p>
                 <p className="text-xs text-amber-600 font-medium">Avg</p>
               </CardContent>
             </Card>
@@ -373,23 +369,6 @@ export default function CustomersPage() {
                 </Badge>
               </h1>
               <p className="text-muted-foreground font-medium">Analyze loyalty and manage client relationships from local DB</p>
-            </div>
-            <div className="flex items-center gap-3">
-              <Button
-                variant="outline"
-                className="h-12 px-6 rounded-2xl border-none bg-white shadow-sm font-bold text-muted-foreground hover:bg-white hover:text-foreground transition-all"
-                onClick={handleExport}
-              >
-                <Filter className="w-4 h-4 mr-2" />
-                Export CSV
-              </Button>
-              <Button
-                onClick={() => setIsAddDialogOpen(true)}
-                className="h-12 px-6 rounded-2xl bg-accent hover:bg-accent/90 text-white font-black shadow-lg shadow-accent/20 transition-all hover:scale-105 active:scale-95"
-              >
-                <UserPlus className="w-4 h-4 mr-2" />
-                Add New Customer
-              </Button>
             </div>
           </div>
         )}
@@ -416,10 +395,10 @@ export default function CustomersPage() {
                 <div className="flex items-center justify-between">
                   <div>
                     <p className="text-sm font-medium text-emerald-600">Total Revenue</p>
-                    <p className="text-3xl font-bold text-emerald-700 mt-2">${totalRevenue.toLocaleString()}</p>
+                    <p className="text-3xl font-bold text-emerald-700">RM {totalRevenue.toLocaleString()}</p>
                   </div>
                   <div className="w-12 h-12 bg-emerald-200 rounded-xl flex items-center justify-center">
-                    <DollarSign className="w-6 h-6 text-emerald-600" />
+                    <Banknote className="w-6 h-6 text-emerald-600" />
                   </div>
                 </div>
               </CardContent>
@@ -430,7 +409,7 @@ export default function CustomersPage() {
                 <div className="flex items-center justify-between">
                   <div>
                     <p className="text-sm font-medium text-amber-600">Avg. Spent</p>
-                    <p className="text-3xl font-bold text-amber-700 mt-2">${Math.round(avgSpentPerCustomer).toLocaleString()}</p>
+                    <p className="text-3xl font-bold text-amber-700">RM {Math.round(avgSpentPerCustomer).toLocaleString()}</p>
                   </div>
                   <div className="w-12 h-12 bg-amber-200 rounded-xl flex items-center justify-center">
                     <TrendingUp className="w-6 h-6 text-amber-600" />
@@ -471,112 +450,7 @@ export default function CustomersPage() {
           </div>
         )}
 
-        {/* Top Customers - Mobile Compact Version */}
-        {isMobile && topCustomers.length > 0 && (
-          <Card className="border-0 shadow-sm bg-white">
-            <CardHeader className="pb-3 px-4 pt-4">
-              <CardTitle className="text-lg font-semibold flex items-center gap-2">
-                <Star className="w-5 h-5 text-amber-500" />
-                Top Customers
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="px-4 pb-4">
-              <div className="space-y-3">
-                {topCustomers.slice(0, 3).map((customer, index) => {
-                  const tier = getCustomerTier(customer.total_spent);
-                  const TierIcon = tier.icon;
-                  return (
-                    <div
-                      key={customer.user_id}
-                      className="flex items-center gap-3 p-3 rounded-lg bg-gradient-to-r from-secondary/10 to-secondary/5 border border-border/20"
-                    >
-                      <div className="relative">
-                        <Avatar className="w-10 h-10 ring-2 ring-accent/20">
-                          <AvatarImage src={customer.avatar_url || ""} />
-                          <AvatarFallback className="bg-gradient-to-br from-accent/20 to-accent/10 text-accent font-semibold text-sm">
-                            {getInitials(customer.full_name)}
-                          </AvatarFallback>
-                        </Avatar>
-                        <div className="absolute -top-1 -right-1 w-5 h-5 bg-gradient-to-r from-amber-400 to-amber-500 rounded-full flex items-center justify-center text-white text-xs font-bold">
-                          {index + 1}
-                        </div>
-                      </div>
-                      <div className="flex-1 min-w-0">
-                        <div className="flex items-center gap-2 mb-1">
-                          <p className="font-semibold text-foreground text-sm truncate">
-                            {customer.full_name || "Anonymous"}
-                          </p>
-                          <TierIcon className="w-3 h-3 text-amber-500 flex-shrink-0" />
-                        </div>
-                        <div className="flex items-center gap-3 text-xs text-muted-foreground">
-                          <span>{customer.total_visits} visits</span>
-                          <span>${customer.total_spent.toLocaleString()}</span>
-                        </div>
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            </CardContent>
-          </Card>
-        )}
 
-        {/* Desktop Top Customers */}
-        {!isMobile && topCustomers.length > 0 && (
-          <Card className="border-0 shadow-lg bg-white/80 backdrop-blur-sm">
-            <CardHeader className="pb-4">
-              <CardTitle className="text-xl font-semibold flex items-center gap-2">
-                <Star className="w-5 h-5 text-amber-500" />
-                Top Customers
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                {topCustomers.map((customer, index) => {
-                  const tier = getCustomerTier(customer.total_spent);
-                  return (
-                    <div
-                      key={customer.user_id}
-                      className="p-4 rounded-xl bg-gradient-to-br from-secondary/20 to-secondary/5 border border-border/30"
-                    >
-                      <div className="flex items-center gap-3 mb-3">
-                        <div className="relative">
-                          <Avatar className="w-12 h-12 ring-2 ring-accent/20">
-                            <AvatarImage src={customer.avatar_url || ""} />
-                            <AvatarFallback className="bg-gradient-to-br from-accent/20 to-accent/10 text-accent font-semibold">
-                              {getInitials(customer.full_name)}
-                            </AvatarFallback>
-                          </Avatar>
-                          <div className="absolute -top-1 -right-1 w-6 h-6 bg-gradient-to-r from-amber-400 to-amber-500 rounded-full flex items-center justify-center text-white text-xs font-bold">
-                            {index + 1}
-                          </div>
-                        </div>
-                        <div className="flex-1">
-                          <p className="font-semibold text-foreground">
-                            {customer.full_name || "Anonymous"}
-                          </p>
-                          <Badge className={`${tier.bg} ${tier.text} border-0 text-xs`}>
-                            {tier.label}
-                          </Badge>
-                        </div>
-                      </div>
-                      <div className="space-y-2 text-sm">
-                        <div className="flex justify-between">
-                          <span className="text-muted-foreground">Visits:</span>
-                          <span className="font-medium">{customer.total_visits}</span>
-                        </div>
-                        <div className="flex justify-between">
-                          <span className="text-muted-foreground">Spent:</span>
-                          <span className="font-medium">${customer.total_spent.toLocaleString()}</span>
-                        </div>
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            </CardContent>
-          </Card>
-        )}
 
         {/* Desktop Search & Filters */}
         {!isMobile && (
@@ -647,14 +521,7 @@ export default function CustomersPage() {
                     : "Start building your customer base by adding your first customer"
                   }
                 </p>
-                <Button
-                  size={isMobile ? "sm" : "default"}
-                  className="bg-gradient-to-r from-accent to-accent/90 text-white"
-                  onClick={() => setIsAddDialogOpen(true)}
-                >
-                  <UserPlus className="w-4 h-4 mr-2" />
-                  Add First Customer
-                </Button>
+                {/* Manual customer addition disabled */}
               </div>
             ) : (
               <div className="space-y-3">
@@ -677,7 +544,7 @@ export default function CustomersPage() {
                       <div className="flex-1 min-w-0">
                         <div className="flex items-center gap-2 mb-1">
                           <h3 className={`font-semibold text-foreground ${isMobile ? 'text-sm' : 'text-base'} truncate`}>
-                            {customer.full_name || "Anonymous Customer"}
+                            {customer.full_name}
                           </h3>
                           <TierIcon className={`${isMobile ? 'w-3 h-3' : 'w-4 h-4'} ${tier.text} flex-shrink-0`} />
                           {!isMobile && (
@@ -708,7 +575,7 @@ export default function CustomersPage() {
                         {isMobile && (
                           <div className="flex items-center gap-4 mt-1 text-xs">
                             <span className="text-accent font-medium">{customer.total_visits} visits</span>
-                            <span className="text-emerald-600 font-medium">${customer.total_spent.toLocaleString()}</span>
+                            <span className="text-emerald-600 font-medium">RM {customer.total_spent.toLocaleString()}</span>
                           </div>
                         )}
                       </div>
@@ -721,7 +588,7 @@ export default function CustomersPage() {
                             <p className="text-xs text-muted-foreground font-medium">Visits</p>
                           </div>
                           <div className="text-center">
-                            <p className="text-lg font-bold text-foreground">${customer.total_spent.toLocaleString()}</p>
+                            <p className="text-lg font-bold text-foreground">RM {customer.total_spent.toLocaleString()}</p>
                             <p className="text-xs text-muted-foreground font-medium">Total Spent</p>
                           </div>
                           <div className="text-center min-w-[100px]">
@@ -758,6 +625,13 @@ export default function CustomersPage() {
                           >
                             <Calendar className="w-4 h-4 mr-2" />
                             Book Appointment
+                          </DropdownMenuItem>
+                          <DropdownMenuItem
+                            className="hover:bg-secondary/50"
+                            onClick={() => navigate(`/dashboard/customers/${customer.user_id}`)}
+                          >
+                            <Users className="w-4 h-4 mr-2" />
+                            View Customer Details
                           </DropdownMenuItem>
                           <DropdownMenuItem
                             className="hover:bg-secondary/50"
@@ -830,6 +704,6 @@ export default function CustomersPage() {
           </DialogContent>
         </Dialog>
       </div>
-    </ResponsiveDashboardLayout>
+    </ResponsiveDashboardLayout >
   );
 }

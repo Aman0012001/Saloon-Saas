@@ -1,18 +1,17 @@
 import { useState, useEffect } from "react";
-import { useParams, useNavigate, Link } from "react-router-dom";
+import { useParams, useNavigate } from "react-router-dom";
 import {
     MapPin, Star, Clock, Phone, Mail,
     ChevronLeft, Loader2, Scissors,
     Sparkles, Zap, Award, CheckCircle2,
     CalendarDays, Share2, Heart,
-    Info, ShieldCheck, Instagram, Facebook, Twitter
+    Info, ShieldCheck, Instagram, Facebook, Twitter, HelpCircle
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
 import Navbar from "@/components/Navbar";
 import Footer from "@/components/Footer";
-import { motion } from "framer-motion";
 import api from "@/services/api";
 
 interface Service {
@@ -23,6 +22,15 @@ interface Service {
     duration_minutes: number;
     category: string;
     image_url: string;
+}
+
+interface KnowledgeItem {
+    id: string;
+    salon_id: string;
+    category: 'Skin Care' | 'FAQ';
+    title: string;
+    content: string;
+    is_active: boolean;
 }
 
 interface Salon {
@@ -43,6 +51,7 @@ export default function SalonServices() {
     const navigate = useNavigate();
     const [salon, setSalon] = useState<Salon | null>(null);
     const [services, setServices] = useState<Service[]>([]);
+    const [knowledgeItems, setKnowledgeItems] = useState<KnowledgeItem[]>([]);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
     const [activeCategory, setActiveCategory] = useState("All");
@@ -52,12 +61,14 @@ export default function SalonServices() {
             if (!id) return;
             try {
                 setLoading(true);
-                const [salonData, servicesData] = await Promise.all([
+                const [salonData, servicesData, knowledgeData] = await Promise.all([
                     api.salons.getById(id),
-                    api.services.getBySalon(id)
+                    api.services.getBySalon(id),
+                    api.knowledgeBase.getBySalon(id)
                 ]);
                 setSalon(salonData);
                 setServices(servicesData || []);
+                setKnowledgeItems(knowledgeData || []);
             } catch (err: any) {
                 console.error("Error fetching salon details:", err);
                 setError("Could not load salon details. Please try again later.");
@@ -126,7 +137,7 @@ export default function SalonServices() {
 
                         <div className="space-y-1">
                             <h1 className="text-3xl md:text-3xl font-bold text-slate-900 flex items-center">
-                                <span className="bg-slate-200/50 px-2 rounded mr-2 h-8 inline-flex items-center text-slate-700">
+                                <span className="px-2 rounded mr-2 h-8 inline-flex items-center text-slate-700">
                                     {salon.name.split(' ')[0]}
                                 </span>
                                 {salon.name.split(' ').slice(1).join(' ')}
@@ -189,7 +200,7 @@ export default function SalonServices() {
                             <div className="p-6 border-b border-slate-50 bg-slate-50/30">
                                 <h3 className="text-lg font-bold text-slate-900">Services With Pricing</h3>
                             </div>
-                            <CardContent className="p-0 max-h-[600px] overflow-y-auto custom-scrollbar">
+                            <CardContent className="p-0 max-h-[480px] overflow-y-auto overflow-x-hidden custom-scrollbar">
                                 <div className="divide-y divide-slate-50">
                                     {services.length === 0 ? (
                                         <div className="py-12 text-center text-slate-400 font-medium">No services currently listed.</div>
@@ -217,7 +228,7 @@ export default function SalonServices() {
                                             </div>
                                             <div className="flex items-center gap-6">
                                                 <div className="text-xl font-bold text-slate-900 tracking-tight">
-                                                    ${service.price}
+                                                    RM {service.price}
                                                 </div>
                                                 <Button
                                                     onClick={() => navigate(`/book?salonId=${salon.id}&serviceId=${service.id}`)}
@@ -233,6 +244,32 @@ export default function SalonServices() {
                         </Card>
                     </div>
                 </div>
+
+                {/* FAQ Section */}
+                {knowledgeItems.filter(i => i.category === 'FAQ' && i.is_active).length > 0 && (
+                    <div className="mt-24 space-y-12">
+                        <div className="text-center max-w-2xl mx-auto">
+                            <h2 className="text-3xl font-black text-slate-900 mb-4">Frequently Asked Questions</h2>
+                            <p className="text-slate-500 font-medium">Clear answers to common inquiries at {salon.name}.</p>
+                        </div>
+
+                        <div className="max-w-4xl mx-auto space-y-4">
+                            {knowledgeItems.filter(i => i.category === 'FAQ' && i.is_active).map((item) => (
+                                <div key={item.id} className="p-8 rounded-[2rem] bg-white border border-slate-100 shadow-sm hover:shadow-md transition-all group">
+                                    <h4 className="text-lg font-bold text-slate-900 mb-3 flex items-start gap-4">
+                                        <span className="w-8 h-8 rounded-lg bg-amber-50 flex items-center justify-center text-amber-600 text-sm flex-shrink-0 mt-0.5">Q</span>
+                                        {item.title}
+                                    </h4>
+                                    <div className="pl-12">
+                                        <p className="text-slate-500 leading-relaxed font-medium italic">
+                                            "{item.content}"
+                                        </p>
+                                    </div>
+                                </div>
+                            ))}
+                        </div>
+                    </div>
+                )}
             </main>
 
             <Footer />

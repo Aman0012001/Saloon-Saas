@@ -1,41 +1,42 @@
 <?php
+header('Content-Type: text/plain');
 error_reporting(E_ALL);
 ini_set('display_errors', 1);
 
-require_once __DIR__ . '/config.php';
-
-echo "<h3>Database Connection Debug</h3>";
-echo "Attempting to connect to: " . DB_HOST . "<br>";
-echo "Database name: " . DB_NAME . "<br>";
-echo "User: " . DB_USER . "<br>";
+echo "--- Database Connection Diagnostics ---\n\n";
 
 try {
-    $dsn = "mysql:host=" . DB_HOST . ";charset=" . DB_CHARSET;
+    require_once __DIR__ . '/config.php';
+    echo "Config loaded.\n";
+    echo "Host: " . DB_HOST . "\n";
+    echo "Port: " . DB_PORT . "\n";
+    echo "Database: " . DB_NAME . "\n";
+    echo "User: " . DB_USER . "\n";
+    echo "Password correctly set: " . (defined('DB_PASS') ? 'Yes' : 'No') . "\n\n";
+
+    echo "Attempting to connect via PDO...\n";
+    $dsn = "mysql:host=" . DB_HOST . ";port=" . DB_PORT . ";dbname=" . DB_NAME . ";charset=" . DB_CHARSET;
     $pdo = new PDO($dsn, DB_USER, DB_PASS);
     $pdo->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
-    echo "<p style='color: green;'>✅ Connected to MySQL server successfully!</p>";
+    echo "SUCCESS: Connected to database '" . DB_NAME . "'.\n\n";
 
-    // Check if database exists
-    $stmt = $pdo->query("SELECT COUNT(*) FROM INFORMATION_SCHEMA.SCHEMATA WHERE SCHEMA_NAME = '" . DB_NAME . "'");
-    if ($stmt->fetchColumn()) {
-        echo "<p style='color: green;'>✅ Database '" . DB_NAME . "' exists!</p>";
+    echo "Checking if 'salons' table exists...\n";
+    try {
+        $stmt = $pdo->query("SELECT 1 FROM salons LIMIT 1");
+        echo "SUCCESS: 'salons' table exists.\n";
 
-        $pdo->exec("USE " . DB_NAME);
-
-        // List tables
-        $tables = $pdo->query("SHOW TABLES")->fetchAll(PDO::FETCH_COLUMN);
-        echo "<b>Tables found:</b><ul>";
-        foreach ($tables as $table) {
-            echo "<li>$table</li>";
-        }
-        echo "</ul>";
-    } else {
-        echo "<p style='color: red;'>❌ Database '" . DB_NAME . "' does NOT exist!</p>";
-        echo "Creating database '" . DB_NAME . "'...<br>";
-        $pdo->exec("CREATE DATABASE IF NOT EXISTS " . DB_NAME);
-        echo "<p style='color: green;'>✅ Database created successfully. Please run database.sql to import tables.</p>";
+        $stmt = $pdo->query("SELECT COUNT(*) FROM salons");
+        $count = $stmt->fetchColumn();
+        echo "Total salons in database: " . $count . "\n";
+    } catch (PDOException $e) {
+        echo "ERROR: 'salons' table does not exist or cannot be read.\n";
+        echo "Message: " . $e->getMessage() . "\n";
     }
 
 } catch (PDOException $e) {
-    echo "<p style='color: red;'>❌ Connection failed: " . $e->getMessage() . "</p>";
+    echo "ERROR: Connection failed!\n";
+    echo "Message: " . $e->getMessage() . "\n";
+    echo "\nTIP: Check if MySQL is running in XAMPP/WAMP and that the database name '" . DB_NAME . "' exists.\n";
+} catch (Exception $e) {
+    echo "ERROR: " . $e->getMessage() . "\n";
 }

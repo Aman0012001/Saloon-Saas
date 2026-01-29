@@ -55,13 +55,13 @@ const SalonOwnerCTA = () => {
 
         <div className="text-center space-y-4">
           <div className="flex flex-col sm:flex-row gap-4 justify-center">
-            <Link to="/dashboard/create-salon">
+            {/* <Link to="/dashboard/create-salon">
               <Button size="lg" className="bg-foreground text-background hover:bg-foreground/90 gap-2">
                 <Store className="w-5 h-5" />
                 Start Free Trial
                 <ArrowRight className="w-4 h-4" />
               </Button>
-            </Link>
+            </Link> */}
             <Link to="/salon-owner/login">
               <Button size="lg" variant="outline" className="gap-2 border-2 border-foreground/20 text-foreground hover:bg-foreground/5">
                 Salon Owner Login
@@ -69,7 +69,7 @@ const SalonOwnerCTA = () => {
             </Link>
           </div>
           <p className="text-sm text-muted-foreground">
-            <span className="font-semibold text-accent">14-day free trial</span> • No credit card required • Already managing 500+ salons across India
+            <span className="font-semibold text-accent">14-day free trial</span> • No credit card required • Already managing 500+ salons across Malaysia
           </p>
         </div>
       </div>

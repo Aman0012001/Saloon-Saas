@@ -1,4 +1,4 @@
-import { ReactNode, useState } from "react";
+import { ReactNode, useState, useEffect } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import {
   LayoutDashboard,
@@ -19,6 +19,10 @@ import {
   Bell,
   Search,
   Plus,
+  User,
+  ShoppingBag,
+  Mail,
+  BookOpen,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
@@ -36,6 +40,9 @@ import { useAuth } from "@/hooks/useAuth";
 import { Separator } from "@/components/ui/separator";
 import { cn } from "@/lib/utils";
 import { SalonNotificationSystem } from "./SalonNotificationSystem";
+import { PendingApproval } from "./PendingApproval";
+import { Loader2 } from "lucide-react";
+import api from "@/services/api";
 
 interface DashboardLayoutProps {
   children: ReactNode;
@@ -50,9 +57,9 @@ const navItems = [
   },
   {
     icon: Calendar,
-    label: "Appointments",
+    label: "Calendar",
     path: "/dashboard/appointments",
-    description: "Manage bookings"
+    description: "Manage schedule"
   },
   {
     icon: Users,
@@ -62,7 +69,7 @@ const navItems = [
   },
   {
     icon: UserCog,
-    label: "Staff",
+    label: "Staff Profile",
     path: "/dashboard/staff",
     description: "Team & roles"
   },
@@ -97,10 +104,34 @@ const navItems = [
     description: "Promotions & deals"
   },
   {
+    icon: ShoppingBag,
+    label: "Supply Store",
+    path: "/dashboard/store",
+    description: "Professional supplies"
+  },
+  {
+    icon: BookOpen,
+    label: "Knowledge Base",
+    path: "/dashboard/knowledge-base",
+    description: "Skin Care Tips & FAQs"
+  },
+  {
+    icon: User,
+    label: "Staff Profile ",
+    path: "/dashboard/profile",
+    description: "Profile information"
+  },
+  {
     icon: Settings,
     label: "Settings",
     path: "/dashboard/settings",
     description: "Business configuration"
+  },
+  {
+    icon: Mail,
+    label: "Messages",
+    path: "/dashboard/staff/messages",
+    description: "Internal communications"
   },
 ];
 
@@ -109,12 +140,55 @@ export const DashboardLayout = ({ children }: DashboardLayoutProps) => {
   const location = useLocation();
   const navigate = useNavigate();
   const { user, signOut } = useAuth();
-  const { salons, currentSalon, setCurrentSalon, isOwner, isManager } = useSalon();
+  const { salons, currentSalon, setCurrentSalon, isOwner, isManager, isStaff } = useSalon();
+  const [appointmentCount, setAppointmentCount] = useState(0);
+  const [unreadCount, setUnreadCount] = useState(0);
 
   const handleSignOut = async () => {
     await signOut();
     navigate("/");
   };
+
+  const fetchDashboardStats = async () => {
+    if (!currentSalon || !user) return;
+    try {
+      // 1. Fetch Today's Appointments
+      const today = new Date().toISOString().split('T')[0];
+      const bookings = await api.bookings.getAll({
+        salon_id: currentSalon.id,
+        date: today
+      });
+      setAppointmentCount(bookings.length);
+
+      // 2. Fetch Unread Notifications
+      const notifications = await api.notifications.getAll({
+        salon_id: currentSalon.id,
+        unread_only: '1'
+      });
+
+      // 3. Fetch Unread Messages
+      const messages = await api.messages.getAll(currentSalon.id);
+      const unreadMessages = messages.filter((m: any) => {
+        if (m.is_read) return false;
+        if (m.receiver_id === user.id) return true;
+        if (!m.receiver_id) {
+          if (isOwner && m.recipient_type === 'owner') return true;
+          if (isStaff && m.recipient_type === 'staff') return true;
+        }
+        return false;
+      }).length;
+
+      setUnreadCount((notifications?.length || 0) + unreadMessages);
+    } catch (error) {
+      console.error('Failed to fetch dashboard stats:', error);
+    }
+  };
+
+  useEffect(() => {
+    fetchDashboardStats();
+    const interval = setInterval(fetchDashboardStats, 60000); // Check every 60 seconds
+    return () => clearInterval(interval);
+  }, [currentSalon, user]);
 
   const getInitials = (name: string) => {
     return name
@@ -126,9 +200,13 @@ export const DashboardLayout = ({ children }: DashboardLayoutProps) => {
   };
 
   const filteredNavItems = navItems.filter((item) => {
+    // Owners don't need "Staff Profile ", "Supply Store" or "Inventory" in the main sidebar list
+    if (isOwner && (item.label === "Staff Profile " || item.label === "Supply Store" || item.label === "Inventory")) {
+      return false;
+    }
     // Staff can only see limited items
     if (!isOwner && !isManager) {
-      return ["Dashboard", "Appointments", "Customers"].includes(item.label);
+      return ["Calendar", "Staff Profile "].includes(item.label);
     }
     // Managers can see most items except Settings
     if (isManager && !isOwner) {
@@ -136,6 +214,25 @@ export const DashboardLayout = ({ children }: DashboardLayoutProps) => {
     }
     return true;
   });
+
+  if (currentSalon?.approval_status === 'pending' && isOwner) {
+    return (
+      <div className="min-h-screen bg-[#FDFCFB] flex flex-col items-center justify-center">
+        <header className="fixed top-0 left-0 right-0 h-20 bg-white/80 backdrop-blur-xl border-b border-border/50 px-8 flex items-center justify-between z-50">
+          <Link to="/" className="flex items-center gap-3">
+            <div className="w-10 h-10 bg-accent rounded-xl flex items-center justify-center">
+              <Scissors className="w-5 h-5 text-white" />
+            </div>
+            <span className="font-bold text-xl text-foreground">NoamSkin</span>
+          </Link>
+          <Button variant="ghost" onClick={handleSignOut} className="font-bold text-slate-500 hover:text-red-500 gap-2">
+            <LogOut className="w-4 h-4" /> Sign Out
+          </Button>
+        </header>
+        <PendingApproval salonName={currentSalon.name} />
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-background via-background to-secondary/20 flex w-full">
@@ -164,7 +261,7 @@ export const DashboardLayout = ({ children }: DashboardLayoutProps) => {
                 </div>
                 <div>
                   <span className="font-bold text-xl text-foreground">NoamSkin</span>
-                  <p className="text-xs text-muted-foreground">Professional</p>
+                  <p className="text-xs text-muted-foreground">Staff Profile</p>
                 </div>
               </Link>
               <Button
@@ -177,8 +274,8 @@ export const DashboardLayout = ({ children }: DashboardLayoutProps) => {
               </Button>
             </div>
 
-            {/* Salon Selector */}
-            {salons.length > 0 && (
+            {/* Salon Selector - hidden for owners and staff as requested */}
+            {salons.length > 0 && !isOwner && !isStaff && (
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
                   <Button
@@ -256,19 +353,29 @@ export const DashboardLayout = ({ children }: DashboardLayoutProps) => {
                     isActive ? "text-white" : "text-muted-foreground group-hover:text-foreground",
                     "group-hover:scale-110"
                   )} />
-                  <div className="flex-1 flex flex-col">
-                    <span className={cn(
-                      "font-medium leading-none",
-                      isActive ? "text-white" : "text-foreground"
-                    )}>
-                      {item.label}
-                    </span>
-                    <span className={cn(
-                      "text-[10px] mt-1 line-clamp-1",
-                      isActive ? "text-white/80" : "text-muted-foreground"
-                    )}>
-                      {item.description}
-                    </span>
+                  <div className="flex-1 flex flex-row items-center justify-between">
+                    <div className="flex flex-col">
+                      <span className={cn(
+                        "font-medium leading-none",
+                        isActive ? "text-white" : "text-foreground"
+                      )}>
+                        {item.label}
+                      </span>
+                      <span className={cn(
+                        "text-[10px] mt-1 line-clamp-1",
+                        isActive ? "text-white/80" : "text-muted-foreground"
+                      )}>
+                        {item.description}
+                      </span>
+                    </div>
+                    {item.label === "Appointments" && appointmentCount > 0 && (
+                      <Badge className={cn(
+                        "ml-auto h-5 w-5 p-0 flex items-center justify-center text-[10px] font-black rounded-full",
+                        isActive ? "bg-white text-accent" : "bg-accent text-white"
+                      )}>
+                        {appointmentCount}
+                      </Badge>
+                    )}
                   </div>
                   {isActive && (
                     <div className="absolute right-2 w-2 h-2 bg-white rounded-full" />
@@ -280,36 +387,49 @@ export const DashboardLayout = ({ children }: DashboardLayoutProps) => {
 
           {/* User Menu */}
           <div className="p-4 border-t border-border/50">
-            <div className="flex items-center gap-3 p-3 rounded-xl bg-secondary/30 hover:bg-secondary/50 transition-colors">
-              <Avatar className="w-10 h-10 ring-2 ring-accent/20">
-                <AvatarImage src="" />
-                <AvatarFallback className="bg-gradient-to-br from-accent to-accent/80 text-white text-sm font-medium">
-                  {user?.email ? getInitials(user.email) : "U"}
-                </AvatarFallback>
-              </Avatar>
-              <div className="flex-1 min-w-0">
-                <p className="text-sm font-medium truncate text-foreground">
-                  {user?.email?.split("@")[0]}
-                </p>
-                <div className="flex items-center gap-2">
-                  <Badge variant="secondary" className="text-xs px-2 py-0.5">
-                    {isOwner ? "Owner" : isManager ? "Manager" : "Staff"}
-                  </Badge>
+            <div className="flex items-center gap-3 p-3 rounded-xl bg-secondary/30 transition-colors">
+              <div
+                className="flex items-center gap-3 flex-1 min-w-0 cursor-pointer hover:opacity-80 transition-opacity"
+                onClick={() => navigate("/dashboard/notifications")}
+              >
+                <div className="relative">
+                  <Avatar className="w-10 h-10 ring-2 ring-accent/20">
+                    <AvatarImage src="" />
+                    <AvatarFallback className="bg-gradient-to-br from-accent to-accent/80 text-white text-sm font-medium">
+                      {user?.email ? getInitials(user.email) : "U"}
+                    </AvatarFallback>
+                  </Avatar>
+                  {unreadCount > 0 && (
+                    <span className="absolute -top-1 -right-1 flex h-5 w-5 items-center justify-center rounded-full bg-accent text-[10px] font-black text-white border-2 border-white animate-pulse shadow-lg">
+                      {unreadCount}
+                    </span>
+                  )}
+                </div>
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm font-medium truncate text-foreground">
+                    {user?.email?.split("@")[0]}
+                  </p>
+                  <div className="flex items-center gap-2">
+                    <Badge variant="secondary" className="text-xs px-2 py-0.5">
+                      {isOwner ? "Owner" : isManager ? "Manager" : "Staff"}
+                    </Badge>
+                  </div>
                 </div>
               </div>
+
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
                   <Button
                     variant="ghost"
                     size="icon"
-                    className="text-muted-foreground hover:text-foreground"
+                    className="text-muted-foreground hover:text-foreground hover:bg-white/20 rounded-lg"
                   >
                     <Settings className="w-4 h-4" />
                   </Button>
                 </DropdownMenuTrigger>
                 <DropdownMenuContent align="end" className="w-48 bg-white/95 backdrop-blur-xl border-border/50">
-                  <DropdownMenuItem className="cursor-pointer">
-                    <Settings className="w-4 h-4 mr-2" />
+                  <DropdownMenuItem className="cursor-pointer" onClick={() => navigate("/dashboard/profile")}>
+                    <User className="w-4 h-4 mr-2" />
                     Profile Settings
                   </DropdownMenuItem>
                   <DropdownMenuSeparator />
@@ -392,12 +512,17 @@ export const DashboardLayout = ({ children }: DashboardLayoutProps) => {
             <div className="flex items-center gap-3">
               <SalonNotificationSystem />
 
-              <div className="h-11 w-11 rounded-xl overflow-hidden border-2 border-border/30 hover:border-accent/50 transition-colors cursor-pointer lg:hidden" onClick={() => navigate("/dashboard/settings")}>
+              <div className="relative h-11 w-11 rounded-xl border-2 border-border/30 hover:border-accent/50 transition-colors cursor-pointer lg:hidden" onClick={() => navigate("/dashboard/notifications")}>
                 <Avatar className="h-full w-full">
                   <AvatarFallback className="bg-accent/10 text-accent text-xs font-bold">
                     {user?.email ? getInitials(user.email) : "U"}
                   </AvatarFallback>
                 </Avatar>
+                {unreadCount > 0 && (
+                  <span className="absolute -top-1 -right-1 flex h-5 w-5 items-center justify-center rounded-full bg-accent text-[10px] font-black text-white border-2 border-white animate-pulse shadow-lg">
+                    {unreadCount}
+                  </span>
+                )}
               </div>
             </div>
           </div>

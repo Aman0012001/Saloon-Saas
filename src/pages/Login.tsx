@@ -39,24 +39,41 @@ const Login = () => {
       // Get the current user to check user type
       const userData = await api.auth.getCurrentUser();
       const userType = userData?.user?.user_type;
+      const salonRole = userData?.user?.salon_role;
 
       toast({
         title: "Session Established",
         description: "Accessing local management console...",
       });
 
-      // Redirect based on user type
-      if (userType === 'salon_owner') {
+      // Redirect based on user type and salon role
+      if (userType === 'admin') {
+        navigate("/admin");
+      } else if (userType === 'salon_owner' || salonRole === 'owner' || salonRole === 'staff' || salonRole === 'manager') {
         navigate("/dashboard");
+      } else if (userType === 'customer') {
+        navigate("/client-hub");
       } else {
         navigate("/");
       }
     } catch (error: any) {
       console.error("Login error:", error);
+
+      let errorTitle = "Access Denied";
+      let errorMessage = error.message || "Invalid digital signature";
+
+      if (error.message?.includes("WAITING_APPROVAL") || error.message?.includes("waiting for approval")) {
+        errorTitle = "Approval Pending";
+        errorMessage = "Your salon account is waiting for approval by the Super Admin. Please check back later.";
+      } else if (error.message?.includes("REJECTED")) {
+        errorTitle = "Registration Rejected";
+        errorMessage = "Your salon registration was not approved. Please contact support.";
+      }
+
       toast({
-        title: "Access Denied",
-        description: error.message || "Invalid digital signature",
-        variant: "destructive",
+        title: errorTitle,
+        description: errorMessage,
+        variant: error.message?.includes("WAITING_APPROVAL") ? "default" : "destructive",
       });
     } finally {
       setLoading(false);
@@ -73,8 +90,8 @@ const Login = () => {
           <Link to="/" className="flex justify-center mb-6">
             <img src={logo} alt="Saloon Logo" className="h-16 w-auto" />
           </Link>
-          <CardTitle className="text-4xl font-black text-slate-900 tracking-tight">Saloon Console</CardTitle>
-          <CardDescription className="font-bold text-slate-400 uppercase tracking-widest text-[10px] mt-2">Authenticated Partner Entrance Only</CardDescription>
+          <CardTitle className="text-4xl font-black text-slate-900 tracking-tight">Sign In</CardTitle>
+          <CardDescription className="font-bold text-slate-400 uppercase tracking-widest text-[10px] mt-2">Secure Access to Your Account</CardDescription>
         </CardHeader>
         <form onSubmit={handleLogin}>
           <CardContent className="space-y-6 px-10">
@@ -93,7 +110,7 @@ const Login = () => {
             <div className="space-y-2">
               <div className="flex items-center justify-between ml-1">
                 <Label className="text-[10px] font-black uppercase text-slate-400 tracking-widest">Access Pass</Label>
-                <Link to="#" className="text-[10px] font-black uppercase text-accent tracking-widest hover:underline">Forgot?</Link>
+                <Link to="/forgot-password" className="text-[10px] font-black uppercase text-accent tracking-widest hover:underline">Forgot?</Link>
               </div>
               <div className="relative">
                 <Input
@@ -126,7 +143,12 @@ const Login = () => {
                 "ACCESS DASHBOARD"
               )}
             </Button>
-            <div className="text-center">
+            <div className="text-center space-y-4">
+              <p className="text-[9px] text-slate-400 font-bold uppercase tracking-widest max-w-[80%] mx-auto leading-relaxed">
+                By signing in, you agree to our{" "}
+                <Link to="/terms" className="text-slate-500 underline">Terms</Link> &{" "}
+                <Link to="/privacy" className="text-slate-500 underline">Privacy Policy</Link>
+              </p>
               <p className="text-xs text-slate-400 font-bold uppercase tracking-widest">
                 New Partner?{" "}
                 <Link to="/signup" className="text-accent underline font-black">

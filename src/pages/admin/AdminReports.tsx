@@ -113,7 +113,7 @@ export default function AdminReports() {
               <div className="flex justify-between items-start">
                 <div>
                   <p className="text-[10px] font-black uppercase text-slate-400 tracking-widest leading-none">{stat.label}</p>
-                  <p className="text-3xl font-black text-slate-900 mt-3">{stat.value}</p>
+                  <p className="text-3xl font-black text-slate-900 mt-3">{stat.label === "Gross Volume" ? `RM ${stat.value}` : stat.value}</p>
                 </div>
                 <div className={`w-12 h-12 rounded-xl ${stat.bg} ${stat.color} flex items-center justify-center group-hover:scale-110 transition-transform`}>
                   <stat.icon className="w-6 h-6" />

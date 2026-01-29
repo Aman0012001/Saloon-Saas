@@ -24,6 +24,14 @@ import { useSalon } from "@/hooks/useSalon";
 import { useAuth } from "@/hooks/useAuth";
 import api from "@/services/api";
 import { useToast } from "@/hooks/use-toast";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { countryCodes } from "@/utils/countryCodes";
 
 const DAYS = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"];
 
@@ -47,7 +55,10 @@ export default function SettingsPage() {
     gst_number: "",
     logo_url: "",
     cover_image_url: "",
+    upi_id: "",
+    bank_details: "",
   });
+  const [countryCode, setCountryCode] = useState("+60");
 
   const handleFileUpload = async (file: File, type: 'logo' | 'cover') => {
     if (type === 'logo') setUploadingLogo(true);
@@ -91,6 +102,20 @@ export default function SettingsPage() {
 
   useEffect(() => {
     if (currentSalon) {
+      const rawPhone = currentSalon.phone || "";
+      let detectedCode = "+60";
+      let phoneNumber = rawPhone;
+
+      if (rawPhone.startsWith("+")) {
+        for (const c of countryCodes) {
+          if (rawPhone.startsWith(c.code)) {
+            detectedCode = c.code;
+            phoneNumber = rawPhone.substring(c.code.length);
+            break;
+          }
+        }
+      }
+
       setFormData({
         name: currentSalon.name || "",
         description: currentSalon.description || "",
@@ -98,12 +123,15 @@ export default function SettingsPage() {
         city: currentSalon.city || "",
         state: currentSalon.state || "",
         pincode: currentSalon.pincode || "",
-        phone: currentSalon.phone || "",
+        phone: phoneNumber,
         email: currentSalon.email || "",
         gst_number: currentSalon.gst_number || "",
         logo_url: currentSalon.logo_url || "",
         cover_image_url: currentSalon.cover_image_url || "",
+        upi_id: currentSalon.upi_id || "",
+        bank_details: currentSalon.bank_details || "",
       });
+      setCountryCode(detectedCode);
 
       // Initialize business hours
       let hours = currentSalon.business_hours;
@@ -136,6 +164,7 @@ export default function SettingsPage() {
 
     setSaving(true);
     try {
+      const fullPhone = formData.phone ? `${countryCode}${formData.phone}` : "";
       await api.salons.update(currentSalon.id, {
         name: formData.name,
         description: formData.description || null,
@@ -143,11 +172,13 @@ export default function SettingsPage() {
         city: formData.city || null,
         state: formData.state || null,
         pincode: formData.pincode || null,
-        phone: formData.phone || null,
+        phone: fullPhone,
         email: formData.email || null,
         gst_number: formData.gst_number || null,
         logo_url: formData.logo_url || null,
         cover_image_url: formData.cover_image_url || null,
+        upi_id: formData.upi_id || null,
+        bank_details: formData.bank_details || null,
       });
 
       toast({ title: "Success", description: "Salon profile updated locally" });
@@ -271,12 +302,31 @@ export default function SettingsPage() {
                   </div>
                   <div className="space-y-2">
                     <Label htmlFor="phone" className="text-xs font-black uppercase tracking-widest text-muted-foreground ml-1">Phone</Label>
-                    <Input
-                      id="phone"
-                      value={formData.phone}
-                      onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
-                      className="h-12 bg-secondary/30 border-none rounded-xl"
-                    />
+                    <div className="flex gap-2">
+                      <Select value={countryCode} onValueChange={setCountryCode}>
+                        <SelectTrigger className="w-[110px] h-12 bg-secondary/30 border-none rounded-xl">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent className="rounded-xl border-none shadow-2xl bg-white max-h-[300px]">
+                          {countryCodes.sort((a, b) => a.country.localeCompare(b.country)).map((c) => (
+                            <SelectItem key={`${c.country}-${c.code}`} value={c.code} className="font-medium py-2 rounded-lg cursor-pointer">
+                              <span className="flex items-center gap-2">
+                                <span>{c.flag}</span>
+                                <span>{c.code}</span>
+                              </span>
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                      <Input
+                        id="phone"
+                        type="tel"
+                        value={formData.phone}
+                        onChange={(e) => setFormData({ ...formData, phone: e.target.value.replace(/[^0-9]/g, '') })}
+                        className="h-12 bg-secondary/30 border-none rounded-xl flex-1"
+                        placeholder="000 000 0000"
+                      />
+                    </div>
                   </div>
                 </div>
                 <div className="space-y-2">
@@ -318,6 +368,28 @@ export default function SettingsPage() {
                     onChange={(e) => setFormData({ ...formData, address: e.target.value })}
                     className="h-12 bg-secondary/30 border-none rounded-xl"
                   />
+                </div>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="upi" className="text-xs font-black uppercase tracking-widest text-muted-foreground ml-1">UPI ID (for payments)</Label>
+                    <Input
+                      id="upi"
+                      placeholder="e.g. salon@upi"
+                      value={formData.upi_id}
+                      onChange={(e) => setFormData({ ...formData, upi_id: e.target.value })}
+                      className="h-12 bg-secondary/30 border-none rounded-xl"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="bank" className="text-xs font-black uppercase tracking-widest text-muted-foreground ml-1">Bank Details (for invoices)</Label>
+                    <Input
+                      id="bank"
+                      placeholder="e.g. Maybank 5642XXX"
+                      value={formData.bank_details}
+                      onChange={(e) => setFormData({ ...formData, bank_details: e.target.value })}
+                      className="h-12 bg-secondary/30 border-none rounded-xl"
+                    />
+                  </div>
                 </div>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
                   <div className="space-y-4">

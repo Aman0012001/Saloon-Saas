@@ -1,135 +1,238 @@
-import { useState } from "react";
-import { DashboardLayout } from "@/components/dashboard/DashboardLayout";
+import { useState, useEffect, useCallback } from "react";
 import { ResponsiveDashboardLayout } from "@/components/dashboard/ResponsiveDashboardLayout";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useMobile } from "@/hooks/use-mobile";
 import { useToast } from "@/hooks/use-toast";
+import { useSalon } from "@/hooks/useSalon";
+import api from "@/services/api";
 import {
   Package,
   Plus,
   Search,
   AlertTriangle,
-  TrendingDown,
   ShoppingCart,
   Boxes,
   BarChart3,
   Edit,
   MoreHorizontal,
   Calendar,
-  DollarSign,
+  Banknote,
   Truck,
   CheckCircle,
   XCircle,
   Clock,
-  Filter
+  RefreshCw,
+  Trash2
 } from "lucide-react";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+
+interface InventoryItem {
+  id: string;
+  name: string;
+  category: string;
+  stock_quantity: number;
+  min_stock_level: number;
+  unit_price: number;
+  supplier_name: string;
+  last_restocked_at: string | null;
+}
+
+interface Supplier {
+  id: string;
+  name: string;
+  contact_person: string;
+  phone: string;
+  email: string;
+  address: string;
+}
 
 const InventoryPage = () => {
   const [activeTab, setActiveTab] = useState("products");
   const [searchTerm, setSearchTerm] = useState("");
   const [showSearch, setShowSearch] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const [products, setProducts] = useState<InventoryItem[]>([]);
+  const [suppliers, setSuppliers] = useState<Supplier[]>([]);
+  const [showAddDialog, setShowAddDialog] = useState(false);
+  const [showEditDialog, setShowEditDialog] = useState(false);
+  const [showSupplierDialog, setShowSupplierDialog] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [editingItem, setEditingItem] = useState<InventoryItem | null>(null);
+
+  const [newItem, setNewItem] = useState({
+    name: "",
+    category: "Hair Care",
+    stock_quantity: 0,
+    min_stock_level: 5,
+    unit_price: 0,
+    supplier_name: "",
+  });
+
+  const [newSupplier, setNewSupplier] = useState({
+    name: "",
+    contact_person: "",
+    phone: "",
+    email: "",
+    address: "",
+  });
+
   const isMobile = useMobile();
   const { toast } = useToast();
+  const { currentSalon, loading: salonLoading } = useSalon();
 
-  // Mock data
-  const products = [
-    {
-      id: "P001",
-      name: "Hair Shampoo - L'Oreal",
-      category: "Hair Care",
-      stock: 25,
-      minStock: 10,
-      price: 450,
-      supplier: "Beauty Supplies Co.",
-      lastRestocked: "2024-01-15",
-      image: "🧴"
-    },
-    {
-      id: "P002",
-      name: "Hair Conditioner - Pantene",
-      category: "Hair Care",
-      stock: 5,
-      minStock: 10,
-      price: 380,
-      supplier: "Beauty Supplies Co.",
-      lastRestocked: "2024-01-10",
-      image: "🧴"
-    },
-    {
-      id: "P003",
-      name: "Face Cream - Olay",
-      category: "Skin Care",
-      stock: 15,
-      minStock: 8,
-      price: 650,
-      supplier: "Cosmetics Ltd.",
-      lastRestocked: "2024-01-18",
-      image: "🧴"
-    },
-    {
-      id: "P004",
-      name: "Hair Oil - Parachute",
-      category: "Hair Care",
-      stock: 2,
-      minStock: 5,
-      price: 120,
-      supplier: "Local Distributor",
-      lastRestocked: "2024-01-05",
-      image: "🛢️"
-    },
-    {
-      id: "P005",
-      name: "Nail Polish - Lakme",
-      category: "Nail Care",
-      stock: 0,
-      minStock: 6,
-      price: 250,
-      supplier: "Cosmetics Ltd.",
-      lastRestocked: "2024-01-01",
-      image: "💅"
+  const fetchData = useCallback(async () => {
+    if (!currentSalon) return;
+    setLoading(true);
+    try {
+      const [productsData, suppliersData] = await Promise.all([
+        api.inventory.getBySalon(currentSalon.id),
+        api.inventory.getSuppliers(currentSalon.id)
+      ]);
+      setProducts(Array.isArray(productsData) ? productsData : []);
+      setSuppliers(Array.isArray(suppliersData) ? suppliersData : []);
+    } catch (error: any) {
+      console.error("Error fetching inventory:", error);
+      toast({
+        title: "Error",
+        description: error.message || "Failed to load inventory data",
+        variant: "destructive"
+      });
+    } finally {
+      setLoading(false);
     }
-  ];
+  }, [currentSalon, toast]);
+
+  useEffect(() => {
+    fetchData();
+  }, [fetchData]);
+
+  const handleAddItem = async () => {
+    if (!currentSalon || !newItem.name) return;
+    setIsSubmitting(true);
+    try {
+      await api.inventory.create({
+        ...newItem,
+        salon_id: currentSalon.id
+      });
+      toast({ title: "Success", description: "Product added to inventory" });
+      setShowAddDialog(false);
+      setNewItem({
+        name: "",
+        category: "Hair Care",
+        stock_quantity: 0,
+        min_stock_level: 5,
+        unit_price: 0,
+        supplier_name: "",
+      });
+      fetchData();
+    } catch (error: any) {
+      toast({ title: "Error", description: error.message || "Failed to add product", variant: "destructive" });
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  const handleEditClick = (item: InventoryItem) => {
+    setEditingItem(item);
+    setShowEditDialog(true);
+  };
+
+  const handleUpdateItem = async () => {
+    if (!currentSalon || !editingItem) return;
+    setIsSubmitting(true);
+    try {
+      await api.inventory.update(editingItem.id, {
+        ...editingItem,
+        salon_id: currentSalon.id
+      });
+      toast({ title: "Success", description: "Product updated successfully" });
+      setShowEditDialog(false);
+      setEditingItem(null);
+      fetchData();
+    } catch (error: any) {
+      toast({ title: "Error", description: error.message || "Failed to update product", variant: "destructive" });
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  const handleAddSupplier = async () => {
+    if (!currentSalon || !newSupplier.name) return;
+    setIsSubmitting(true);
+    try {
+      await api.inventory.create({
+        ...newSupplier,
+        salon_id: currentSalon.id,
+        is_supplier: true
+      });
+      toast({ title: "Success", description: "Supplier added successfully" });
+      setShowSupplierDialog(false);
+      setNewSupplier({
+        name: "",
+        contact_person: "",
+        phone: "",
+        email: "",
+        address: "",
+      });
+      fetchData();
+    } catch (error: any) {
+      toast({ title: "Error", description: error.message || "Failed to add supplier", variant: "destructive" });
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  const handleDeleteItem = async (id: string) => {
+    if (!currentSalon || !confirm("Are you sure you want to delete this item?")) return;
+    try {
+      await api.inventory.delete(id, currentSalon.id);
+      toast({ title: "Deleted", description: "Item removed from inventory" });
+      fetchData();
+    } catch (error) {
+      toast({ title: "Error", description: "Failed to delete item", variant: "destructive" });
+    }
+  };
 
   const stats = [
     {
       title: "Total Products",
-      value: "156",
-      change: "+12",
+      value: products.length.toString(),
       icon: Package,
-      color: "from-blue-500 to-blue-600",
       bg: "bg-blue-50",
       textColor: "text-blue-700"
     },
     {
       title: "Low Stock Items",
-      value: "8",
-      change: "+3",
+      value: products.filter(p => p.stock_quantity > 0 && p.stock_quantity <= p.min_stock_level).length.toString(),
       icon: AlertTriangle,
       alert: true,
-      color: "from-orange-500 to-orange-600",
       bg: "bg-orange-50",
       textColor: "text-orange-700"
     },
     {
       title: "Out of Stock",
-      value: "2",
-      change: "+1",
+      value: products.filter(p => p.stock_quantity === 0).length.toString(),
       icon: XCircle,
       alert: true,
-      color: "from-red-500 to-red-600",
       bg: "bg-red-50",
       textColor: "text-red-700"
     },
     {
       title: "Inventory Value",
-      value: "$45,600",
-      change: "+5%",
+      value: `RM ${products.reduce((acc, p) => acc + (p.stock_quantity * p.unit_price), 0).toLocaleString()}`,
       icon: BarChart3,
-      color: "from-emerald-500 to-emerald-600",
       bg: "bg-emerald-50",
       textColor: "text-emerald-700"
     }
@@ -138,38 +241,22 @@ const InventoryPage = () => {
   const getStockStatus = (stock: number, minStock: number) => {
     if (stock === 0) {
       return (
-        <Badge className="bg-gradient-to-r from-red-100 to-red-200 text-red-700 border-0 font-medium text-xs">
-          <XCircle className="w-3 h-3 mr-1" />
+        <Badge className="bg-red-100 text-red-700 border-0 font-bold px-3 uppercase text-[10px]">
           Out of Stock
         </Badge>
       );
     } else if (stock <= minStock) {
       return (
-        <Badge className="bg-gradient-to-r from-orange-100 to-orange-200 text-orange-700 border-0 font-medium text-xs">
-          <AlertTriangle className="w-3 h-3 mr-1" />
+        <Badge className="bg-orange-100 text-orange-700 border-0 font-bold px-3 uppercase text-[10px]">
           Low Stock
         </Badge>
       );
     } else {
       return (
-        <Badge className="bg-gradient-to-r from-emerald-100 to-emerald-200 text-emerald-700 border-0 font-medium text-xs">
-          <CheckCircle className="w-3 h-3 mr-1" />
+        <Badge className="bg-emerald-100 text-emerald-700 border-0 font-bold px-3 uppercase text-[10px]">
           In Stock
         </Badge>
       );
-    }
-  };
-
-  const getCategoryIcon = (category: string) => {
-    switch (category.toLowerCase()) {
-      case "hair care":
-        return "💇‍♀️";
-      case "skin care":
-        return "🧴";
-      case "nail care":
-        return "💅";
-      default:
-        return "📦";
     }
   };
 
@@ -178,29 +265,30 @@ const InventoryPage = () => {
     product.category.toLowerCase().includes(searchTerm.toLowerCase())
   );
 
+  if (loading || salonLoading) {
+    return (
+      <ResponsiveDashboardLayout showBackButton={true}>
+        <div className="flex flex-col items-center justify-center min-h-[400px] gap-4">
+          <div className="w-12 h-12 border-4 border-accent border-t-transparent rounded-full animate-spin shadow-lg shadow-accent/20" />
+          <p className="text-muted-foreground font-black uppercase tracking-widest text-[10px] animate-pulse">Syncing Inventory...</p>
+        </div>
+      </ResponsiveDashboardLayout>
+    );
+  }
+
   return (
     <ResponsiveDashboardLayout
       showBackButton={true}
       headerActions={
         isMobile ? (
           <div className="flex items-center gap-2">
-            <Button
-              variant="ghost"
-              size="icon"
-              className="w-9 h-9"
-              onClick={() => setShowSearch(!showSearch)}
-            >
-              <Search className="w-5 h-5" />
+            <Button variant="ghost" size="icon" onClick={fetchData}>
+              <RefreshCw className="w-5 h-5" />
             </Button>
             <Button
               size="sm"
-              className="bg-gradient-to-r from-accent to-accent/90 text-white px-3"
-              onClick={() => {
-                toast({
-                  title: "Add Product",
-                  description: "Add product feature will be available soon",
-                });
-              }}
+              className="bg-accent text-white font-bold rounded-xl"
+              onClick={() => setShowAddDialog(true)}
             >
               <Plus className="w-4 h-4 mr-1" />
               Add
@@ -209,339 +297,127 @@ const InventoryPage = () => {
         ) : undefined
       }
     >
-      <div className={`space-y-${isMobile ? '4' : '6'} pb-${isMobile ? '20' : '0'}`}>
-        {/* Mobile Search Bar */}
-        {isMobile && showSearch && (
-          <Card className="border-0 shadow-sm bg-white">
-            <CardContent className="p-4">
-              <div className="relative">
-                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-                <Input
-                  placeholder="Search products..."
-                  value={searchTerm}
-                  onChange={(e) => setSearchTerm(e.target.value)}
-                  className="pl-10 h-10 bg-secondary/30 border-border/50 focus:bg-white transition-colors"
-                />
-              </div>
-            </CardContent>
-          </Card>
-        )}
-
-        {/* Mobile Stats Cards */}
-        {isMobile && (
-          <div className="grid grid-cols-2 gap-3">
-            {stats.map((stat, index) => (
-              <Card key={index} className={`border-0 shadow-sm bg-gradient-to-br ${stat.bg} to-${stat.bg.replace('50', '100')}`}>
-                <CardContent className="p-3 text-center">
-                  <stat.icon className={`w-5 h-5 ${stat.textColor} mx-auto mb-1`} />
-                  <p className={`text-lg font-bold ${stat.textColor}`}>{stat.value}</p>
-                  <p className={`text-xs ${stat.textColor} font-medium`}>
-                    {stat.title.replace(' Items', '').replace(' Stock', '')}
-                  </p>
-                </CardContent>
-              </Card>
-            ))}
-          </div>
-        )}
-
-        {/* Desktop Header */}
+      <div className={`space-y-6 pb-20 md:pb-0`}>
+        {/* Header */}
         {!isMobile && (
           <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
             <div>
-              <h1 className="text-2xl font-bold text-foreground">Inventory Management</h1>
-              <p className="text-muted-foreground">
-                Track products, stock levels, and suppliers
+              <h1 className="text-3xl font-black text-foreground tracking-tight">Inventory Management</h1>
+              <p className="text-muted-foreground font-medium">
+                Track products, stock levels, and suppliers in real-time
               </p>
             </div>
-            <Button
-              className="bg-accent hover:bg-accent/90 gap-2"
-              onClick={() => {
-                toast({
-                  title: "Add Product",
-                  description: "Add product feature will be available soon",
-                });
-              }}
-            >
-              <Plus className="w-4 h-4" />
-              Add Product
-            </Button>
+            <div className="flex items-center gap-3">
+              <Button variant="outline" onClick={fetchData} className="rounded-xl font-bold bg-white">
+                <RefreshCw className="w-4 h-4 mr-2" /> Refresh
+              </Button>
+              <Button
+                className="bg-accent hover:bg-accent/90 gap-2 text-white font-black rounded-xl shadow-lg shadow-accent/20"
+                onClick={() => setShowAddDialog(true)}
+              >
+                <Plus className="w-4 h-4" />
+                Add Product
+              </Button>
+            </div>
           </div>
         )}
 
-        {/* Desktop Stats Grid */}
-        {!isMobile && (
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-            {stats.map((stat, index) => (
-              <Card key={index} className="border-border shadow-card">
-                <CardContent className="p-6">
-                  <div className="flex items-start justify-between">
-                    <div className="space-y-2">
-                      <p className="text-sm text-muted-foreground">{stat.title}</p>
-                      <p className="text-2xl font-bold text-foreground">{stat.value}</p>
-                    </div>
-                    <div className={`w-10 h-10 rounded-lg flex items-center justify-center ${stat.alert ? 'bg-orange-500/10' : 'bg-accent/10'
-                      }`}>
-                      <stat.icon className={`w-5 h-5 ${stat.alert ? 'text-orange-600' : 'text-accent'
-                        }`} />
-                    </div>
-                  </div>
-                  <div className="mt-4 flex items-center gap-1 text-sm">
-                    <span className={stat.alert ? 'text-orange-600' : 'text-sage'}>
-                      {stat.change}
-                    </span>
-                    <span className="text-muted-foreground">this month</span>
-                  </div>
-                </CardContent>
-              </Card>
-            ))}
-          </div>
-        )}
-
-        {/* Mobile Tab Filters */}
-        {isMobile && (
-          <div className="flex gap-2 overflow-x-auto pb-2 scrollbar-hide">
-            <Button
-              variant={activeTab === "products" ? "default" : "outline"}
-              size="sm"
-              onClick={() => setActiveTab("products")}
-              className={`flex-shrink-0 ${activeTab === "products" ? "bg-accent text-white" : ""}`}
-            >
-              <Package className="w-4 h-4 mr-2" />
-              Products
-            </Button>
-            <Button
-              variant={activeTab === "suppliers" ? "default" : "outline"}
-              size="sm"
-              onClick={() => setActiveTab("suppliers")}
-              className={`flex-shrink-0 ${activeTab === "suppliers" ? "bg-blue-500 text-white hover:bg-blue-600" : ""}`}
-            >
-              <Boxes className="w-4 h-4 mr-2" />
-              Suppliers
-            </Button>
-            <Button
-              variant={activeTab === "orders" ? "default" : "outline"}
-              size="sm"
-              onClick={() => setActiveTab("orders")}
-              className={`flex-shrink-0 ${activeTab === "orders" ? "bg-emerald-500 text-white hover:bg-emerald-600" : ""}`}
-            >
-              <ShoppingCart className="w-4 h-4 mr-2" />
-              Orders
-            </Button>
-          </div>
-        )}
+        {/* Stats Grid */}
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+          {stats.map((stat, index) => (
+            <Card key={index} className="border-none shadow-sm bg-white rounded-2xl">
+              <CardContent className="p-4 flex items-center gap-4">
+                <div className={`w-12 h-12 rounded-xl ${stat.bg} flex items-center justify-center ${stat.textColor}`}>
+                  <stat.icon className="w-6 h-6" />
+                </div>
+                <div>
+                  <p className="text-[10px] font-black uppercase text-muted-foreground tracking-widest">{stat.title}</p>
+                  <p className="text-xl font-black text-slate-900">{stat.value}</p>
+                </div>
+              </CardContent>
+            </Card>
+          ))}
+        </div>
 
         {/* Main Content */}
         <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
-          {!isMobile && (
-            <TabsList className="grid w-full grid-cols-3">
-              <TabsTrigger value="products">Products</TabsTrigger>
-              <TabsTrigger value="suppliers">Suppliers</TabsTrigger>
-              <TabsTrigger value="orders">Purchase Orders</TabsTrigger>
-            </TabsList>
-          )}
+          <TabsList className="grid w-full grid-cols-3 bg-slate-100 p-1 rounded-2xl h-12">
+            <TabsTrigger value="products" className="rounded-xl font-bold data-[state=active]:bg-white data-[state=active]:shadow-sm">Products</TabsTrigger>
+            <TabsTrigger value="suppliers" className="rounded-xl font-bold data-[state=active]:bg-white data-[state=active]:shadow-sm">Suppliers</TabsTrigger>
+            <TabsTrigger value="orders" className="rounded-xl font-bold data-[state=active]:bg-white data-[state=active]:shadow-sm">Orders</TabsTrigger>
+          </TabsList>
 
           <TabsContent value="products" className="space-y-4">
-            {/* Desktop Search */}
-            {!isMobile && (
-              <div className="flex items-center gap-4">
-                <div className="relative flex-1 max-w-md">
+            <Card className="border-none shadow-sm bg-white rounded-[2rem] overflow-hidden">
+              <CardHeader className="flex flex-row items-center justify-between pb-2">
+                <CardTitle className="text-xl font-bold">Product List ({filteredProducts.length})</CardTitle>
+                <div className="relative w-64 lg:block hidden">
                   <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
                   <Input
                     placeholder="Search products..."
                     value={searchTerm}
                     onChange={(e) => setSearchTerm(e.target.value)}
-                    className="pl-10"
+                    className="pl-10 h-10 bg-secondary/30 border-none rounded-xl"
                   />
                 </div>
-              </div>
-            )}
-
-            <Card className="border-0 shadow-sm bg-white">
-              <CardHeader className={`${isMobile ? 'pb-3 px-4 pt-4' : 'pb-4'}`}>
-                <div className="flex items-center justify-between">
-                  <div>
-                    <CardTitle className={`${isMobile ? 'text-lg' : 'text-xl'} font-semibold`}>
-                      Product Inventory ({filteredProducts.length})
-                    </CardTitle>
-                    {!isMobile && (
-                      <CardDescription>
-                        Manage your salon products and stock levels
-                      </CardDescription>
-                    )}
-                  </div>
-                </div>
               </CardHeader>
-              <CardContent className={isMobile ? 'px-4 pb-4' : ''}>
+              <CardContent>
                 {filteredProducts.length === 0 ? (
-                  <div className={`text-center ${isMobile ? 'py-8' : 'py-12'}`}>
-                    <div className={`${isMobile ? 'w-12 h-12' : 'w-16 h-16'} bg-gradient-to-br from-secondary/30 to-secondary/10 rounded-full flex items-center justify-center mx-auto mb-4`}>
-                      <Package className={`${isMobile ? 'w-6 h-6' : 'w-8 h-8'} text-muted-foreground`} />
-                    </div>
-                    <h3 className={`${isMobile ? 'text-base' : 'text-lg'} font-semibold text-foreground mb-2`}>No products found</h3>
-                    <p className={`text-muted-foreground mb-4 ${isMobile ? 'text-sm' : ''}`}>
-                      {searchTerm
-                        ? "Try adjusting your search criteria"
-                        : "Add your first product to get started"
-                      }
-                    </p>
-                    <Button
-                      size={isMobile ? "sm" : "default"}
-                      className="bg-gradient-to-r from-accent to-accent/90 text-white"
-                      onClick={() => {
-                        toast({
-                          title: "Add Product",
-                          description: "Add product feature will be available soon",
-                        });
-                      }}
-                    >
-                      <Plus className="w-4 h-4 mr-2" />
-                      Add First Product
-                    </Button>
+                  <div className="py-20 text-center text-muted-foreground font-medium">
+                    No products found in your inventory.
                   </div>
                 ) : (
                   <div className="space-y-3">
                     {filteredProducts.map((product) => (
                       <div
                         key={product.id}
-                        className={`group ${isMobile ? 'p-4 rounded-xl bg-white border border-border/30 shadow-sm' : 'flex items-center justify-between p-4 rounded-lg bg-secondary/50 hover:bg-secondary/70 transition-colors'}`}
+                        className="flex flex-col md:flex-row md:items-center justify-between p-5 rounded-2xl bg-slate-50 hover:bg-slate-100 transition-colors gap-4"
                       >
-                        {isMobile ? (
-                          // Mobile Layout - Card Style
-                          <div className="space-y-3">
-                            {/* Header Row */}
-                            <div className="flex items-center justify-between">
-                              <div className="flex items-center gap-3">
-                                <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-accent/10 to-accent/5 flex items-center justify-center border border-accent/20 text-lg">
-                                  {getCategoryIcon(product.category)}
-                                </div>
-                                <div>
-                                  <p className="font-semibold text-foreground text-sm">{product.id}</p>
-                                  <p className="text-xs text-muted-foreground">{product.category}</p>
-                                </div>
-                              </div>
-                              {getStockStatus(product.stock, product.minStock)}
-                            </div>
-
-                            {/* Product Info */}
-                            <div className="bg-secondary/20 rounded-lg p-3">
-                              <div className="flex items-start justify-between">
-                                <div className="flex-1 min-w-0">
-                                  <p className="font-medium text-foreground text-sm mb-1 line-clamp-2">{product.name}</p>
-                                  <p className="text-xs text-muted-foreground mb-2">Supplier: {product.supplier}</p>
-                                  <div className="flex items-center gap-3 text-xs text-muted-foreground">
-                                    <span className="flex items-center gap-1">
-                                      <Calendar className="w-3 h-3" />
-                                      {new Date(product.lastRestocked).toLocaleDateString('en-IN', {
-                                        day: 'numeric',
-                                        month: 'short'
-                                      })}
-                                    </span>
-                                    <span className="flex items-center gap-1">
-                                      <DollarSign className="w-3 h-3" />
-                                      {product.price}
-                                    </span>
-                                  </div>
-                                </div>
-                                <div className="text-right ml-3">
-                                  <p className="text-xl font-bold text-foreground">{product.stock}</p>
-                                  <p className="text-xs text-muted-foreground">units</p>
-                                  <p className="text-xs text-muted-foreground">min: {product.minStock}</p>
-                                </div>
-                              </div>
-                            </div>
-
-                            {/* Action Row */}
-                            <div className="flex items-center justify-between pt-2 border-t border-border/20">
-                              <div className="flex items-center gap-2">
-                                <Button
-                                  variant="outline"
-                                  size="sm"
-                                  className="h-8 px-3 text-xs"
-                                  onClick={() => {
-                                    toast({
-                                      title: "Edit Product",
-                                      description: `Editing ${product.name}`,
-                                    });
-                                  }}
-                                >
-                                  <Edit className="w-3 h-3 mr-1" />
-                                  Edit
-                                </Button>
-                                {product.stock <= product.minStock && (
-                                  <Button
-                                    variant="outline"
-                                    size="sm"
-                                    className="h-8 px-3 text-xs border-blue-200 text-blue-700 hover:bg-blue-50"
-                                    onClick={() => {
-                                      toast({
-                                        title: "Restock Product",
-                                        description: `Restocking ${product.name}`,
-                                      });
-                                    }}
-                                  >
-                                    <Truck className="w-3 h-3 mr-1" />
-                                    Restock
-                                  </Button>
-                                )}
-                              </div>
-                              <Button
-                                variant="ghost"
-                                size="icon"
-                                className="w-8 h-8"
-                                onClick={() => {
-                                  toast({
-                                    title: "More Options",
-                                    description: "Additional options will be available soon",
-                                  });
-                                }}
-                              >
-                                <MoreHorizontal className="w-4 h-4" />
-                              </Button>
+                        <div className="flex items-center gap-4">
+                          <div className="w-12 h-12 rounded-xl bg-white shadow-sm flex items-center justify-center text-accent">
+                            <Package className="w-6 h-6" />
+                          </div>
+                          <div>
+                            <p className="font-black text-slate-900">{product.name}</p>
+                            <div className="flex items-center gap-2 mt-1">
+                              <Badge className="bg-slate-200 text-slate-600 border-0 font-bold text-[9px] uppercase px-2">{product.category}</Badge>
+                              <p className="text-xs font-bold text-slate-400">Supplier: {product.supplier_name || "N/A"}</p>
                             </div>
                           </div>
-                        ) : (
-                          // Desktop Layout - Horizontal
-                          <>
-                            <div className="flex items-center gap-4">
-                              <div className="w-12 h-12 rounded-lg bg-accent/10 flex items-center justify-center text-xl">
-                                {getCategoryIcon(product.category)}
-                              </div>
-                              <div>
-                                <p className="font-medium text-foreground">{product.name}</p>
-                                <p className="text-sm text-muted-foreground">{product.category}</p>
-                                <p className="text-xs text-muted-foreground">
-                                  Supplier: {product.supplier}
-                                </p>
-                              </div>
-                            </div>
-                            <div className="flex items-center gap-6">
-                              <div className="text-right">
-                                <p className="font-medium text-foreground">
-                                  Stock: {product.stock} units
-                                </p>
-                                <p className="text-sm text-muted-foreground">
-                                  Min: {product.minStock} units
-                                </p>
-                                <p className="text-xs text-muted-foreground">
-                                  ${product.price} per unit
-                                </p>
-                              </div>
-                              {getStockStatus(product.stock, product.minStock)}
-                              <Button
-                                variant="outline"
-                                size="sm"
-                                onClick={() => {
-                                  toast({
-                                    title: "Edit Product",
-                                    description: `Editing ${product.name}`,
-                                  });
-                                }}
-                              >
-                                Edit
-                              </Button>
-                            </div>
-                          </>
-                        )}
+                        </div>
+
+                        <div className="flex-1 px-4 flex flex-col md:flex-row items-center gap-4 md:gap-12 justify-center">
+                          <div className="text-center">
+                            <p className="text-lg font-black text-slate-900">{product.stock_quantity}</p>
+                            <p className="text-[10px] font-black uppercase text-slate-400 tracking-tighter">Current Stock</p>
+                          </div>
+                          <div className="text-center">
+                            <p className="text-lg font-black text-slate-500">RM {product.unit_price}</p>
+                            <p className="text-[10px] font-black uppercase text-slate-400 tracking-tighter">Unit Price</p>
+                          </div>
+                        </div>
+
+                        <div className="flex items-center gap-4">
+                          {getStockStatus(product.stock_quantity, product.min_stock_level)}
+                          <div className="flex items-center gap-2">
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="rounded-xl h-9 w-9 bg-white shadow-sm hover:text-accent"
+                              onClick={() => handleEditClick(product)}
+                            >
+                              <Edit className="w-4 h-4" />
+                            </Button>
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="rounded-xl h-9 w-9 bg-white shadow-sm hover:text-red-500"
+                              onClick={() => handleDeleteItem(product.id)}
+                            >
+                              <Trash2 className="w-4 h-4" />
+                            </Button>
+                          </div>
+                        </div>
                       </div>
                     ))}
                   </div>
@@ -551,92 +427,278 @@ const InventoryPage = () => {
           </TabsContent>
 
           <TabsContent value="suppliers" className="space-y-4">
-            <Card className="border-0 shadow-sm bg-white">
-              <CardHeader className={`${isMobile ? 'pb-3 px-4 pt-4' : 'pb-4'}`}>
-                <CardTitle className={`${isMobile ? 'text-lg' : 'text-xl'} font-semibold`}>Suppliers</CardTitle>
-                {!isMobile && (
-                  <CardDescription>
-                    Manage your product suppliers
-                  </CardDescription>
-                )}
+            <Card className="border-none shadow-sm bg-white rounded-[2rem] overflow-hidden">
+              <CardHeader className="flex flex-row items-center justify-between pb-2">
+                <CardTitle className="text-xl font-bold">Suppliers ({suppliers.length})</CardTitle>
+                <Button
+                  onClick={() => setShowSupplierDialog(true)}
+                  className="bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-xl h-10 px-4"
+                >
+                  <Plus className="w-4 h-4 mr-2" /> New Supplier
+                </Button>
               </CardHeader>
-              <CardContent className={`space-y-4 ${isMobile ? 'px-4 pb-4' : ''}`}>
-                <div className={`grid grid-cols-1 ${isMobile ? 'gap-3' : 'md:grid-cols-2 gap-4'}`}>
-                  <div className={`${isMobile ? 'p-3' : 'p-4'} border border-border rounded-lg bg-gradient-to-r from-blue-50 to-blue-100`}>
-                    <div className="flex items-center gap-3 mb-2">
-                      <Boxes className="w-5 h-5 text-blue-600" />
-                      <span className="font-medium text-blue-700">Beauty Supplies Co.</span>
-                    </div>
-                    <p className={`${isMobile ? 'text-xs' : 'text-sm'} text-blue-600 mb-1`}>
-                      Contact: +91 98765 43210
-                    </p>
-                    <p className={`${isMobile ? 'text-xs' : 'text-sm'} text-blue-600`}>
-                      Products: Hair care, Styling products
-                    </p>
+              <CardContent>
+                {suppliers.length === 0 ? (
+                  <div className="py-20 text-center text-muted-foreground font-medium">
+                    No suppliers added yet.
                   </div>
-                  <div className={`${isMobile ? 'p-3' : 'p-4'} border border-border rounded-lg bg-gradient-to-r from-emerald-50 to-emerald-100`}>
-                    <div className="flex items-center gap-3 mb-2">
-                      <Boxes className="w-5 h-5 text-emerald-600" />
-                      <span className="font-medium text-emerald-700">Cosmetics Ltd.</span>
-                    </div>
-                    <p className={`${isMobile ? 'text-xs' : 'text-sm'} text-emerald-600 mb-1`}>
-                      Contact: +91 87654 32109
-                    </p>
-                    <p className={`${isMobile ? 'text-xs' : 'text-sm'} text-emerald-600`}>
-                      Products: Skin care, Face treatments
-                    </p>
-                  </div>
-                  {isMobile && (
-                    <div className="p-3 border border-border rounded-lg bg-gradient-to-r from-purple-50 to-purple-100">
-                      <div className="flex items-center gap-3 mb-2">
-                        <Boxes className="w-5 h-5 text-purple-600" />
-                        <span className="font-medium text-purple-700">Local Distributor</span>
+                ) : (
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    {suppliers.map(sup => (
+                      <div key={sup.id} className="p-5 rounded-3xl bg-slate-50 border border-slate-100 relative group">
+                        <div className="flex items-start justify-between">
+                          <div className="flex items-center gap-4">
+                            <div className="w-12 h-12 rounded-2xl bg-white shadow-sm flex items-center justify-center text-blue-600">
+                              <Boxes className="w-6 h-6" />
+                            </div>
+                            <div>
+                              <p className="font-black text-slate-900 text-lg">{sup.name}</p>
+                              <p className="text-sm font-bold text-slate-500">{sup.contact_person || "No Contact Person"}</p>
+                            </div>
+                          </div>
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="rounded-xl text-slate-400 group-hover:text-red-500"
+                            onClick={() => api.inventory.delete(sup.id, currentSalon!.id, true).then(() => fetchData())}
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </Button>
+                        </div>
+                        <div className="mt-4 space-y-2">
+                          <p className="text-sm font-medium flex items-center gap-2 text-slate-600">
+                            <Truck className="w-4 h-4" /> {sup.phone || "No phone"}
+                          </p>
+                          <p className="text-sm font-medium flex items-center gap-2 text-slate-600">
+                            <ShoppingCart className="w-4 h-4" /> {sup.email || "No email"}
+                          </p>
+                        </div>
                       </div>
-                      <p className="text-xs text-purple-600 mb-1">
-                        Contact: +91 76543 21098
-                      </p>
-                      <p className="text-xs text-purple-600">
-                        Products: Hair oils, Natural products
-                      </p>
-                    </div>
-                  )}
-                </div>
+                    ))}
+                  </div>
+                )}
               </CardContent>
             </Card>
           </TabsContent>
 
           <TabsContent value="orders" className="space-y-4">
-            <Card className="border-0 shadow-sm bg-white">
-              <CardHeader className={`${isMobile ? 'pb-3 px-4 pt-4' : 'pb-4'}`}>
-                <CardTitle className={`${isMobile ? 'text-lg' : 'text-xl'} font-semibold`}>Purchase Orders</CardTitle>
-                {!isMobile && (
-                  <CardDescription>
-                    Track your product orders and deliveries
-                  </CardDescription>
-                )}
-              </CardHeader>
-              <CardContent className={`space-y-4 ${isMobile ? 'px-4 pb-4' : ''}`}>
-                <div className={`text-center ${isMobile ? 'py-8' : 'py-8'}`}>
-                  <ShoppingCart className={`${isMobile ? 'w-12 h-12' : 'w-12 h-12'} mx-auto mb-3 text-muted-foreground opacity-50`} />
-                  <p className="text-muted-foreground mb-4">No purchase orders yet</p>
-                  <Button
-                    className="bg-accent hover:bg-accent/90 gap-2"
-                    onClick={() => {
-                      toast({
-                        title: "Create Purchase Order",
-                        description: "Purchase order feature will be available soon",
-                      });
-                    }}
-                  >
-                    <Plus className="w-4 h-4" />
-                    Create Purchase Order
-                  </Button>
-                </div>
+            <Card className="border-none shadow-sm bg-white rounded-[2rem] overflow-hidden">
+              <CardContent className="py-20 text-center">
+                <ShoppingCart className="w-16 h-16 mx-auto mb-4 text-slate-200" />
+                <p className="text-xl font-black text-slate-400">Restock Center</p>
+                <p className="text-muted-foreground font-medium max-w-xs mx-auto mt-2">
+                  Platform orders and restock requests will appear here once you connect with suppliers.
+                </p>
               </CardContent>
             </Card>
           </TabsContent>
         </Tabs>
       </div>
+
+      {/* Add Product Dialog */}
+      <Dialog open={showAddDialog} onOpenChange={setShowAddDialog}>
+        <DialogContent className="max-w-md rounded-3xl border-none p-6">
+          <DialogHeader>
+            <DialogTitle className="text-2xl font-black">Add Product</DialogTitle>
+            <DialogDescription className="font-medium">Populate your salon's local inventory.</DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 py-4">
+            <div className="space-y-2">
+              <Label className="text-[10px] font-black uppercase text-muted-foreground ml-1">Product Name</Label>
+              <Input
+                placeholder="e.g. Lavender Shampoo"
+                value={newItem.name}
+                onChange={e => setNewItem({ ...newItem, name: e.target.value })}
+                className="bg-secondary/30 border-none h-12 rounded-xl"
+              />
+            </div>
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label className="text-[10px] font-black uppercase text-muted-foreground ml-1">Category</Label>
+                <Input
+                  placeholder="Hair Care"
+                  value={newItem.category}
+                  onChange={e => setNewItem({ ...newItem, category: e.target.value })}
+                  className="bg-secondary/30 border-none h-12 rounded-xl"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label className="text-[10px] font-black uppercase text-muted-foreground ml-1">Unit Price (RM)</Label>
+                <Input
+                  type="number"
+                  placeholder="0.00"
+                  value={newItem.unit_price}
+                  onChange={e => setNewItem({ ...newItem, unit_price: parseFloat(e.target.value) })}
+                  className="bg-secondary/30 border-none h-12 rounded-xl"
+                />
+              </div>
+            </div>
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label className="text-[10px] font-black uppercase text-muted-foreground ml-1">Current Stock</Label>
+                <Input
+                  type="number"
+                  placeholder="0"
+                  value={newItem.stock_quantity}
+                  onChange={e => setNewItem({ ...newItem, stock_quantity: parseInt(e.target.value) })}
+                  className="bg-secondary/30 border-none h-12 rounded-xl"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label className="text-[10px] font-black uppercase text-muted-foreground ml-1">Min. Alert Level</Label>
+                <Input
+                  type="number"
+                  placeholder="5"
+                  value={newItem.min_stock_level}
+                  onChange={e => setNewItem({ ...newItem, min_stock_level: parseInt(e.target.value) })}
+                  className="bg-secondary/30 border-none h-12 rounded-xl"
+                />
+              </div>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button
+              onClick={handleAddItem}
+              disabled={isSubmitting || !newItem.name}
+              className="bg-accent text-white font-black w-full h-12 rounded-xl shadow-lg shadow-accent/20"
+            >
+              {isSubmitting ? "Adding..." : "Save Product"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Edit Product Dialog */}
+      <Dialog open={showEditDialog} onOpenChange={setShowEditDialog}>
+        <DialogContent className="max-w-md rounded-3xl border-none p-6">
+          <DialogHeader>
+            <DialogTitle className="text-2xl font-black">Edit Product</DialogTitle>
+            <DialogDescription className="font-medium">Update product details in your inventory.</DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 py-4">
+            <div className="space-y-2">
+              <Label className="text-[10px] font-black uppercase text-muted-foreground ml-1">Product Name</Label>
+              <Input
+                placeholder="e.g. Lavender Shampoo"
+                value={editingItem?.name || ""}
+                onChange={e => setEditingItem(prev => prev ? { ...prev, name: e.target.value } : null)}
+                className="bg-secondary/30 border-none h-12 rounded-xl"
+              />
+            </div>
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label className="text-[10px] font-black uppercase text-muted-foreground ml-1">Category</Label>
+                <Input
+                  placeholder="Hair Care"
+                  value={editingItem?.category || ""}
+                  onChange={e => setEditingItem(prev => prev ? { ...prev, category: e.target.value } : null)}
+                  className="bg-secondary/30 border-none h-12 rounded-xl"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label className="text-[10px] font-black uppercase text-muted-foreground ml-1">Unit Price (RM)</Label>
+                <Input
+                  type="number"
+                  placeholder="0.00"
+                  value={editingItem?.unit_price || 0}
+                  onChange={e => setEditingItem(prev => prev ? { ...prev, unit_price: parseFloat(e.target.value) } : null)}
+                  className="bg-secondary/30 border-none h-12 rounded-xl"
+                />
+              </div>
+            </div>
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label className="text-[10px] font-black uppercase text-muted-foreground ml-1">Current Stock</Label>
+                <Input
+                  type="number"
+                  placeholder="0"
+                  value={editingItem?.stock_quantity || 0}
+                  onChange={e => setEditingItem(prev => prev ? { ...prev, stock_quantity: parseInt(e.target.value) } : null)}
+                  className="bg-secondary/30 border-none h-12 rounded-xl"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label className="text-[10px] font-black uppercase text-muted-foreground ml-1">Min. Alert Level</Label>
+                <Input
+                  type="number"
+                  placeholder="5"
+                  value={editingItem?.min_stock_level || 0}
+                  onChange={e => setEditingItem(prev => prev ? { ...prev, min_stock_level: parseInt(e.target.value) } : null)}
+                  className="bg-secondary/30 border-none h-12 rounded-xl"
+                />
+              </div>
+            </div>
+            <div className="space-y-2">
+              <Label className="text-[10px] font-black uppercase text-muted-foreground ml-1">Supplier Name</Label>
+              <Input
+                placeholder="e.g. Acme Supplies"
+                value={editingItem?.supplier_name || ""}
+                onChange={e => setEditingItem(prev => prev ? { ...prev, supplier_name: e.target.value } : null)}
+                className="bg-secondary/30 border-none h-12 rounded-xl"
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button
+              onClick={handleUpdateItem}
+              disabled={isSubmitting || !editingItem?.name}
+              className="bg-accent text-white font-black w-full h-12 rounded-xl shadow-lg shadow-accent/20"
+            >
+              {isSubmitting ? "Updating..." : "Update Product"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Add Supplier Dialog */}
+      <Dialog open={showSupplierDialog} onOpenChange={setShowSupplierDialog}>
+        <DialogContent className="max-w-md rounded-3xl border-none p-6">
+          <DialogHeader>
+            <DialogTitle className="text-2xl font-black">New Supplier</DialogTitle>
+            <DialogDescription className="font-medium">Add a supplier to your network.</DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 py-4">
+            <div className="space-y-2">
+              <Label className="text-[10px] font-black uppercase text-muted-foreground ml-1">Company Name</Label>
+              <Input
+                placeholder="Supplies Co."
+                value={newSupplier.name}
+                onChange={e => setNewSupplier({ ...newSupplier, name: e.target.value })}
+                className="bg-secondary/30 border-none h-12 rounded-xl"
+              />
+            </div>
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label className="text-[10px] font-black uppercase text-muted-foreground ml-1">Contact Person</Label>
+                <Input
+                  placeholder="John Doe"
+                  value={newSupplier.contact_person}
+                  onChange={e => setNewSupplier({ ...newSupplier, contact_person: e.target.value })}
+                  className="bg-secondary/30 border-none h-12 rounded-xl"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label className="text-[10px] font-black uppercase text-muted-foreground ml-1">Phone</Label>
+                <Input
+                  placeholder="+60..."
+                  value={newSupplier.phone}
+                  onChange={e => setNewSupplier({ ...newSupplier, phone: e.target.value })}
+                  className="bg-secondary/30 border-none h-12 rounded-xl"
+                />
+              </div>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button
+              onClick={handleAddSupplier}
+              disabled={isSubmitting || !newSupplier.name}
+              className="bg-blue-600 text-white font-black w-full h-12 rounded-xl shadow-lg shadow-blue/20"
+            >
+              {isSubmitting ? "Saving..." : "Register Supplier"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </ResponsiveDashboardLayout>
   );
 };

@@ -3,7 +3,7 @@ import { useNavigate, Link } from "react-router-dom";
 import {
   Search,
   Clock,
-  DollarSign,
+  Banknote,
   Scissors,
   Sparkles,
   ArrowRight,
@@ -279,7 +279,7 @@ const AllServicesSimple = () => {
                               {service.category || "General"}
                             </Badge>
                             <div className="flex items-center gap-1 text-accent">
-                              <DollarSign className="w-4 h-4" />
+                              <Banknote className="w-4 h-4" />
                               <span className="text-2xl font-black">{service.price}</span>
                             </div>
                           </div>

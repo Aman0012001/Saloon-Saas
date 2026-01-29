@@ -1,12 +1,12 @@
 import { Link } from "react-router-dom";
-import { 
-  Check, 
-  Star, 
-  Crown, 
-  Zap, 
-  Shield, 
-  Users, 
-  Calendar, 
+import {
+  Check,
+  Star,
+  Crown,
+  Zap,
+  Shield,
+  Users,
+  Calendar,
   BarChart3,
   Headphones,
   Smartphone,
@@ -24,7 +24,7 @@ const Pricing = () => {
     {
       name: "Starter",
       icon: Star,
-      price: "$999",
+      price: "RM 999",
       period: "/month",
       description: "Perfect for small salons getting started",
       popular: false,
@@ -46,7 +46,7 @@ const Pricing = () => {
     {
       name: "Professional",
       icon: Crown,
-      price: "$2,499",
+      price: "RM 2,499",
       period: "/month",
       description: "Most popular choice for growing salons",
       popular: true,
@@ -69,7 +69,7 @@ const Pricing = () => {
     {
       name: "Enterprise",
       icon: Zap,
-      price: "$4,999",
+      price: "RM 4,999",
       period: "/month",
       description: "Complete solution for salon chains",
       popular: false,
@@ -92,25 +92,25 @@ const Pricing = () => {
   const addOns = [
     {
       name: "Advanced Analytics",
-      price: "$499/month",
+      price: "RM 499/month",
       description: "Detailed business insights and performance metrics",
       icon: BarChart3
     },
     {
       name: "WhatsApp Integration",
-      price: "$299/month", 
+      price: "RM 299/month",
       description: "Send booking confirmations and reminders via WhatsApp",
       icon: Smartphone
     },
     {
       name: "Website Integration",
-      price: "$799/month",
+      price: "RM 799/month",
       description: "Embed booking widget on your salon website",
       icon: Globe
     },
     {
       name: "Dedicated Support",
-      price: "$1,999/month",
+      price: "RM 1,999/month",
       description: "Priority support with dedicated account manager",
       icon: Headphones
     }
@@ -135,7 +135,7 @@ const Pricing = () => {
     },
     {
       question: "What if I need more bookings?",
-      answer: "Our Professional and Enterprise plans include unlimited bookings. For Starter plan, additional bookings are $2 each."
+      answer: "Our Professional and Enterprise plans include unlimited bookings. For Starter plan, additional bookings are RM 2 each."
     },
     {
       question: "Do you offer discounts for annual payments?",
@@ -146,7 +146,7 @@ const Pricing = () => {
   return (
     <div className="min-h-screen bg-background">
       <Navbar />
-      
+
       {/* Header */}
       <section className="pt-24 pb-16 px-4 bg-gradient-to-br from-accent/5 to-accent/10">
         <div className="container mx-auto text-center">
@@ -182,15 +182,14 @@ const Pricing = () => {
           <div className="grid lg:grid-cols-3 gap-8 max-w-6xl mx-auto">
             {plans.map((plan, index) => {
               const IconComponent = plan.icon;
-              
+
               return (
-                <Card 
-                  key={plan.name} 
-                  className={`relative border-2 transition-all duration-300 hover:shadow-xl ${
-                    plan.popular 
-                      ? 'border-accent bg-gradient-to-b from-accent/5 to-accent/10 scale-105' 
+                <Card
+                  key={plan.name}
+                  className={`relative border-2 transition-all duration-300 hover:shadow-xl ${plan.popular
+                      ? 'border-accent bg-gradient-to-b from-accent/5 to-accent/10 scale-105'
                       : 'border-border hover:border-accent/30'
-                  }`}
+                    }`}
                 >
                   {plan.popular && (
                     <div className="absolute -top-4 left-1/2 transform -translate-x-1/2">
@@ -199,7 +198,7 @@ const Pricing = () => {
                       </Badge>
                     </div>
                   )}
-                  
+
                   <CardHeader className="text-center pb-4">
                     <div className="w-16 h-16 bg-accent/10 rounded-full flex items-center justify-center mx-auto mb-4">
                       <IconComponent className="w-8 h-8 text-accent" />
@@ -211,7 +210,7 @@ const Pricing = () => {
                       <span className="text-muted-foreground">{plan.period}</span>
                     </div>
                   </CardHeader>
-                  
+
                   <CardContent className="space-y-6">
                     <div className="space-y-3">
                       {plan.features.map((feature, idx) => (
@@ -221,7 +220,7 @@ const Pricing = () => {
                         </div>
                       ))}
                     </div>
-                    
+
                     {plan.limitations.length > 0 && (
                       <div className="pt-4 border-t">
                         <p className="text-xs text-muted-foreground mb-2">Limitations:</p>
@@ -232,14 +231,13 @@ const Pricing = () => {
                         ))}
                       </div>
                     )}
-                    
+
                     <Link to="/dashboard/create-salon" className="block">
-                      <Button 
-                        className={`w-full ${
-                          plan.popular 
-                            ? 'bg-accent hover:bg-accent/90 text-white' 
+                      <Button
+                        className={`w-full ${plan.popular
+                            ? 'bg-accent hover:bg-accent/90 text-white'
                             : 'bg-background border-2 border-accent text-accent hover:bg-accent hover:text-white'
-                        }`}
+                          }`}
                         size="lg"
                       >
                         {plan.popular ? 'Start Free Trial' : 'Get Started'}
@@ -262,11 +260,11 @@ const Pricing = () => {
               Enhance your salon management with these optional add-ons
             </p>
           </div>
-          
+
           <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-6 max-w-6xl mx-auto">
             {addOns.map((addon, index) => {
               const IconComponent = addon.icon;
-              
+
               return (
                 <Card key={addon.name} className="text-center hover:shadow-lg transition-all">
                   <CardContent className="p-6">
@@ -293,7 +291,7 @@ const Pricing = () => {
               Got questions? We've got answers.
             </p>
           </div>
-          
+
           <div className="max-w-3xl mx-auto space-y-6">
             {faqs.map((faq, index) => (
               <Card key={index} className="border-0 shadow-md">

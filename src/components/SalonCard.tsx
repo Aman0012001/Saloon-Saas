@@ -10,6 +10,7 @@ interface SalonCardProps {
   employees: number;
   coverImage: string;
   logoImage: string;
+  ownerName?: string;
 }
 
 import { useNavigate } from "react-router-dom";
@@ -23,6 +24,7 @@ const SalonCard = ({
   employees,
   coverImage,
   logoImage,
+  ownerName,
 }: SalonCardProps) => {
   const navigate = useNavigate();
 
@@ -70,14 +72,14 @@ const SalonCard = ({
 
           {/* Stats */}
           <div className="flex items-center gap-4 text-sm text-muted-foreground">
-            <span><strong className="text-foreground">{services}</strong> Services</span>
+            <span className="font-bold text-sky-600">@ {ownerName?.toUpperCase()}</span>
             <span><strong className="text-foreground">{employees}</strong> Employees</span>
           </div>
 
           {/* Book Button */}
           <Button
             variant="ghost"
-            className="w-full mt-2 text-foreground group-hover:text-accent font-medium"
+            className="w-full mt-2 text-foreground hover:bg-[#533B26] hover:text-white font-medium transition-all duration-300"
           >
             Book Now →
           </Button>

@@ -3,6 +3,82 @@
 
 // GET /api/staff?salon_id=xxx - Get salon staff members
 if ($method === 'GET' && empty($uriParts[1])) {
+    $userData = protectRoute(['owner', 'manager', 'staff'], 'view_staff');
+    $salonId = $_GET['salon_id'] ?? null;
+
+    if (!$salonId) {
+        sendResponse(['error' => 'salon_id is required'], 400);
+    }
+
+    $stmt = $db->prepare("
+        SELECT s.*, ur.role,
+               (SELECT GROUP_CONCAT(service_id) FROM staff_services ss WHERE ss.staff_id = s.id) as assigned_services
+        FROM staff_profiles s
+        LEFT JOIN user_roles ur ON s.user_id = ur.user_id AND s.salon_id = ur.salon_id
+        WHERE s.salon_id = ?
+        ORDER BY s.created_at DESC
+    ");
+    $stmt->execute([$salonId]);
+    $staff = $stmt->fetchAll();
+
+    // Parse assigned_services from GROUP_CONCAT
+    foreach ($staff as &$member) {
+        $assigned = $member['assigned_services'] ?? '';
+        $member['assigned_services'] = $assigned ? explode(',', $assigned) : [];
+    }
+
+    sendResponse(['staff' => $staff]);
+}
+
+// GET /api/staff/available-specialists?salon_id=xxx&service_id=yyy&date=zzz&time=ttt - Get available staff for service
+if ($method === 'GET' && ($uriParts[1] ?? '') === 'available-specialists') {
+    $salonId = $_GET['salon_id'] ?? null;
+    $serviceId = $_GET['service_id'] ?? null; // Optional
+    $date = $_GET['date'] ?? null;
+    $time = $_GET['time'] ?? null;
+
+    if (!$salonId) {
+        sendResponse(['error' => 'salon_id is required'], 400);
+    }
+
+    $query = "
+        SELECT s.*, ur.role
+        FROM staff_profiles s
+        LEFT JOIN user_roles ur ON s.user_id = ur.user_id AND s.salon_id = ur.salon_id
+        WHERE s.salon_id = ? AND s.is_active = 1
+    ";
+    $params = [$salonId];
+
+    if ($serviceId) {
+        $query .= " AND s.id IN (SELECT staff_id FROM staff_services WHERE service_id = ?)";
+        $params[] = $serviceId;
+    }
+
+    if ($date && $time) {
+        $query .= " AND s.id NOT IN (
+            SELECT staff_id FROM bookings 
+            WHERE booking_date = ? AND booking_time = ? AND status != 'cancelled' AND staff_id IS NOT NULL
+        )";
+        $params[] = $date;
+        $params[] = $time;
+
+        $query .= " AND s.id NOT IN (
+            SELECT staff_id FROM staff_leaves 
+            WHERE ? BETWEEN start_date AND end_date AND status = 'approved'
+        )";
+        $params[] = $date;
+    }
+
+    $stmt = $db->prepare($query);
+    $stmt->execute($params);
+    $staff = $stmt->fetchAll();
+
+    sendResponse(['specialists' => $staff]);
+}
+
+// GET /api/staff/me - Get current user's staff profile
+if ($method === 'GET' && ($uriParts[1] ?? '') === 'me') {
+    $userData = protectRoute(['staff', 'manager', 'owner'], 'view_staff');
     $salonId = $_GET['salon_id'] ?? null;
 
     if (!$salonId) {
@@ -13,94 +89,143 @@ if ($method === 'GET' && empty($uriParts[1])) {
         SELECT s.*, ur.role 
         FROM staff_profiles s
         LEFT JOIN user_roles ur ON s.user_id = ur.user_id AND s.salon_id = ur.salon_id
-        WHERE s.salon_id = ?
-        ORDER BY s.created_at DESC
+        WHERE s.user_id = ? AND s.salon_id = ?
     ");
-    $stmt->execute([$salonId]);
-    $staff = $stmt->fetchAll();
+    $stmt->execute([$userData['user_id'], $salonId]);
+    $staff = $stmt->fetch();
+
+    if (!$staff)
+        sendResponse(['error' => 'Staff profile not found'], 404);
+
+    sendResponse(['staff' => $staff]);
+}
+
+// GET /api/staff/:id - Get staff member by ID
+if ($method === 'GET' && !empty($uriParts[1]) && empty($uriParts[2])) {
+    $staffId = $uriParts[1];
+    $userData = protectRoute(['owner', 'manager', 'staff'], 'view_staff');
+
+    $stmt = $db->prepare("
+        SELECT s.*, ur.role,
+               (SELECT GROUP_CONCAT(service_id) FROM staff_services ss WHERE ss.staff_id = s.id) as assigned_services
+        FROM staff_profiles s
+        LEFT JOIN user_roles ur ON s.user_id = ur.user_id AND s.salon_id = ur.salon_id
+        WHERE s.id = ?
+    ");
+    $stmt->execute([$staffId]);
+    $staff = $stmt->fetch();
+
+    if (!$staff)
+        sendResponse(['error' => 'Staff member not found'], 404);
+
+    $assigned = $staff['assigned_services'] ?? '';
+    $staff['assigned_services'] = $assigned ? explode(',', $assigned) : [];
 
     sendResponse(['staff' => $staff]);
 }
 
 // POST /api/staff - Create new staff member
 if ($method === 'POST' && empty($uriParts[1])) {
-    $userData = Auth::getUserFromToken();
-    if (!$userData) {
-        sendResponse(['error' => 'Unauthorized'], 401);
-    }
-
+    $userData = protectRoute(['owner', 'manager'], 'manage_staff');
     $data = getRequestBody();
 
     if (empty($data['salon_id']) || empty($data['display_name'])) {
-        sendResponse(['error' => 'Missing required fields'], 400);
+        sendResponse(['error' => 'Missing required fields: salon_id, display_name'], 400);
     }
 
-    // Check if user is owner/manager of the salon
-    $stmt = $db->prepare("SELECT role FROM user_roles WHERE user_id = ? AND salon_id = ?");
-    $stmt->execute([$userData['user_id'], $data['salon_id']]);
-    $userRole = $stmt->fetch();
-
-    if (!$userRole || ($userRole['role'] !== 'owner' && $userRole['role'] !== 'manager')) {
-        sendResponse(['error' => 'Forbidden'], 403);
+    if (!$membershipService->canAddStaff($data['salon_id'])) {
+        sendResponse(['error' => 'Plan limit reached. Please upgrade your subscription.'], 403);
     }
 
-    $id = Auth::generateUuid();
-    $stmt = $db->prepare("
-        INSERT INTO staff_profiles 
-        (id, user_id, salon_id, display_name, email, phone, specializations, commission_percentage, is_active)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-    ");
+    $db->beginTransaction();
 
-    $specializations = isset($data['specializations']) ? json_encode($data['specializations']) : '[]';
+    try {
+        $staffUserId = null;
 
-    $stmt->execute([
-        $id,
-        $data['user_id'] ?? null,
-        $data['salon_id'],
-        $data['display_name'],
-        $data['email'] ?? null,
-        $data['phone'] ?? null,
-        $specializations,
-        $data['commission_percentage'] ?? 0,
-        isset($data['is_active']) ? (bool) $data['is_active'] : true
-    ]);
+        // If email is provided, handle user creation or linking
+        if (!empty($data['email'])) {
+            // Check if user already exists
+            $stmt = $db->prepare("SELECT id FROM users WHERE email = ?");
+            $stmt->execute([$data['email']]);
+            $existingUser = $stmt->fetch();
 
-    // If a user_id was provided and a role was provided, create/update user_role
-    if (!empty($data['user_id']) && !empty($data['role'])) {
-        $roleId = Auth::generateUuid();
+            if ($existingUser) {
+                $staffUserId = $existingUser['id'];
+            } else if (!empty($data['password'])) {
+                // Create new user
+                $staffUserId = Auth::generateUuid();
+                $stmt = $db->prepare("INSERT INTO users (id, email, password_hash) VALUES (?, ?, ?)");
+                $stmt->execute([$staffUserId, $data['email'], Auth::hashPassword($data['password'])]);
+
+                // Create profile
+                $profileId = Auth::generateUuid();
+                $stmt = $db->prepare("INSERT INTO profiles (id, user_id, full_name, user_type) VALUES (?, ?, ?, 'customer')");
+                $stmt->execute([$profileId, $staffUserId, $data['display_name']]);
+            }
+        }
+
+        $id = Auth::generateUuid();
         $stmt = $db->prepare("
-            INSERT INTO user_roles (id, user_id, salon_id, role)
-            VALUES (?, ?, ?, ?)
-            ON DUPLICATE KEY UPDATE role = VALUES(role)
+            INSERT INTO staff_profiles 
+            (id, user_id, salon_id, display_name, email, phone, specializations, commission_percentage, is_active, created_by_id)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         ");
-        $stmt->execute([$roleId, $data['user_id'], $data['salon_id'], $data['role']]);
+
+        $specializations = isset($data['specializations']) ? (is_array($data['specializations']) ? json_encode($data['specializations']) : $data['specializations']) : '[]';
+
+        $stmt->execute([
+            $id,
+            $staffUserId,
+            $data['salon_id'],
+            $data['display_name'],
+            $data['email'] ?? null,
+            $data['phone'] ?? null,
+            $specializations,
+            $data['commission_percentage'] ?? 0,
+            isset($data['is_active']) ? (int) $data['is_active'] : 1,
+            $userData['user_id'] // Strict ownership
+        ]);
+
+        // Create user_role for the salon
+        if ($staffUserId) {
+            $role = $data['role'] ?? 'staff';
+            $roleId = Auth::generateUuid();
+            $stmt = $db->prepare("
+                INSERT INTO user_roles (id, user_id, salon_id, role)
+                VALUES (?, ?, ?, ?)
+                ON DUPLICATE KEY UPDATE role = VALUES(role)
+            ");
+            $stmt->execute([$roleId, $staffUserId, $data['salon_id'], $role]);
+        }
+
+        $db->commit();
+
+        $stmt = $db->prepare("SELECT * FROM staff_profiles WHERE id = ?");
+        $stmt->execute([$id]);
+        $newStaff = $stmt->fetch();
+
+        sendResponse(['staff' => $newStaff], 201);
+    } catch (Exception $e) {
+        $db->rollBack();
+        sendResponse(['error' => 'Failed to create staff node: ' . $e->getMessage()], 500);
     }
-
-    $stmt = $db->prepare("SELECT * FROM staff_profiles WHERE id = ?");
-    $stmt->execute([$id]);
-    $newStaff = $stmt->fetch();
-
-    sendResponse(['staff' => $newStaff], 201);
 }
 
 // PUT /api/staff/:id - Update staff member
 if ($method === 'PUT' && !empty($uriParts[1])) {
-    $userData = Auth::getUserFromToken();
-    if (!$userData) {
-        throw new Exception('Unauthorized', 401);
-    }
-
     $staffId = $uriParts[1];
-    $data = getRequestBody();
 
     // Get staff record to find salon_id
     $stmt = $db->prepare("SELECT * FROM staff_profiles WHERE id = ?");
     $stmt->execute([$staffId]);
     $staff = $stmt->fetch();
 
-    if (!$staff) {
+    if (!$staff)
         sendResponse(['error' => 'Staff member not found'], 404);
-    }
+
+    $userData = protectRoute(['owner', 'manager'], 'manage_staff', $staff['salon_id']);
+
+    $data = getRequestBody();
 
     // Check permissions
     $stmt = $db->prepare("SELECT role FROM user_roles WHERE user_id = ? AND salon_id = ?");
@@ -136,6 +261,48 @@ if ($method === 'PUT' && !empty($uriParts[1])) {
         $stmt->execute([$data['role'], $staff['user_id'], $staff['salon_id']]);
     }
 
+    // Update password or create user if provided
+    if (!empty($data['password'])) {
+        $passwordHash = Auth::hashPassword($data['password']);
+
+        if (!empty($staff['user_id'])) {
+            // Update existing user
+            $stmt = $db->prepare("UPDATE users SET password_hash = ? WHERE id = ?");
+            $stmt->execute([$passwordHash, $staff['user_id']]);
+        } else if (!empty($staff['email'])) {
+            // Check if user with this email already exists
+            $stmt = $db->prepare("SELECT id FROM users WHERE email = ?");
+            $stmt->execute([$staff['email']]);
+            $existingUser = $stmt->fetch();
+
+            $newUserId = $existingUser ? $existingUser['id'] : Auth::generateUuid();
+
+            if (!$existingUser) {
+                // Create user
+                $stmt = $db->prepare("INSERT INTO users (id, email, password_hash) VALUES (?, ?, ?)");
+                $stmt->execute([$newUserId, $staff['email'], $passwordHash]);
+
+                // Create profile
+                $profileId = Auth::generateUuid();
+                $stmt = $db->prepare("INSERT INTO profiles (id, user_id, full_name, user_type) VALUES (?, ?, ?, 'customer')");
+                $stmt->execute([$profileId, $newUserId, $staff['display_name']]);
+            } else {
+                // Update password for existing user if they are being linked as staff
+                $stmt = $db->prepare("UPDATE users SET password_hash = ? WHERE id = ?");
+                $stmt->execute([$passwordHash, $newUserId]);
+            }
+
+            // Link to salon
+            $roleId = Auth::generateUuid();
+            $stmt = $db->prepare("INSERT INTO user_roles (id, user_id, salon_id, role) VALUES (?, ?, ?, ?) ON DUPLICATE KEY UPDATE role = VALUES(role)");
+            $stmt->execute([$roleId, $newUserId, $staff['salon_id'], $data['role'] ?? 'staff']);
+
+            // Update staff profile with the new user_id
+            $stmt = $db->prepare("UPDATE staff_profiles SET user_id = ? WHERE id = ?");
+            $stmt->execute([$newUserId, $staffId]);
+        }
+    }
+
     $stmt = $db->prepare("SELECT * FROM staff_profiles WHERE id = ?");
     $stmt->execute([$staffId]);
     $updatedStaff = $stmt->fetch();
@@ -145,11 +312,6 @@ if ($method === 'PUT' && !empty($uriParts[1])) {
 
 // DELETE /api/staff/:id - Delete staff member
 if ($method === 'DELETE' && !empty($uriParts[1])) {
-    $userData = Auth::getUserFromToken();
-    if (!$userData) {
-        sendResponse(['error' => 'Unauthorized'], 401);
-    }
-
     $staffId = $uriParts[1];
 
     // Get staff record to find salon_id
@@ -157,9 +319,10 @@ if ($method === 'DELETE' && !empty($uriParts[1])) {
     $stmt->execute([$staffId]);
     $staff = $stmt->fetch();
 
-    if (!$staff) {
+    if (!$staff)
         sendResponse(['error' => 'Staff member not found'], 404);
-    }
+
+    $userData = protectRoute(['owner'], 'manage_staff', $staff['salon_id']);
 
     // Check permissions
     $stmt = $db->prepare("SELECT role FROM user_roles WHERE user_id = ? AND salon_id = ?");
@@ -174,6 +337,247 @@ if ($method === 'DELETE' && !empty($uriParts[1])) {
     $stmt->execute([$staffId]);
 
     sendResponse(['message' => 'Staff member deleted']);
+}
+
+// GET /api/staff/:id/profile-stats - Get detailed analytics for a staff member
+if ($method === 'GET' && !empty($uriParts[1]) && ($uriParts[2] ?? '') === 'profile-stats') {
+    $staffId = $uriParts[1];
+    $userData = protectRoute(['owner', 'manager', 'staff'], 'view_staff');
+
+    // 1. Get Staff Info
+    $stmt = $db->prepare("SELECT * FROM staff_profiles WHERE id = ?");
+    $stmt->execute([$staffId]);
+    $staff = $stmt->fetch();
+
+    if (!$staff)
+        sendResponse(['error' => 'Staff record not found'], 404);
+
+    $salonId = $staff['salon_id'];
+    $month = $_GET['month'] ?? date('m');
+    $year = $_GET['year'] ?? date('Y');
+
+    // 2. Calculate Earnings & Customers Handled
+    // We join bookings with services to get price and calculate commission
+    $stmt = $db->prepare("
+        SELECT 
+            COUNT(b.id) as total_customers,
+            SUM(s.price) as gross_revenue,
+            SUM(s.price * (st.commission_percentage / 100)) as total_earnings
+        FROM bookings b
+        JOIN services s ON b.service_id = s.id
+        JOIN staff_profiles st ON b.staff_id = st.id
+        WHERE b.staff_id = ? 
+        AND b.status = 'completed'
+        AND MONTH(b.booking_date) = ?
+        AND YEAR(b.booking_date) = ?
+    ");
+    $stmt->execute([$staffId, $month, $year]);
+    $monthStats = $stmt->fetch();
+
+    // 3. Attendance Summary (Monthly)
+    $stmt = $db->prepare("
+        SELECT 
+            COUNT(DISTINCT DATE(check_in)) as days_worked,
+            SUM(TIMESTAMPDIFF(MINUTE, check_in, IFNULL(check_out, CURRENT_TIMESTAMP))) as total_minutes
+        FROM staff_attendance
+        WHERE staff_id = ?
+        AND MONTH(check_in) = ?
+        AND YEAR(check_in) = ?
+    ");
+    $stmt->execute([$staffId, $month, $year]);
+    $attendanceStats = $stmt->fetch();
+
+    // 4. Leave Summary (Monthly)
+    $stmt = $db->prepare("
+        SELECT COUNT(*) as leave_days
+        FROM staff_leaves
+        WHERE staff_id = ?
+        AND status = 'approved'
+        AND ((MONTH(start_date) = ? AND YEAR(start_date) = ?) OR (MONTH(end_date) = ? AND YEAR(end_date) = ?))
+    ");
+    $stmt->execute([$staffId, $month, $year, $month, $year]);
+    $leaveStats = $stmt->fetch();
+
+    // 5. Recent Customers
+    $stmt = $db->prepare("
+        SELECT b.*, s.name as service_name, s.price, u.email, p.full_name
+        FROM bookings b
+        JOIN services s ON b.service_id = s.id
+        JOIN users u ON b.user_id = u.id
+        LEFT JOIN profiles p ON u.id = p.user_id
+        WHERE b.staff_id = ?
+        ORDER BY b.booking_date DESC, b.booking_time DESC
+        LIMIT 10
+    ");
+    $stmt->execute([$staffId]);
+    $recentCustomers = $stmt->fetchAll();
+
+    sendResponse([
+        'stats' => [
+            'customers' => (int) $monthStats['total_customers'],
+            'revenue' => (float) $monthStats['gross_revenue'],
+            'earnings' => (float) $monthStats['total_earnings'],
+            'days_worked' => (int) $attendanceStats['days_worked'],
+            'total_hours' => round($attendanceStats['total_minutes'] / 60, 1),
+            'leave_days' => (int) $leaveStats['leave_days']
+        ],
+        'recent_customers' => $recentCustomers,
+        'attendance_logs' => [] // Detailed logs can be fetched separately or included
+    ]);
+}
+
+// GET /api/staff/:id/leaves - Get leave records
+if ($method === 'GET' && !empty($uriParts[1]) && ($uriParts[2] ?? '') === 'leaves') {
+    $staffId = $uriParts[1];
+    protectRoute(['owner', 'manager', 'staff'], 'view_staff');
+
+    $stmt = $db->prepare("SELECT * FROM staff_leaves WHERE staff_id = ? ORDER BY start_date DESC");
+    $stmt->execute([$staffId]);
+    $leaves = $stmt->fetchAll();
+
+    sendResponse(['leaves' => $leaves]);
+}
+
+// POST /api/staff/:id/leaves - Create leave request
+if ($method === 'POST' && !empty($uriParts[1]) && ($uriParts[2] ?? '') === 'leaves') {
+    $staffId = $uriParts[1];
+    $userData = protectRoute(['owner', 'manager', 'staff'], 'manage_staff'); // Should check if it's their own profile or they are owner
+
+    $data = getRequestBody();
+    $id = Auth::generateUuid();
+
+    $stmt = $db->prepare("
+        INSERT INTO staff_leaves (id, staff_id, salon_id, start_date, end_date, leave_type, reason, status)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+    ");
+    $stmt->execute([
+        $id,
+        $staffId,
+        $data['salon_id'],
+        $data['start_date'],
+        $data['end_date'],
+        $data['leave_type'] ?? 'casual',
+        $data['reason'] ?? '',
+        (in_array($userData['role'], ['owner', 'manager'])) ? 'approved' : 'pending'
+    ]);
+
+    sendResponse(['message' => 'Leave request logged', 'id' => $id]);
+}
+
+// POST /api/staff/attendance/check-in
+if ($method === 'POST' && in_array('attendance', $uriParts) && in_array('check-in', $uriParts)) {
+    $userData = protectRoute(['staff', 'manager', 'owner'], 'track_attendance');
+    $data = getRequestBody();
+
+    $salonId = $data['salon_id'] ?? null;
+    if (!$salonId)
+        sendResponse(['error' => 'salon_id required'], 400);
+
+    // Get staff profile for this user in this salon
+    $stmt = $db->prepare("SELECT id FROM staff_profiles WHERE user_id = ? AND salon_id = ?");
+    $stmt->execute([$userData['user_id'], $salonId]);
+    $staff = $stmt->fetch();
+
+    if (!$staff)
+        sendResponse(['error' => 'Staff profile not found for this node'], 404);
+
+    // Check if already checked in today
+    $stmt = $db->prepare("SELECT id FROM staff_attendance WHERE staff_id = ? AND DATE(check_in) = CURDATE() AND check_out IS NULL");
+    $stmt->execute([$staff['id']]);
+    if ($stmt->fetch())
+        sendResponse(['error' => 'Already checked in for current cycle'], 400);
+
+    $id = Auth::generateUuid();
+    $stmt = $db->prepare("INSERT INTO staff_attendance (id, staff_id, salon_id, check_in) VALUES (?, ?, ?, CURRENT_TIMESTAMP)");
+    $stmt->execute([$id, $staff['id'], $salonId]);
+
+    sendResponse(['message' => 'Node check-in successful', 'attendance_id' => $id]);
+}
+
+// POST /api/staff/attendance/check-out
+if ($method === 'POST' && in_array('attendance', $uriParts) && in_array('check-out', $uriParts)) {
+    $userData = protectRoute(['staff', 'manager', 'owner'], 'track_attendance');
+    $data = getRequestBody();
+
+    $salonId = $data['salon_id'] ?? null;
+    if (!$salonId)
+        sendResponse(['error' => 'salon_id required'], 400);
+
+    // Get staff profile
+    $stmt = $db->prepare("SELECT id FROM staff_profiles WHERE user_id = ? AND salon_id = ?");
+    $stmt->execute([$userData['user_id'], $salonId]);
+    $staff = $stmt->fetch();
+
+    if (!$staff)
+        sendResponse(['error' => 'Staff profile not found'], 404);
+
+    // Update ongoing attendance record
+    $stmt = $db->prepare("UPDATE staff_attendance SET check_out = CURRENT_TIMESTAMP WHERE staff_id = ? AND check_out IS NULL ORDER BY check_in DESC LIMIT 1");
+    $stmt->execute([$staff['id']]);
+
+    if ($stmt->rowCount() === 0)
+        sendResponse(['error' => 'No active check-in found'], 400);
+
+    sendResponse(['message' => 'Node check-out successful']);
+}
+
+// GET /api/staff/attendance/:staff_id - Get attendance history
+if ($method === 'GET' && in_array('attendance', $uriParts) && !empty($uriParts[1])) {
+    $staffId = $uriParts[2] ?? $uriParts[1]; // Handle different URL structures if needed
+
+    // In index.php, staff/attendance/STAFF_ID -> uriParts[0]=staff, uriParts[1]=attendance, uriParts[2]=STAFF_ID
+    $staffId = $uriParts[2];
+
+    $userData = protectRoute(['staff', 'manager', 'owner'], 'view_attendance');
+
+    // Fetch records
+    $stmt = $db->prepare("SELECT * FROM staff_attendance WHERE staff_id = ? ORDER BY check_in DESC");
+    $stmt->execute([$staffId]);
+    $history = $stmt->fetchAll();
+
+    sendResponse(['attendance' => $history]);
+}
+
+// POST /api/staff/:id/services - Assign services to staff
+if ($method === 'POST' && !empty($uriParts[1]) && ($uriParts[2] ?? '') === 'services') {
+    $staffId = $uriParts[1];
+
+    // Get staff record to find salon_id
+    $stmt = $db->prepare("SELECT * FROM staff_profiles WHERE id = ?");
+    $stmt->execute([$staffId]);
+    $staff = $stmt->fetch();
+
+    if (!$staff)
+        sendResponse(['error' => 'Staff record not found'], 404);
+
+    protectRoute(['owner', 'manager'], 'manage_staff', $staff['salon_id']);
+
+    $data = getRequestBody();
+    $serviceIds = $data['service_ids'] ?? [];
+
+    if (!is_array($serviceIds)) {
+        sendResponse(['error' => 'service_ids must be an array'], 400);
+    }
+
+    $db->beginTransaction();
+    try {
+        // Clear existing assignments
+        $db->prepare("DELETE FROM staff_services WHERE staff_id = ?")->execute([$staffId]);
+
+        // Add new assignments
+        if (!empty($serviceIds)) {
+            $stmt = $db->prepare("INSERT INTO staff_services (id, staff_id, service_id) VALUES (?, ?, ?)");
+            foreach ($serviceIds as $serviceId) {
+                $stmt->execute([Auth::generateUuid(), $staffId, $serviceId]);
+            }
+        }
+
+        $db->commit();
+        sendResponse(['message' => 'Staff services synchronized successfully']);
+    } catch (Exception $e) {
+        $db->rollBack();
+        sendResponse(['error' => 'Failed to sync staff services: ' . $e->getMessage()], 500);
+    }
 }
 
 sendResponse(['error' => 'Staff route not found'], 404);

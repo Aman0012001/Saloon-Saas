@@ -1,30 +1,38 @@
 import { useEffect, useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import {
-    Phone,
-    Calendar,
-    ArrowLeft,
-    Mail,
-    Activity,
-    AlertCircle,
-    FileText,
-    Save,
-    Plus,
-    Pill,
-    Sparkles,
-    ClipboardList,
-    History,
-    Droplet,
-    Gift,
-    Zap,
-    Crown,
-    User,
-    Clock,
-    MessageSquare,
-    MessageCircle,
     Send,
-    Smile
+    Smile,
+    ChevronRight,
+    Loader2,
+    CheckCircle2,
+    ShieldCheck,
+    Fingerprint,
+    Search,
+    Filter,
+    MoreVertical,
+    Share2,
+    LayoutDashboard,
+    ArrowLeft,
+    Phone,
+    Mail,
+    Clock,
+    Plus,
+    AlertCircle,
+    Pill,
+    ClipboardList,
+    Calendar,
+    MessageCircle,
+    Activity,
+    Save,
+    FileText,
+    User,
+    TrendingUp,
+    Settings,
+    Star,
+    Image as ImageIcon
 } from "lucide-react";
+import { motion, AnimatePresence } from "framer-motion";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
@@ -66,17 +74,17 @@ interface Booking {
 }
 
 interface CustomerProfile {
-    user_id: string;
+    id?: string;
+    user_id?: string;
     full_name: string | null;
     phone: string | null;
     email?: string;
     avatar_url: string | null;
-    created_at: string;
+    created_at?: string;
     date_of_birth?: string;
     skin_type?: string;
-    skin_issues?: string[];
-    allergies?: string[];
-    medical_conditions?: string[];
+    skin_issues?: string;
+    allergy_records?: string;
 }
 
 export default function CustomerDetailsPage() {
@@ -89,11 +97,33 @@ export default function CustomerDetailsPage() {
     const [bookings, setBookings] = useState<Booking[]>([]);
     const [loading, setLoading] = useState(true);
     const [activeTab, setActiveTab] = useState("history");
+    const [purchases, setPurchases] = useState<any[]>([]);
+    const [isPurchaseDialogOpen, setIsPurchaseDialogOpen] = useState(false);
+    const [newPurchase, setNewPurchase] = useState({ product_name: "", price: "" });
+    const [savingPurchase, setSavingPurchase] = useState(false);
 
-    // CRM Form States
-    const [skinType, setSkinType] = useState("Combination");
+    const [dob, setDob] = useState("");
+    const [skinType, setSkinType] = useState("");
     const [allergies, setAllergies] = useState("");
     const [skinIssues, setSkinIssues] = useState("");
+    const [savingCRM, setSavingCRM] = useState(false);
+
+    // Treatment Record States
+    const [isTreatmentDialogOpen, setIsTreatmentDialogOpen] = useState(false);
+    const [selectedBooking, setSelectedBooking] = useState<Booking | null>(null);
+    const [treatmentData, setTreatmentData] = useState({
+        treatment_details: "",
+        products_used: "",
+        skin_reaction: "",
+        improvement_notes: "",
+        recommended_next_treatment: "",
+        post_treatment_instructions: "",
+        follow_up_reminder_date: "",
+        marketing_notes: "",
+        before_photo_url: "",
+        after_photo_url: ""
+    });
+    const [savingTreatment, setSavingTreatment] = useState(false);
 
     // Booking Dialog States
     const [isBookingOpen, setIsBookingOpen] = useState(false);
@@ -101,50 +131,110 @@ export default function CustomerDetailsPage() {
     const [selectedDate, setSelectedDate] = useState(new Date().toISOString().split('T')[0]);
     const [selectedTime, setSelectedTime] = useState("");
 
-    useEffect(() => {
+    const fetchData = async () => {
         if (!userId || !currentSalon) return;
+        setLoading(true);
+        try {
+            // Fetch Profile from local API
+            const profileData = await api.profiles.getById(userId);
 
-        const fetchData = async () => {
-            setLoading(true);
-            try {
-                // Fetch Profile from local API
-                const profileData = await api.profiles.getById(userId);
+            const bookingsData = await api.bookings.getAll({
+                salon_id: currentSalon.id,
+                user_id: userId
+            });
 
-                // Fetch Visit History from local API
-                const bookingsData = await api.bookings.getAll({
-                    salon_id: currentSalon.id,
-                    user_id: userId
-                });
-
-                setProfile(profileData);
-                setBookings(bookingsData || []);
-
-                // Simulating fetching CRM extended data
-                setSkinType("Oily/Sensitive");
-                setAllergies("Latex, Penicillin");
-                setSkinIssues("Acne scarring, Hyperpigmentation");
-
-            } catch (error) {
-                console.error("Error fetching local customer details:", error);
-                toast({
-                    title: "Error",
-                    description: "Could not load data from local database",
-                    variant: "destructive",
-                });
-            } finally {
-                setLoading(false);
+            // If profile is thin but bookings have data, enrich it
+            const enrichedProfile = { ...profileData };
+            if (bookingsData && bookingsData.length > 0) {
+                const latestBooking = bookingsData[0];
+                if (!enrichedProfile.full_name) enrichedProfile.full_name = latestBooking.full_name;
+                if (!enrichedProfile.phone) enrichedProfile.phone = latestBooking.phone;
+                if (!enrichedProfile.email) enrichedProfile.email = latestBooking.email;
             }
-        };
 
+            // Fetch CRM extended data
+            try {
+                const crmData = await api.customerRecords.getProfile(userId, currentSalon.id);
+                if (crmData?.profile) {
+                    setSkinType(crmData.profile.skin_type || "");
+                    setAllergies(crmData.profile.allergy_records || "");
+                    setSkinIssues(crmData.profile.skin_issues || "");
+                    setDob(crmData.profile.date_of_birth || "");
+
+                    // Also use CRM data as fallback for name if still missing
+                }
+            } catch (err) {
+                console.warn("No CRM data found or error fetching it");
+            }
+
+            setProfile(enrichedProfile);
+            setBookings(bookingsData || []);
+
+            // Fetch Product Purchases
+            try {
+                const purchasesData = await api.productPurchases.getByCustomer(userId, currentSalon.id);
+                setPurchases(purchasesData || []);
+            } catch (err) {
+                console.warn("Error fetching purchases:", err);
+            }
+
+            // Handle query parameters for direct record opening
+            const params = new URLSearchParams(window.location.search);
+            const tab = params.get("tab");
+            const bookingId = params.get("bookingId");
+
+            if (tab) setActiveTab(tab);
+            if (bookingId && bookingsData) {
+                const targetBooking = bookingsData.find((b: any) => b.id === bookingId);
+                if (targetBooking) {
+                    handleOpenTreatmentRecord(targetBooking);
+                }
+            }
+
+        } catch (error) {
+            console.error("Error fetching local customer details:", error);
+            toast({
+                title: "Error",
+                description: "Could not load data from local database",
+                variant: "destructive",
+            });
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    useEffect(() => {
         fetchData();
     }, [userId, currentSalon]);
 
-    const handleSaveCRM = () => {
-        toast({
-            title: "CRM Updated",
-            description: "Local customer health profile saved.",
-        });
+    const handleSaveCRM = async () => {
+        if (!userId || !currentSalon) return;
+        setSavingCRM(true);
+        try {
+            await api.customerRecords.saveProfile({
+                user_id: userId,
+                salon_id: currentSalon.id,
+                skin_type: skinType,
+                allergy_records: allergies,
+                skin_issues: skinIssues,
+                date_of_birth: dob
+            });
+            toast({
+                title: "Success",
+                description: "Customer health profile updated successfully.",
+            });
+        } catch (error) {
+            toast({
+                title: "Error",
+                description: "Failed to update profile.",
+                variant: "destructive"
+            });
+        } finally {
+            setSavingCRM(false);
+        }
     };
+
+
 
     const handleBooking = async () => {
         if (!selectedService || !selectedDate || !selectedTime || !currentSalon) {
@@ -184,11 +274,133 @@ export default function CustomerDetailsPage() {
         }
     };
 
+    const handleOpenTreatmentRecord = async (booking: Booking) => {
+        setSelectedBooking(booking);
+        setIsTreatmentDialogOpen(true);
+        try {
+            const data = await api.customerRecords.getTreatmentRecord(booking.id);
+            if (data?.record) {
+                setTreatmentData({
+                    treatment_details: data.record.treatment_details || "",
+                    products_used: data.record.products_used || "",
+                    skin_reaction: data.record.skin_reaction || "",
+                    improvement_notes: data.record.improvement_notes || "",
+                    recommended_next_treatment: data.record.recommended_next_treatment || "",
+                    post_treatment_instructions: data.record.post_treatment_instructions || "",
+                    follow_up_reminder_date: data.record.follow_up_reminder_date || "",
+                    marketing_notes: data.record.marketing_notes || "",
+                    before_photo_url: data.record.before_photo_url || "",
+                    after_photo_url: data.record.after_photo_url || ""
+                });
+            } else {
+                setTreatmentData({
+                    treatment_details: "",
+                    products_used: "",
+                    skin_reaction: "",
+                    improvement_notes: "",
+                    recommended_next_treatment: "",
+                    post_treatment_instructions: "",
+                    follow_up_reminder_date: "",
+                    marketing_notes: "",
+                    before_photo_url: "",
+                    after_photo_url: ""
+                });
+            }
+        } catch (error) {
+            console.error("Error fetching treatment record:", error);
+        }
+    };
+
+    const handlePhotoUpload = async (event: React.ChangeEvent<HTMLInputElement>, type: 'before' | 'after') => {
+        const file = event.target.files?.[0];
+        if (!file) return;
+
+        try {
+            const response = await api.uploads.upload(file);
+            if (response.url) {
+                setTreatmentData(prev => ({
+                    ...prev,
+                    [type === 'before' ? 'before_photo_url' : 'after_photo_url']: response.url
+                }));
+                toast({ title: "Success", description: "Photo uploaded successfully" });
+            }
+        } catch (error) {
+            console.error("Photo upload failed:", error);
+            toast({ title: "Error", description: "Failed to upload photo", variant: "destructive" });
+        }
+    };
+
+    const handleSaveTreatment = async () => {
+        if (!selectedBooking) return;
+        setSavingTreatment(true);
+        try {
+            // Save Profile Data (DOB & Skin Type)
+            if (currentSalon && userId) {
+                await api.customerRecords.saveProfile({
+                    user_id: userId,
+                    salon_id: currentSalon.id,
+                    date_of_birth: dob,
+                    skin_type: skinType,
+                    allergy_records: allergies,
+                    skin_issues: skinIssues
+                });
+            }
+
+            await api.customerRecords.saveTreatmentRecord({
+                booking_id: selectedBooking.id,
+                ...treatmentData
+            });
+            toast({
+                title: "Success",
+                description: "Treatment record updated successfully.",
+            });
+            setIsTreatmentDialogOpen(false);
+        } catch (error) {
+            toast({
+                title: "Error",
+                description: "Failed to save treatment record.",
+                variant: "destructive"
+            });
+        } finally {
+            setSavingTreatment(false);
+        }
+    };
+
+    const handleAddPurchase = async () => {
+        if (!userId || !currentSalon || !newPurchase.product_name || !newPurchase.price) {
+            toast({ title: "Error", description: "Please fill all fields", variant: "destructive" });
+            return;
+        }
+
+        setSavingPurchase(true);
+        try {
+            await api.productPurchases.create({
+                user_id: userId,
+                salon_id: currentSalon.id,
+                product_name: newPurchase.product_name,
+                price: parseFloat(newPurchase.price),
+                purchase_date: new Date().toISOString().split('T')[0]
+            });
+
+            toast({ title: "Success", description: "Product purchase recorded." });
+            setIsPurchaseDialogOpen(false);
+            setNewPurchase({ product_name: "", price: "" });
+
+            // Refresh purchases
+            const purchasesData = await api.productPurchases.getByCustomer(userId, currentSalon.id);
+            setPurchases(purchasesData || []);
+        } catch (error) {
+            toast({ title: "Error", description: "Failed to record purchase.", variant: "destructive" });
+        } finally {
+            setSavingPurchase(false);
+        }
+    };
+
     if (loading) {
         return (
             <ResponsiveDashboardLayout>
-                <div className="flex items-center justify-center h-screen">
-                    <Loader2 className="animate-spin h-8 w-8 text-accent" />
+                <div className="flex items-center justify-center h-screen bg-[#F0F2F5]">
+                    <Loader2 className="animate-spin h-8 w-8 text-slate-400" />
                 </div>
             </ResponsiveDashboardLayout>
         );
@@ -202,229 +414,462 @@ export default function CustomerDetailsPage() {
                         <User className="w-8 h-8 text-slate-400" />
                     </div>
                     <h2 className="text-xl font-bold text-slate-700">Dossier Missing</h2>
-                    <p className="text-slate-500 max-w-md">The requested local profile is not in the registry.</p>
-                    <Button onClick={() => navigate("/dashboard/customers")} variant="outline" className="rounded-xl font-bold">
-                        <ArrowLeft className="w-4 h-4 mr-2" /> Return to Archive
+                    <Button onClick={() => navigate("/dashboard/customers")} variant="outline">
+                        <ArrowLeft className="w-4 h-4 mr-2" /> Return
                     </Button>
                 </div>
             </ResponsiveDashboardLayout>
         );
     }
 
+    // Derived Data for UI
+    const totalSpend = bookings.reduce((sum, b) => sum + (Number(b.price) || 0), 0);
+    const uniqueServices = Array.from(new Set(bookings.map(b => b.service_name).filter(Boolean)));
+    const lastVisit = bookings.length > 0 ? bookings[0].booking_date : "N/A";
+
     return (
         <ResponsiveDashboardLayout>
-            <div className="min-h-screen bg-gradient-to-br from-gray-50 via-white to-blue-50/30 -m-6 p-6 pb-24">
-                <div className="max-w-7xl mx-auto space-y-8">
-                    {/* Header / Nav */}
-                    <div className="flex items-center gap-4">
-                        <Button
-                            variant="ghost"
-                            size="icon"
-                            onClick={() => navigate("/dashboard/customers")}
-                            className="bg-white/50 hover:bg-white text-slate-600 hover:text-slate-900 transition-colors shadow-sm rounded-xl h-10 w-10"
-                        >
-                            <ArrowLeft className="w-5 h-5" />
-                        </Button>
-                        <div>
-                            <h1 className="text-3xl font-black text-slate-900 tracking-tight">Client Hub</h1>
-                            <p className="text-slate-500 font-bold uppercase tracking-widest text-[10px] mt-1">Local Registry Status: Verified</p>
+            <div className="min-h-screen bg-[] p-4 md:p-8 font-sans text-slate-800 -m-6">
+                <div className="max-w-7xl mx-auto space-y-6">
+
+                    {/* Main Header */}
+                    <div className="bg-[#1e3a8a] text-white py-4 px-6 rounded-t-lg shadow-sm border-b-4 border-[#fbbf24] flex items-center justify-between">
+                        <div className="flex items-center gap-4">
+                            <Button
+                                variant="ghost"
+                                size="icon"
+                                onClick={() => navigate("/dashboard/customers")}
+                                className="text-white hover:bg-white/10"
+                            >
+                                <ArrowLeft className="w-5 h-5" />
+                            </Button>
+                            <h1 className="text-2xl font-bold tracking-wider uppercase">Customer Record</h1>
                         </div>
+                        <div className="hidden md:block h-px flex-1 bg-white/20 mx-8"></div>
                     </div>
 
-                    <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
-                        {/* PROFILE CARD */}
-                        <div className="lg:col-span-4 space-y-6">
-                            <Card className="border-none shadow-2xl bg-white rounded-[2.5rem] overflow-hidden">
-                                <div className="h-32 bg-slate-900 relative">
-                                    <div className="absolute inset-0 bg-[url('https://grainy-gradients.vercel.app/noise.svg')] opacity-20"></div>
-                                </div>
-                                <CardContent className="relative pt-0 px-8 pb-10 text-center mt-[-64px]">
-                                    <Avatar className="w-32 h-32 ring-8 ring-white shadow-2xl mx-auto mb-4 bg-white">
-                                        <AvatarImage src={profile.avatar_url || ""} />
-                                        <AvatarFallback className="text-4xl bg-slate-50 text-slate-300 font-black">
-                                            {profile.full_name?.charAt(0)}
-                                        </AvatarFallback>
-                                    </Avatar>
+                    {/* Top Row: Profile & History */}
+                    <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
 
-                                    <h2 className="text-2xl font-black text-slate-900">{profile.full_name || 'Unidentified'}</h2>
-                                    <Badge className="bg-accent/10 text-accent border-none font-black px-3 py-1 mt-3">PRO CLIENT</Badge>
-
-                                    <div className="mt-8 space-y-4 text-left">
-                                        {[
-                                            { icon: Phone, label: "Digital ID", value: profile.phone || "No Alias", color: "text-blue-600", bg: "bg-blue-50" },
-                                            { icon: Mail, label: "Network", value: profile.email || "No Email", color: "text-purple-600", bg: "bg-purple-50" },
-                                            { icon: Clock, label: "Last Visit", value: bookings[0]?.booking_date ? format(new Date(bookings[0].booking_date), 'MMM d, yyyy') : 'No History', color: "text-emerald-600", bg: "bg-emerald-50" }
-                                        ].map((item, i) => (
-                                            <div key={i} className="flex items-center gap-4 p-4 rounded-2xl bg-slate-50/50 border border-slate-100 hover:bg-white transition-all shadow-sm">
-                                                <div className={`w-10 h-10 rounded-xl ${item.bg} flex items-center justify-center shrink-0`}>
-                                                    <item.icon className={`w-5 h-5 ${item.color}`} />
-                                                </div>
-                                                <div>
-                                                    <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest leading-none">{item.label}</p>
-                                                    <p className="font-bold text-slate-700 mt-1">{item.value}</p>
+                        {/* Profile Card (Left - Wider) */}
+                        <div className="lg:col-span-7">
+                            <Card className="h-full border border-slate-300 shadow-sm bg-[#F9FAFB] rounded-lg overflow-hidden">
+                                <CardContent className="p-6">
+                                    <div className="flex flex-col md:flex-row gap-6">
+                                        <div className="shrink-0 text-center md:text-left">
+                                            <Avatar className="w-32 h-32 rounded-lg border-4 border-white shadow-md mx-auto md:mx-0">
+                                                <AvatarImage src={profile.avatar_url || ""} className="object-cover" />
+                                                <AvatarFallback className="rounded-lg text-4xl bg-slate-200 text-slate-400">
+                                                    {profile.full_name?.charAt(0)}
+                                                </AvatarFallback>
+                                            </Avatar>
+                                        </div>
+                                        <div className="flex-1 space-y-3">
+                                            <div>
+                                                <div className="flex items-center gap-2 justify-center md:justify-start">
+                                                    <h2 className="text-2xl font-bold text-slate-900">{profile.full_name || "Unknown Guest"}</h2>
+                                                    {bookings.length > 5 && (
+                                                        <span className="flex items-center gap-1 text-[#d97706] font-bold text-sm bg-[#fef3c7] px-2 py-0.5 rounded-full border border-[#fcd34d]">
+                                                            <Star className="w-3 h-3 fill-current" /> VIP Client
+                                                        </span>
+                                                    )}
                                                 </div>
                                             </div>
-                                        ))}
+
+                                            <div className="space-y-2 pt-2 border-t border-slate-200 text-sm">
+                                                <div className="flex items-center gap-3">
+                                                    <Phone className="w-4 h-4 text-[#1e3a8a]" />
+                                                    <span className="font-semibold">{profile.phone || "No Contact"}</span>
+                                                </div>
+                                                <div className="flex items-center gap-3">
+                                                    <Mail className="w-4 h-4 text-[#1e3a8a]" />
+                                                    <span className="font-semibold">{profile.email || "No Email"}</span>
+                                                </div>
+                                                <div className="flex items-center gap-3">
+                                                    <Calendar className="w-4 h-4 text-[#1e3a8a]" />
+                                                    <span className="font-semibold">DOB: {dob ? format(new Date(dob), 'MM/dd/yyyy') : 'Not Set'} {dob && `(Age: ${new Date().getFullYear() - new Date(dob).getFullYear()})`}</span>
+                                                </div>
+                                                <div className="flex items-center gap-3">
+                                                    <ShieldCheck className="w-4 h-4 text-[#1e3a8a]" />
+                                                    <span className="font-semibold text-slate-600 italic">Skin Type: {skinType || "Unspecified"}</span>
+                                                </div>
+                                            </div>
+                                        </div>
                                     </div>
 
-                                    <Button
-                                        onClick={() => setIsBookingOpen(true)}
-                                        className="w-full mt-10 h-16 text-lg font-black bg-slate-900 hover:bg-black shadow-xl shadow-slate-900/20 text-white rounded-[2rem] transition-all transform hover:scale-[1.02]"
-                                    >
-                                        <Calendar className="w-5 h-5 mr-3" /> Book Local Session
-                                    </Button>
+                                    <div className="mt-6 pt-6 border-t border-slate-300 grid grid-cols-3 gap-4 text-center">
+                                        <div>
+                                            <p className="text-xs font-bold text-slate-500 uppercase tracking-wide">Last Visit</p>
+                                            <p className="text-lg font-bold text-slate-900 mt-1">{lastVisit !== "N/A" ? format(new Date(lastVisit), 'MM/dd/yyyy') : "N/A"}</p>
+                                        </div>
+                                        <div className="border-l border-slate-300">
+                                            <p className="text-xs font-bold text-slate-500 uppercase tracking-wide">Total Visits</p>
+                                            <p className="text-lg font-bold text-slate-900 mt-1">{bookings.length}</p>
+                                        </div>
+                                        <div className="border-l border-slate-300">
+                                            <p className="text-xs font-bold text-slate-500 uppercase tracking-wide">Total Spend</p>
+                                            <p className="text-lg font-bold text-[#059669] mt-1">${totalSpend.toFixed(2)}</p>
+                                        </div>
+                                    </div>
+
+
                                 </CardContent>
                             </Card>
                         </div>
 
-                        {/* CONTENT AREA */}
-                        <div className="lg:col-span-8 space-y-8">
-                            <div className="bg-red-50 border border-red-100 rounded-[2rem] p-8 flex items-start gap-6 shadow-sm border-l-8 border-l-red-500">
-                                <div className="p-4 bg-white rounded-2xl shadow-sm shrink-0">
-                                    <AlertCircle className="w-8 h-8 text-red-600" />
-                                </div>
-                                <div>
-                                    <h3 className="font-black text-slate-900 text-xl">Operational Constraints</h3>
-                                    <p className="text-red-700/80 font-bold mt-1 text-sm tracking-tight">Active Hazards: {allergies || "None logged"}</p>
-                                </div>
-                            </div>
-
-                            <Tabs defaultValue="history" className="w-full">
-                                <TabsList className="bg-white p-1.5 rounded-[2.5rem] border border-slate-100 shadow-sm w-full grid grid-cols-3 mb-8 h-18">
-                                    <TabsTrigger value="history" className="rounded-[2rem] py-4 data-[state=active]:bg-slate-900 data-[state=active]:text-white transition-all font-black text-xs uppercase tracking-widest">Treatments</TabsTrigger>
-                                    <TabsTrigger value="marketing" className="rounded-[2rem] py-4 data-[state=active]:bg-slate-900 data-[state=active]:text-white transition-all font-black text-xs uppercase tracking-widest">Connect</TabsTrigger>
-                                    <TabsTrigger value="plan" className="rounded-[2rem] py-4 data-[state=active]:bg-slate-900 data-[state=active]:text-white transition-all font-black text-xs uppercase tracking-widest">Assesment</TabsTrigger>
-                                </TabsList>
-
-                                <TabsContent value="history" className="animate-in fade-in slide-in-from-bottom-5 duration-500">
-                                    {bookings.length === 0 ? (
-                                        <Card className="border-none shadow-sm bg-white rounded-[2rem] p-16 text-center">
-                                            <History className="w-16 h-16 text-slate-100 mx-auto mb-4" />
-                                            <p className="text-slate-400 font-black uppercase tracking-widest text-xs">Archive Empty</p>
-                                        </Card>
-                                    ) : (
-                                        <div className="space-y-6">
-                                            {bookings.map((b) => (
-                                                <Card key={b.id} className="border-none shadow-sm bg-white rounded-[2.5rem] p-8 flex flex-col md:flex-row items-center justify-between gap-6 hover:shadow-xl transition-all border-l-8 border-l-accent/50">
-                                                    <div className="flex items-center gap-5">
-                                                        <div className="h-14 w-14 bg-slate-50 rounded-2xl flex items-center justify-center text-accent">
-                                                            <Sparkles className="w-7 h-7" />
-                                                        </div>
-                                                        <div>
-                                                            <h4 className="font-black text-xl text-slate-900">{b.service_name || "Treatment Session"}</h4>
-                                                            <p className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] mt-1">{format(new Date(b.booking_date), 'MMMM dd, yyyy')}</p>
-                                                        </div>
-                                                    </div>
-                                                    <div className="text-right">
-                                                        <p className="text-2xl font-black text-slate-900">${b.price || '0'}</p>
-                                                        <Badge className="bg-slate-100 text-slate-600 border-none font-black text-[9px] uppercase tracking-tighter mt-1">{b.status}</Badge>
-                                                    </div>
-                                                </Card>
-                                            ))}
-                                        </div>
-                                    )}
-                                </TabsContent>
-
-                                <TabsContent value="marketing" className="space-y-6">
-                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                                        <Card className="border-none shadow-sm bg-emerald-500 p-8 rounded-[2.5rem] text-white overflow-hidden relative group">
-                                            <MessageCircle className="absolute -right-10 -bottom-10 w-48 h-48 opacity-10 group-hover:scale-110 transition-transform" />
-                                            <h4 className="text-2xl font-black">WhatsApp Client</h4>
-                                            <p className="text-white/70 font-bold text-sm mt-2">Initialize encrypted local channel.</p>
-                                            <Button className="w-full mt-8 bg-white text-emerald-600 font-black h-14 rounded-2xl hover:bg-emerald-50 shadow-xl shadow-emerald-500/20">Open Tunnel</Button>
-                                        </Card>
-                                        <Card className="border-none shadow-sm bg-slate-900 p-8 rounded-[2.5rem] text-white">
-                                            <h4 className="text-2xl font-black">Email Brief</h4>
-                                            <p className="text-slate-400 font-bold text-sm mt-2">Send maintenance report via SMTP.</p>
-                                            <Button className="w-full mt-8 bg-accent text-white font-black h-14 rounded-2xl hover:bg-accent/90 shadow-xl shadow-accent/20">Send Report</Button>
-                                        </Card>
+                        {/* History Card (Right) */}
+                        <div className="lg:col-span-5">
+                            <Card className="h-full border border-slate-300 shadow-sm bg-[#F9FAFB] rounded-lg">
+                                <CardHeader className="py-3 px-4 border-b border-slate-200 bg-[#F3F4F6] rounded-t-lg">
+                                    <div className="flex items-center justify-between">
+                                        <CardTitle className="text-sm font-bold text-[#1e3a8a] uppercase tracking-wider">Appointment History</CardTitle>
+                                        <Button variant="ghost" size="sm" className="h-6 text-xs text-slate-500" onClick={() => setIsBookingOpen(true)}>+ New</Button>
                                     </div>
-                                </TabsContent>
-
-                                <TabsContent value="plan">
-                                    <Card className="border-none shadow-sm bg-white rounded-[3rem] p-10">
-                                        <h3 className="text-2xl font-black text-slate-900 tracking-tight">Assesment Data</h3>
-                                        <div className="grid grid-cols-1 md:grid-cols-2 gap-8 mt-10">
-                                            <div className="space-y-4">
-                                                <Label className="text-[10px] font-black uppercase text-slate-400 tracking-widest ml-1">Assigned Skin Type</Label>
-                                                <Select value={skinType} onValueChange={setSkinType}>
-                                                    <SelectTrigger className="h-16 bg-slate-50 border-none rounded-2xl font-bold px-6">
-                                                        <SelectValue />
-                                                    </SelectTrigger>
-                                                    <SelectContent>
-                                                        <SelectItem value="Oily">Oily Focus</SelectItem>
-                                                        <SelectItem value="Dry">Dry/Dehydrated</SelectItem>
-                                                        <SelectItem value="Combination">Combination</SelectItem>
-                                                        <SelectItem value="Sensitive">Hyper Sensitive</SelectItem>
-                                                    </SelectContent>
-                                                </Select>
-                                            </div>
-                                            <div className="space-y-4">
-                                                <Label className="text-[10px] font-black uppercase text-slate-400 tracking-widest ml-1">Recorded Hazards (Allergies)</Label>
-                                                <Input value={allergies} onChange={e => setAllergies(e.target.value)} className="h-16 bg-slate-50 border-none rounded-2xl font-bold px-6" />
-                                            </div>
-                                        </div>
-                                        <Button onClick={handleSaveCRM} className="w-full mt-10 h-16 bg-slate-900 text-white font-black rounded-[2rem] shadow-xl hover:bg-black">Commit to Registry</Button>
-                                    </Card>
-                                </TabsContent>
-                            </Tabs>
+                                </CardHeader>
+                                <CardContent className="p-0">
+                                    <div className="max-h-[280px] overflow-y-auto">
+                                        {bookings.length === 0 ? (
+                                            <div className="p-6 text-center text-slate-400 text-sm italic">No history available.</div>
+                                        ) : (
+                                            <table className="w-full text-sm text-left">
+                                                <tbody className="divide-y divide-slate-200">
+                                                    {bookings.map((b) => (
+                                                        <tr key={b.id} className="hover:bg-slate-100 transition-colors cursor-pointer" onClick={() => handleOpenTreatmentRecord(b)}>
+                                                            <td className="py-3 px-4 font-medium text-slate-600">{format(new Date(b.booking_date), 'MM/dd/yyyy')}</td>
+                                                            <td className="py-3 px-4 text-slate-900 font-semibold truncate max-w-[120px]">{b.service_name || "Service"}</td>
+                                                            <td className="py-3 px-4 text-right font-bold text-slate-700">${b.price}</td>
+                                                        </tr>
+                                                    ))}
+                                                </tbody>
+                                            </table>
+                                        )}
+                                    </div>
+                                </CardContent>
+                            </Card>
                         </div>
                     </div>
+
+                    {/* Bottom Row Grid */}
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+
+                        {/* Services Card */}
+                        <div className="lg:col-span-1">
+                            <Card className="h-full border border-slate-300 shadow-sm bg-[#F9FAFB] rounded-lg flex flex-col">
+                                <CardHeader className="py-3 px-4 border-b border-slate-200 bg-[#F3F4F6] rounded-t-lg">
+                                    <CardTitle className="text-sm font-bold text-[#1e3a8a] uppercase tracking-wider">Services & Products</CardTitle>
+                                </CardHeader>
+                                <CardContent className="p-4 flex-1">
+                                    <ul className="space-y-2">
+                                        {uniqueServices.length > 0 ? uniqueServices.map((s, i) => (
+                                            <li key={i} className="flex items-start gap-2 text-sm text-slate-700 font-medium">
+                                                <span className="mt-1.5 w-1.5 h-1.5 bg-slate-400 rounded-full shrink-0" />
+                                                {s}
+                                            </li>
+                                        )) : (
+                                            <li className="text-sm text-slate-400 italic">No services recorded.</li>
+                                        )}
+                                    </ul>
+                                </CardContent>
+                            </Card>
+                        </div>
+
+                        {/* Notes & Products Card */}
+                        <div className="lg:col-span-1">
+                            <Card className="h-full border border-slate-300 shadow-sm bg-[#F9FAFB] rounded-lg">
+                                <CardHeader className="py-3 px-4 border-b border-slate-200 bg-[#F3F4F6] rounded-t-lg">
+                                    <div className="flex justify-between items-center">
+                                        <CardTitle className="text-sm font-bold text-[#1e3a8a] uppercase tracking-wider">Clinical Notes</CardTitle>
+                                        <Button variant="ghost" size="sm" className="h-6 w-6" onClick={() => setActiveTab('plan')}><Settings className="w-3 h-3" /></Button>
+                                    </div>
+                                </CardHeader>
+                                <CardContent className="p-4">
+                                    <ul className="space-y-2">
+                                        {(allergies || skinIssues) ? (
+                                            <>
+                                                {allergies.split(',').map((a, i) => a.trim() && (
+                                                    <li key={`a-${i}`} className="flex items-start gap-2 text-sm text-rose-700 font-medium">
+                                                        <span className="mt-1.5 w-1.5 h-1.5 bg-rose-400 rounded-full shrink-0" />
+                                                        Allergy: {a.trim()}
+                                                    </li>
+                                                ))}
+                                                {skinIssues.split(',').map((s, i) => s.trim() && (
+                                                    <li key={`s-${i}`} className="flex items-start gap-2 text-sm text-slate-700 font-medium">
+                                                        <span className="mt-1.5 w-1.5 h-1.5 bg-slate-400 rounded-full shrink-0" />
+                                                        {s.trim()}
+                                                    </li>
+                                                ))}
+                                            </>
+                                        ) : (
+                                            <li className="text-sm text-slate-400 italic">No clinical notes recorded.</li>
+                                        )}
+                                    </ul>
+                                </CardContent>
+                            </Card>
+                        </div>
+
+                        <div className="lg:col-span-1">
+                            <Card className="h-full border border-slate-300 shadow-sm bg-[#F9FAFB] rounded-lg">
+                                <CardHeader className="py-3 px-4 border-b border-slate-200 bg-[#F3F4F6] rounded-t-lg">
+                                    <div className="flex justify-between items-center">
+                                        <CardTitle className="text-sm font-bold text-[#1e3a8a] uppercase tracking-wider">Product Purchases</CardTitle>
+                                        <Button
+                                            variant="ghost"
+                                            size="sm"
+                                            className="h-6 text-xs text-slate-500"
+                                            onClick={() => setIsPurchaseDialogOpen(true)}
+                                        >
+                                            <Plus className="w-3 h-3 mr-1" /> Add
+                                        </Button>
+                                    </div>
+                                </CardHeader>
+                                <CardContent className="p-4">
+                                    <div className="space-y-2 text-sm">
+                                        {purchases.length > 0 ? (
+                                            <>
+                                                {purchases.map((p, i) => (
+                                                    <div key={p.id || i} className="flex justify-between items-center text-slate-600">
+                                                        <span>{p.product_name}</span>
+                                                        <span className="font-bold">${parseFloat(p.price).toFixed(2)}</span>
+                                                    </div>
+                                                ))}
+                                                <div className="pt-2 mt-2 border-t border-slate-200 flex justify-between items-center font-bold text-slate-900 text-base">
+                                                    <span>Total Product Spend</span>
+                                                    <span>${purchases.reduce((sum, p) => sum + parseFloat(p.price || 0), 0).toFixed(2)}</span>
+                                                </div>
+                                            </>
+                                        ) : (
+                                            <div className="text-center text-slate-400 italic py-4">No purchases recorded.</div>
+                                        )}
+                                    </div>
+                                </CardContent>
+                            </Card>
+                        </div>
+
+
+                    </div>
+
                 </div>
             </div>
 
-            <Dialog open={isBookingOpen} onOpenChange={setIsBookingOpen}>
-                <DialogContent className="border-none shadow-2xl rounded-[3rem] p-10 max-w-lg">
-                    <DialogHeader>
-                        <DialogTitle className="text-3xl font-black text-slate-900 tracking-tight">Manual Booking</DialogTitle>
-                        <DialogDescription className="font-bold text-slate-400">Initialize a new visit record in the local database.</DialogDescription>
-                    </DialogHeader>
-                    <div className="space-y-6 mt-8">
-                        <div className="space-y-2">
-                            <Label className="text-[10px] font-black uppercase text-slate-400 tracking-widest ml-1">Target Service</Label>
-                            <Select onValueChange={setSelectedService}>
-                                <SelectTrigger className="h-14 bg-slate-50 border-none rounded-2xl font-bold px-5">
-                                    <SelectValue placeholder="Select Procedure" />
-                                </SelectTrigger>
-                                <SelectContent>
-                                    <SelectItem value="Hydrafacial">Hydrafacial Deluxe</SelectItem>
-                                    <SelectItem value="Peel">Chemical Rejuvenation</SelectItem>
-                                    <SelectItem value="Laser">Laser Precision</SelectItem>
-                                </SelectContent>
-                            </Select>
-                        </div>
-                        <div className="grid grid-cols-2 gap-4">
-                            <div className="space-y-2">
-                                <Label className="text-[10px] font-black uppercase text-slate-400 tracking-widest ml-1">Operation Date</Label>
-                                <Input type="date" value={selectedDate} onChange={e => setSelectedDate(e.target.value)} className="h-14 bg-slate-50 border-none rounded-2xl font-bold px-5" />
-                            </div>
-                            <div className="space-y-2">
-                                <Label className="text-[10px] font-black uppercase text-slate-400 tracking-widest ml-1">Timestamp</Label>
-                                <Select onValueChange={setSelectedTime}>
-                                    <SelectTrigger className="h-14 bg-slate-50 border-none rounded-2xl font-bold px-5">
-                                        <SelectValue placeholder="Time" />
-                                    </SelectTrigger>
+            {/* KEEPING EXISTING DIALOGS HIDDEN BUT FUNCTIONAL */}
+            <AnimatePresence>
+                {isBookingOpen && (
+                    <Dialog open={isBookingOpen} onOpenChange={setIsBookingOpen}>
+                        <DialogContent className="sm:max-w-md">
+                            <DialogHeader>
+                                <DialogTitle>New Appointment</DialogTitle>
+                                <DialogDescription>Schedule a session for {profile.full_name}</DialogDescription>
+                            </DialogHeader>
+                            <div className="space-y-4 py-4">
+                                <Select onValueChange={setSelectedService}>
+                                    <SelectTrigger><SelectValue placeholder="Select Service" /></SelectTrigger>
                                     <SelectContent>
-                                        <SelectItem value="10:00">10:00 AM</SelectItem>
-                                        <SelectItem value="14:00">02:00 PM</SelectItem>
-                                        <SelectItem value="16:00">04:00 PM</SelectItem>
+                                        <SelectItem value="Hydrafacial">Hydrafacial</SelectItem>
+                                        <SelectItem value="Hair Cut">Hair Cut</SelectItem>
+                                        <SelectItem value="Consultation">Consultation</SelectItem>
                                     </SelectContent>
                                 </Select>
+                                <Input type="date" value={selectedDate} onChange={e => setSelectedDate(e.target.value)} />
+                                <Input type="time" value={selectedTime} onChange={e => setSelectedTime(e.target.value)} />
+                            </div>
+                            <DialogFooter>
+                                <Button onClick={handleBooking}>Confirm Booking</Button>
+                            </DialogFooter>
+                        </DialogContent>
+                    </Dialog>
+                )}
+            </AnimatePresence>
+
+            <Dialog open={isTreatmentDialogOpen} onOpenChange={setIsTreatmentDialogOpen}>
+                <DialogContent className="max-w-2xl bg-white rounded-lg p-0 overflow-hidden max-h-[90vh] flex flex-col">
+                    <DialogHeader className="p-6 pb-2 shrink-0">
+                        <DialogTitle className="text-xl font-bold text-[#1e3a8a]">Treatment Record</DialogTitle>
+                        <DialogDescription>
+                            Details for {selectedBooking?.service_name} on {selectedBooking && format(new Date(selectedBooking.booking_date), 'MM/dd/yyyy')}
+                        </DialogDescription>
+                    </DialogHeader>
+
+                    <div className="flex-1 overflow-y-auto p-6 pt-2">
+                        {/* Patient Context */}
+                        <div className="grid grid-cols-2 gap-4 mb-6 p-4 bg-slate-50 rounded-lg border border-slate-200">
+                            <div>
+                                <Label className="uppercase text-xs font-bold text-slate-500 mb-1 block">Date of Birth</Label>
+                                <Input
+                                    type="date"
+                                    value={dob}
+                                    onChange={(e) => setDob(e.target.value)}
+                                    className="bg-white"
+                                />
+                            </div>
+                            <div>
+                                <Label className="uppercase text-xs font-bold text-slate-500 mb-1 block">Skin Type</Label>
+                                <Input
+                                    value={skinType}
+                                    onChange={(e) => setSkinType(e.target.value)}
+                                    placeholder="e.g. Oily, Dry"
+                                    className="bg-white"
+                                />
+                            </div>
+                            <div className="col-span-2">
+                                <Label className="uppercase text-xs font-bold text-slate-500 mb-1 block">Clinical Notes (Allergies & Skin Issues)</Label>
+                                <div className="grid grid-cols-2 gap-4">
+                                    <Input
+                                        value={allergies}
+                                        onChange={(e) => setAllergies(e.target.value)}
+                                        placeholder="Allergies (comma separated)"
+                                        className="bg-white"
+                                    />
+                                    <Input
+                                        value={skinIssues}
+                                        onChange={(e) => setSkinIssues(e.target.value)}
+                                        placeholder="Skin Issues (e.g. Acne, Eczema)"
+                                        className="bg-white"
+                                    />
+                                </div>
+                            </div>
+                        </div>
+
+                        <div className="grid grid-cols-2 gap-4">
+                            {Object.keys(treatmentData).map(key => (
+                                <div key={key} className={key.includes('notes') || key.includes('instructions') ? 'col-span-2' : ''}>
+                                    <Label className="uppercase text-xs font-bold text-slate-500 mb-1 block">{key.replace(/_/g, ' ')}</Label>
+                                    <Input
+                                        value={(treatmentData as any)[key]}
+                                        onChange={e => setTreatmentData({ ...treatmentData, [key]: e.target.value })}
+                                        className="bg-slate-50"
+                                    />
+                                </div>
+                            ))}
+                        </div>
+
+                        {/* Photo Comparison Section */}
+                        <div className="border-t border-slate-200 pt-4 mt-2">
+                            <h3 className="text-sm font-bold text-[#1e3a8a] uppercase tracking-wider mb-4">Treatment Photos</h3>
+                            <div className="grid grid-cols-2 gap-6">
+                                {/* Before Photo */}
+                                <div className="space-y-3">
+                                    <Label className="flex items-center gap-2 text-xs font-bold text-slate-500 uppercase">
+                                        <ImageIcon className="w-4 h-4" /> Before Treatment
+                                    </Label>
+                                    <div className="border-2 border-dashed border-slate-300 rounded-lg p-4 flex flex-col items-center justify-center min-h-[200px] bg-slate-50 relative group hover:border-[#F2A93B] transition-colors">
+                                        {treatmentData.before_photo_url ? (
+                                            <div className="relative w-full h-full">
+                                                <img
+                                                    src={treatmentData.before_photo_url}
+                                                    alt="Before"
+                                                    className="w-full h-48 object-cover rounded-md"
+                                                />
+                                                <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center rounded-md">
+                                                    <Button variant="secondary" size="sm" className="pointer-events-none">Change Photo</Button>
+                                                </div>
+                                            </div>
+                                        ) : (
+                                            <div className="text-center text-slate-400">
+                                                <ImageIcon className="w-8 h-8 mx-auto mb-2 opacity-50" />
+                                                <span className="text-sm">Upload Photo</span>
+                                            </div>
+                                        )}
+                                        <Input
+                                            type="file"
+                                            accept="image/*"
+                                            className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
+                                            onChange={(e) => handlePhotoUpload(e, 'before')}
+                                        />
+                                    </div>
+                                </div>
+
+                                {/* After Photo */}
+                                <div className="space-y-3">
+                                    <Label className="flex items-center gap-2 text-xs font-bold text-slate-500 uppercase">
+                                        <ImageIcon className="w-4 h-4" /> After Treatment
+                                    </Label>
+                                    <div className="border-2 border-dashed border-slate-300 rounded-lg p-4 flex flex-col items-center justify-center min-h-[200px] bg-slate-50 relative group hover:border-[#F2A93B] transition-colors">
+                                        {treatmentData.after_photo_url ? (
+                                            <div className="relative w-full h-full">
+                                                <img
+                                                    src={treatmentData.after_photo_url}
+                                                    alt="After"
+                                                    className="w-full h-48 object-cover rounded-md"
+                                                />
+                                                <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center rounded-md">
+                                                    <Button variant="secondary" size="sm" className="pointer-events-none">Change Photo</Button>
+                                                </div>
+                                            </div>
+                                        ) : (
+                                            <div className="text-center text-slate-400">
+                                                <ImageIcon className="w-8 h-8 mx-auto mb-2 opacity-50" />
+                                                <span className="text-sm">Upload Photo</span>
+                                            </div>
+                                        )}
+                                        <Input
+                                            type="file"
+                                            accept="image/*"
+                                            className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
+                                            onChange={(e) => handlePhotoUpload(e, 'after')}
+                                        />
+                                    </div>
+                                </div>
                             </div>
                         </div>
                     </div>
-                    <DialogFooter className="mt-10">
-                        <Button onClick={handleBooking} className="w-full h-16 bg-accent text-white font-black rounded-3xl shadow-xl shadow-accent/20 text-lg">Initialize Booking</Button>
+
+                    <DialogFooter className="p-6 pt-2 shrink-0">
+                        <Button onClick={handleSaveTreatment} disabled={savingTreatment} className="bg-[#1e3a8a] hover:bg-blue-900 text-white">
+                            {savingTreatment ? "Saving..." : "Save Record"}
+                        </Button>
                     </DialogFooter>
                 </DialogContent>
             </Dialog>
+
+            {/* Add Purchase Dialog */}
+            <Dialog open={isPurchaseDialogOpen} onOpenChange={setIsPurchaseDialogOpen}>
+                <DialogContent className="sm:max-w-md">
+                    <DialogHeader>
+                        <DialogTitle>Record Product Purchase</DialogTitle>
+                        <DialogDescription>Add a product sale for {profile.full_name}</DialogDescription>
+                    </DialogHeader>
+                    <div className="space-y-4 py-4">
+                        <div className="space-y-2">
+                            <Label htmlFor="product-name">Product Name</Label>
+                            <Input
+                                id="product-name"
+                                placeholder="e.g. Daily Cleanser"
+                                value={newPurchase.product_name}
+                                onChange={e => setNewPurchase({ ...newPurchase, product_name: e.target.value })}
+                            />
+                        </div>
+                        <div className="space-y-2">
+                            <Label htmlFor="product-price">Price ($)</Label>
+                            <Input
+                                id="product-price"
+                                type="number"
+                                step="0.01"
+                                placeholder="0.00"
+                                value={newPurchase.price}
+                                onChange={e => setNewPurchase({ ...newPurchase, price: e.target.value })}
+                            />
+                        </div>
+                    </div>
+                    <DialogFooter>
+                        <Button
+                            variant="outline"
+                            onClick={() => setIsPurchaseDialogOpen(false)}
+                            disabled={savingPurchase}
+                        >
+                            Cancel
+                        </Button>
+                        <Button
+                            onClick={handleAddPurchase}
+                            disabled={savingPurchase}
+                            className="bg-[#1e3a8a] hover:bg-blue-900"
+                        >
+                            {savingPurchase ? "Saving..." : "Record Sale"}
+                        </Button>
+                    </DialogFooter>
+                </DialogContent>
+            </Dialog>
+
         </ResponsiveDashboardLayout>
     );
 }
 
-const Loader2 = ({ className }: { className?: string }) => (
-    <div className={`w-8 h-8 relative ${className}`}>
-        <div className="absolute inset-0 border-4 border-slate-100 rounded-full"></div>
-        <div className="absolute inset-0 border-4 border-accent rounded-full border-t-transparent animate-spin"></div>
-    </div>
-);

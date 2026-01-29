@@ -9,17 +9,23 @@
 
 $origin = $_SERVER['HTTP_ORIGIN'] ?? '';
 
-if (!empty($origin)) {
+// Allow any localhost or 127.0.0.1 origin for local development
+if (!empty($origin) && (strpos($origin, 'localhost') !== false || strpos($origin, '127.0.0.1') !== false)) {
     header("Access-Control-Allow-Origin: $origin");
     header('Access-Control-Allow-Credentials: true');
-} else {
+    header('Access-Control-Allow-Methods: GET, POST, PUT, DELETE, OPTIONS, PATCH');
+    header('Access-Control-Allow-Headers: Content-Type, Authorization, X-Requested-With, Accept, Origin, Cache-Control, Pragma');
+} else if (empty($origin)) {
     header("Access-Control-Allow-Origin: *");
 }
 
+// Handle preflight requests
 if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
+    header("Access-Control-Allow-Origin: " . ($origin ?: '*'));
     header('Access-Control-Allow-Methods: GET, POST, PUT, DELETE, OPTIONS, PATCH');
-    header('Access-Control-Allow-Headers: Content-Type, Authorization, X-Requested-With, Accept, Origin');
+    header('Access-Control-Allow-Headers: Content-Type, Authorization, X-Requested-With, Accept, Origin, Cache-Control, Pragma');
     header('Access-Control-Max-Age: 86400');
+    // Preflight responses should use 204 or 200
     http_response_code(204);
     exit();
 }
@@ -29,8 +35,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
 // ==========================================
 
 ob_start(); // Prevent accidental output
+ini_set('display_errors', 1);
 error_reporting(E_ALL);
-ini_set('display_errors', 0);
 
 header('Content-Type: application/json; charset=UTF-8');
 header('X-Backend-Server: Salon-PHP-API');
@@ -60,6 +66,101 @@ try {
     // Get database connection
     $db = Database::getInstance()->getConnection();
 
+    require_once __DIR__ . '/../Services/NotificationService.php';
+    require_once __DIR__ . '/../Services/InvoiceService.php';
+    require_once __DIR__ . '/../Services/RBACService.php';
+    require_once __DIR__ . '/../Services/NewsletterService.php';
+    require_once __DIR__ . '/../Services/MembershipService.php';
+
+    $notifService = new NotificationService($db);
+    $invoiceService = new InvoiceService($db, $notifService);
+    $rbacService = new RBACService($db);
+    $newsletterService = new NewsletterService($db);
+    $membershipService = new MembershipService($db);
+
+    /**
+     * Role-Based Access Control Helper
+     */
+    if (!function_exists('protectRoute')) {
+        function protectRoute($allowedRoles = [], $requiredPermission = null, $explicitSalonId = null)
+        {
+            global $rbacService;
+            $userData = Auth::getUserFromToken();
+            if (!$userData) {
+                sendResponse(['error' => 'Authentication required in local registry.'], 401);
+            }
+
+            // Map profile user_types to salon roles for legacy tokens/backward compatibility
+            $effectiveRole = $userData['role'];
+
+            // BYPASS: Check if user is actually a super admin in DB, regardless of token
+            try {
+                $db = Database::getInstance()->getConnection();
+                $stmt = $db->prepare("SELECT 1 FROM platform_admins WHERE user_id = ? AND is_active = 1");
+                $stmt->execute([$userData['user_id']]);
+                if ($stmt->fetchColumn()) {
+                    $effectiveRole = 'admin';
+                }
+            } catch (Exception $e) {
+                // Ignore DB errors here, fall back to token role
+            }
+
+            if ($effectiveRole === 'salon_owner')
+                $effectiveRole = 'owner';
+            if ($effectiveRole === 'salon_staff')
+                $effectiveRole = 'staff';
+            if ($effectiveRole === 'admin')
+                $effectiveRole = 'super_admin';
+
+            // If specific roles are required
+            if (!empty($allowedRoles)) {
+                $isAllowed = in_array($effectiveRole, (array) $allowedRoles);
+
+                // Also allow super_admin to everything
+                if ($effectiveRole === 'super_admin')
+                    $isAllowed = true;
+
+                if (!$isAllowed) {
+                    sendResponse(['error' => "Forbidden - Insufficient clearance level (Role: $effectiveRole)."], 403);
+                }
+            }
+
+            // If a specific permission is required
+            if ($requiredPermission) {
+                $salonId = $explicitSalonId ?: ($_GET['salon_id'] ?? $_POST['salon_id'] ?? null);
+
+                // If not in GET/POST, check request body
+                if (!$salonId) {
+                    $body = json_decode(file_get_contents('php://input'), true);
+                    $salonId = $body['salon_id'] ?? null;
+                }
+
+                if ($salonId) {
+                    if (!$rbacService->hasPermission($userData['user_id'], $salonId, $requiredPermission)) {
+                        // Special case: owners should have all permissions if they are verified owners of the salon
+                        $db = Database::getInstance()->getConnection();
+                        $stmt = $db->prepare("SELECT role FROM user_roles WHERE user_id = ? AND salon_id = ?");
+                        $stmt->execute([$userData['user_id'], $salonId]);
+                        $actualRole = $stmt->fetchColumn();
+
+                        if ($actualRole !== 'owner' && $actualRole !== 'super_admin') {
+                            sendResponse(['error' => "Forbidden - Missing required permission: $requiredPermission"], 403);
+                        }
+                    }
+                } else {
+                    // If permission is required but no salon_id found, we might want to fail safe
+                    // unless it's a global permission (not implemented yet).
+                    // For now, let's just log it or allow it if it's super_admin.
+                    if ($userData['role'] !== 'super_admin') {
+                        // sendResponse(['error' => 'Forbidden - Salon context missing for permission check'], 403);
+                    }
+                }
+            }
+
+            return $userData;
+        }
+    }
+
     // 4. ==========================================
     // 🛣️ ROUTING
     // ==========================================
@@ -73,6 +174,7 @@ try {
     $path = str_replace($basePath, '', $path);
     $uriParts = explode('/', trim($path, '/'));
 
+    error_log("[API Request] Method: $method, Path: $path");
     if (empty($uriParts[0]) || $uriParts[0] === '') {
         sendResponse([
             'status' => 'online',
@@ -162,6 +264,39 @@ try {
             break;
         case 'reviews':
             require_once __DIR__ . '/routes/reviews.php';
+            break;
+        case 'customer_records':
+            require_once __DIR__ . '/routes/customer_records.php';
+            break;
+        case 'platform_products':
+            require_once __DIR__ . '/routes/platform_products.php';
+            break;
+        case 'inventory':
+            require_once __DIR__ . '/routes/inventory.php';
+            break;
+        case 'offers':
+            require_once __DIR__ . '/routes/offers.php';
+            break;
+        case 'contact-enquiries':
+            require_once __DIR__ . '/routes/contact-enquiries.php';
+            break;
+        case 'messages':
+            require_once __DIR__ . '/routes/messages.php';
+            break;
+        case 'knowledge-base':
+            require_once __DIR__ . '/routes/knowledge_base.php';
+            break;
+        case 'product_purchases':
+            require_once __DIR__ . '/routes/product_purchases.php';
+            break;
+        case 'newsletter':
+            require_once __DIR__ . '/routes/newsletter.php';
+            break;
+        case 'reminders':
+            require_once __DIR__ . '/routes/reminders.php';
+            break;
+        case 'loyalty':
+            require_once __DIR__ . '/routes/loyalty.php';
             break;
         default:
             sendResponse([

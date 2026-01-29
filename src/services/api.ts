@@ -22,11 +22,17 @@ const fetchWithAuth = async (url: string, options: RequestInit = {}) => {
 
     console.log(`[API Fetch] ${options.method || 'GET'} ${API_BASE_URL}${url}`);
 
+    // Create an AbortController for a 15-second timeout
+    const controller = new AbortController();
+    const id = setTimeout(() => controller.abort(), 15000);
+
     try {
         const response = await fetch(`${API_BASE_URL}${url}`, {
             ...options,
             headers,
+            signal: controller.signal
         });
+        clearTimeout(id);
 
         if (!response.ok) {
             const resJson = await response.json().catch(() => ({ error: 'Request failed' }));
@@ -38,6 +44,11 @@ const fetchWithAuth = async (url: string, options: RequestInit = {}) => {
         const json = await response.json();
         return json.data !== undefined ? json.data : json;
     } catch (err: any) {
+        clearTimeout(id);
+        if (err.name === 'AbortError') {
+            console.error(`[API Timeout Error] Request to ${url} timed out after 8s`);
+            throw new Error('Server request timed out. Please check if backend is running.');
+        }
         console.error(`[API Network Error] ${err.message}`);
         throw err;
     }
@@ -103,13 +114,54 @@ export const authAPI = {
     async getCurrentUser() {
         return await fetchWithAuth('/auth/me');
     },
+
+    async forgotPassword(email: string) {
+        return await fetchWithAuth('/auth/forgot-password', {
+            method: 'POST',
+            body: JSON.stringify({ email }),
+        });
+    },
+
+    async resetPassword(token: string, password: string) {
+        return await fetchWithAuth('/auth/reset-password', {
+            method: 'POST',
+            body: JSON.stringify({ token, password }),
+        });
+    },
+};
+
+// Helper to ensure we always have an array
+const toArray = (data: any, key?: string) => {
+    if (Array.isArray(data)) return data;
+    if (key && data && Array.isArray(data[key])) return data[key];
+    if (data && typeof data === 'object' && !data.error) {
+        // If it's a single object that's not an error, maybe wrap it? 
+        // No, usually we expect a list. If it's an error object, we return empty.
+    }
+    return [];
 };
 
 // Salons API
 export const salonsAPI = {
     async getAll() {
-        const data = await fetchWithAuth('/salons');
-        return data?.salons || data || [];
+        try {
+            const data = await fetchWithAuth('/salons');
+            console.log('[salonsAPI.getAll] Raw response:', data);
+
+            // Handle different response formats
+            if (Array.isArray(data)) {
+                return data;
+            }
+            if (data && Array.isArray(data.salons)) {
+                return data.salons;
+            }
+
+            console.warn('[salonsAPI.getAll] Unexpected response format:', data);
+            return [];
+        } catch (error) {
+            console.error('[salonsAPI.getAll] Error:', error);
+            return [];
+        }
     },
 
     async getById(id: string) {
@@ -119,7 +171,7 @@ export const salonsAPI = {
 
     async getMySalons() {
         const data = await fetchWithAuth('/salons/my');
-        return data?.salons || data || [];
+        return toArray(data, 'salons');
     },
 
     async create(salonData: any) {
@@ -147,13 +199,13 @@ export const salonsAPI = {
 export const servicesAPI = {
     async getAll() {
         const data = await fetchWithAuth('/services');
-        return data?.services || data || [];
+        return toArray(data, 'services');
     },
 
     async getBySalon(salonId: string, includeInactive: boolean = false) {
         const url = `/services?salon_id=${salonId}${includeInactive ? '&include_inactive=1' : ''}`;
         const data = await fetchWithAuth(url);
-        return data?.services || data || [];
+        return toArray(data, 'services');
     },
 
     async getById(id: string) {
@@ -182,10 +234,10 @@ export const servicesAPI = {
 
 // Bookings API
 export const bookingsAPI = {
-    async getAll(filters?: { user_id?: string; salon_id?: string; date?: string; start_date?: string; end_date?: string }) {
+    async getAll(filters?: { user_id?: string; salon_id?: string; staff_id?: string; status?: string; date?: string; start_date?: string; end_date?: string }) {
         const params = new URLSearchParams(filters as any);
         const data = await fetchWithAuth(`/bookings?${params}`);
-        return data?.bookings || data || [];
+        return toArray(data, 'bookings');
     },
 
     async getById(id: string) {
@@ -200,10 +252,10 @@ export const bookingsAPI = {
         });
     },
 
-    async updateStatus(id: string, status: string) {
+    async updateStatus(id: string, status: string, staffId: string | null = null) {
         return await fetchWithAuth(`/bookings/${id}`, {
             method: 'PUT',
-            body: JSON.stringify({ status }),
+            body: JSON.stringify({ status, staff_id: staffId }),
         });
     },
 
@@ -241,7 +293,7 @@ export const adminAPI = {
 
     async getAllSalons() {
         const data = await fetchWithAuth('/admin/salons');
-        return data?.salons || data || [];
+        return toArray(data, 'salons');
     },
 
     async approveSalon(salonId: string) {
@@ -257,24 +309,43 @@ export const adminAPI = {
         });
     },
 
+    async deleteSalon(salonId: string) {
+        return await fetchWithAuth(`/admin/salons/${salonId}`, {
+            method: 'DELETE',
+        });
+    },
+
+    async createSalon(data: any) {
+        return await fetchWithAuth('/admin/salons', {
+            method: 'POST',
+            body: JSON.stringify(data),
+        });
+    },
+
     async getAllBookings() {
         const data = await fetchWithAuth('/admin/bookings');
-        return data?.bookings || data || [];
+        return toArray(data, 'bookings');
     },
 
     async getAllUsers() {
         const data = await fetchWithAuth('/admin/users');
-        return data?.users || data || [];
+        return toArray(data, 'users');
+    },
+
+    async deleteUser(userId: string) {
+        return await fetchWithAuth(`/admin/users/${userId}`, {
+            method: 'DELETE',
+        });
     },
 
     async getReports(range: string = '30') {
         const data = await fetchWithAuth(`/admin/reports?range=${range}`);
-        return data?.reports || data || [];
+        return toArray(data, 'reports');
     },
 
     async getAllPayments() {
         const data = await fetchWithAuth('/admin/payments');
-        return data?.payments || data || [];
+        return toArray(data, 'payments');
     },
 
     async getSettings() {
@@ -287,18 +358,67 @@ export const adminAPI = {
             body: JSON.stringify(settings),
         });
     },
+
+    async getSubscriptionPlans() {
+        const data = await fetchWithAuth('/admin/subscriptions/plans');
+        return data?.plans || data || [];
+    },
+
+    async createSubscriptionPlan(planData: any) {
+        return await fetchWithAuth('/admin/subscriptions/plans', {
+            method: 'POST',
+            body: JSON.stringify(planData),
+        });
+    },
+
+    async updateSubscriptionPlan(id: string, planData: any) {
+        return await fetchWithAuth(`/admin/subscriptions/plans/${id}`, {
+            method: 'PUT',
+            body: JSON.stringify(planData),
+        });
+    },
+
+    async getContactEnquiries() {
+        const data = await fetchWithAuth('/admin/contact-enquiries');
+        return toArray(data, 'enquiries');
+    },
+
+    async updateContactEnquiryStatus(id: string, status: string) {
+        return await fetchWithAuth(`/admin/contact-enquiries/${id}/status`, {
+            method: 'PUT',
+            body: JSON.stringify({ status }),
+        });
+    },
+
+    async deleteContactEnquiry(id: string) {
+        return await fetchWithAuth(`/admin/contact-enquiries/${id}`, {
+            method: 'DELETE',
+        });
+    },
+
+    async getMemberships() {
+        const data = await fetchWithAuth('/admin/memberships');
+        return toArray(data, 'memberships');
+    },
+
+    async assignMembership(data: { salon_id: string; plan_id: string; status: string }) {
+        return await fetchWithAuth('/admin/memberships/assign', {
+            method: 'POST',
+            body: JSON.stringify(data),
+        });
+    },
 };
 
 // User Roles API
 export const userRolesAPI = {
     async getByUser(userId: string) {
         const data = await fetchWithAuth(`/users/roles?user_id=${userId}`);
-        return data?.roles || data || [];
+        return toArray(data, 'roles');
     },
 
     async getBySalon(salonId: string) {
         const data = await fetchWithAuth(`/users/roles?salon_id=${salonId}`);
-        return data?.roles || data || [];
+        return toArray(data, 'roles');
     },
 };
 
@@ -319,7 +439,7 @@ export const subscriptionsAPI = {
 export const profilesAPI = {
     async getMe() {
         const data = await fetchWithAuth('/users/me');
-        return data?.user || data;
+        return data?.user || data?.profile || data;
     },
 
     async updateMe(profileData: any) {
@@ -332,7 +452,7 @@ export const profilesAPI = {
 
     async getById(userId: string) {
         const data = await fetchWithAuth(`/profiles/${userId}`);
-        return data?.profile || data;
+        return data?.profile || data?.user || data;
     },
 };
 
@@ -340,7 +460,12 @@ export const profilesAPI = {
 export const staffProfilesAPI = {
     async getBySalon(salonId: string) {
         const data = await fetchWithAuth(`/staff?salon_id=${salonId}`);
-        return data?.staff || data || [];
+        return toArray(data, 'staff');
+    },
+
+    async getById(id: string) {
+        const data = await fetchWithAuth(`/staff/${id}`);
+        return data?.staff || data;
     },
 
     async create(staffData: any) {
@@ -357,8 +482,62 @@ export const staffProfilesAPI = {
         });
     },
 
-    async delete(id: string) {
-        await fetchWithAuth(`/staff/${id}`, { method: 'DELETE' });
+    async getProfileStats(id: string, month?: number, year?: number) {
+        let url = `/staff/${id}/profile-stats`;
+        const params = new URLSearchParams();
+        if (month) params.append('month', month.toString());
+        if (year) params.append('year', year.toString());
+        if (params.toString()) url += `?${params.toString()}`;
+        return await fetchWithAuth(url);
+    },
+
+    async getLeaves(id: string) {
+        const data = await fetchWithAuth(`/staff/${id}/leaves`);
+        return toArray(data, 'leaves');
+    },
+
+    async createLeave(id: string, leaveData: any) {
+        return await fetchWithAuth(`/staff/${id}/leaves`, {
+            method: 'POST',
+            body: JSON.stringify(leaveData),
+        });
+    },
+
+    async checkIn(salonId: string) {
+        return await fetchWithAuth('/staff/attendance/check-in', {
+            method: 'POST',
+            body: JSON.stringify({ salon_id: salonId }),
+        });
+    },
+
+    async checkOut(salonId: string) {
+        return await fetchWithAuth('/staff/attendance/check-out', {
+            method: 'POST',
+            body: JSON.stringify({ salon_id: salonId }),
+        });
+    },
+
+    async getAttendance(staffId: string) {
+        const data = await fetchWithAuth(`/staff/attendance/${staffId}`);
+        return toArray(data, 'attendance');
+    },
+
+    async getMe(salonId: string) {
+        const data = await fetchWithAuth(`/staff/me?salon_id=${salonId}`);
+        return data?.staff || data;
+    },
+
+    async syncServices(id: string, serviceIds: string[]) {
+        return await fetchWithAuth(`/staff/${id}/services`, {
+            method: 'POST',
+            body: JSON.stringify({ service_ids: serviceIds }),
+        });
+    },
+
+    async getAvailableSpecialists(params: { salon_id: string; service_id?: string; date?: string; time?: string }) {
+        const query = new URLSearchParams(params as any);
+        const data = await fetchWithAuth(`/staff/available-specialists?${query}`);
+        return toArray(data, 'specialists');
     },
 };
 
@@ -367,7 +546,7 @@ export const notificationsAPI = {
     async getAll(filters?: { salon_id?: string; unread_only?: string }) {
         const params = new URLSearchParams(filters as any);
         const data = await fetchWithAuth(`/notifications?${params}`);
-        return data?.notifications || data || [];
+        return toArray(data, 'notifications');
     },
 
     async markAsRead(id: string) {
@@ -414,6 +593,182 @@ export const api = {
             body: JSON.stringify(data),
         }),
     },
+    customerRecords: {
+        getProfile: (userId: string, salonId: string) => fetchWithAuth(`/customer_records/${userId}/salon/${salonId}`),
+        saveProfile: (data: any) => fetchWithAuth('/customer_records', {
+            method: 'POST',
+            body: JSON.stringify(data),
+        }),
+        getTreatmentRecord: (bookingId: string) => fetchWithAuth(`/customer_records/treatments/${bookingId}`),
+        saveTreatmentRecord: (data: any) => fetchWithAuth('/customer_records/treatments', {
+            method: 'POST',
+            body: JSON.stringify(data),
+        }),
+        getUserTreatments: (userId: string, salonId?: string) => {
+            const url = `/customer_records/${userId}/treatments${salonId ? `?salon_id=${salonId}` : ''}`;
+            return fetchWithAuth(url);
+        }
+    },
+    reminders: {
+        create: (data: any) => fetchWithAuth('/reminders', {
+            method: 'POST',
+            body: JSON.stringify(data),
+        }),
+        getAll: (filters?: { salon_id?: string; user_id?: string }) => {
+            const params = new URLSearchParams(filters as any);
+            return fetchWithAuth(`/reminders?${params}`);
+        },
+        delete: (id: string) => fetchWithAuth(`/reminders/${id}`, {
+            method: 'DELETE',
+        }),
+    },
+    platformProducts: {
+        getAll: (audience?: string, category?: string) => {
+            let url = '/platform_products';
+            const params = new URLSearchParams();
+            if (audience) params.append('audience', audience);
+            if (category) params.append('category', category);
+            if (params.toString()) url += `?${params.toString()}`;
+            return fetchWithAuth(url);
+        },
+        getById: (id: string) => fetchWithAuth(`/platform_products/${id}`),
+        create: (data: any) => fetchWithAuth('/platform_products', {
+            method: 'POST',
+            body: JSON.stringify(data),
+        }),
+        update: (id: string, data: any) => fetchWithAuth(`/platform_products/${id}`, {
+            method: 'PUT',
+            body: JSON.stringify(data),
+        }),
+        delete: (id: string) => fetchWithAuth(`/platform_products/${id}`, {
+            method: 'DELETE',
+        }),
+    },
+    offers: {
+        getBySalon: async (salonId: string) => {
+            const data = await fetchWithAuth(`/offers?salon_id=${salonId}`);
+            return toArray(data, 'offers');
+        },
+        getById: (id: string) => fetchWithAuth(`/offers/${id}`),
+        create: (data: any) => fetchWithAuth('/offers', {
+            method: 'POST',
+            body: JSON.stringify(data),
+        }),
+        update: (id: string, data: any) => fetchWithAuth(`/offers/${id}`, {
+            method: 'PUT',
+            body: JSON.stringify(data),
+        }),
+        delete: (id: string) => fetchWithAuth(`/offers/${id}`, {
+            method: 'DELETE',
+        }),
+    },
+    inventory: {
+        getBySalon: (salonId: string, category?: string) => {
+            let url = `/inventory?salon_id=${salonId}`;
+            if (category) url += `&category=${category}`;
+            return fetchWithAuth(url);
+        },
+        getSuppliers: (salonId: string) => fetchWithAuth(`/inventory?salon_id=${salonId}&suppliers_only=1`),
+        getById: (id: string, salonId: string) => fetchWithAuth(`/inventory/${id}?salon_id=${salonId}`),
+        create: (data: any) => fetchWithAuth('/inventory', {
+            method: 'POST',
+            body: JSON.stringify(data),
+        }),
+        update: (id: string, data: any) => fetchWithAuth(`/inventory/${id}`, {
+            method: 'PUT',
+            body: JSON.stringify(data),
+        }),
+        delete: (id: string, salonId: string, isSupplier: boolean = false) => {
+            const url = `/inventory/${id}?salon_id=${salonId}${isSupplier ? '&is_supplier=1' : ''}`;
+            return fetchWithAuth(url, { method: 'DELETE' });
+        },
+    },
+    messages: {
+        getAll: (salonId?: string) => {
+            let url = '/messages';
+            if (salonId) url += `?salon_id=${salonId}`;
+            return fetchWithAuth(url);
+        },
+        send: (data: {
+            salon_id?: string;
+            receiver_id?: string;
+            subject?: string;
+            content: string;
+            recipient_type: 'owner' | 'super_admin' | 'staff'
+        }) => fetchWithAuth('/messages', {
+            method: 'POST',
+            body: JSON.stringify(data),
+        }),
+        markAsRead: (id: string) => fetchWithAuth(`/messages/${id}/read`, {
+            method: 'PATCH',
+        }),
+        delete: (id: string) => fetchWithAuth(`/messages/${id}`, {
+            method: 'DELETE',
+        }),
+    },
+    contactEnquiries: {
+        create: (data: any) => fetchWithAuth('/contact-enquiries', {
+            method: 'POST',
+            body: JSON.stringify(data),
+        }),
+    },
+    knowledgeBase: {
+        getBySalon: async (salonId: string, category?: string, serviceId?: string) => {
+            let url = `/knowledge-base?salon_id=${salonId}`;
+            if (category) url += `&category=${category}`;
+            if (serviceId) url += `&service_id=${serviceId}`;
+            const data = await fetchWithAuth(url);
+            return toArray(data, 'items');
+        },
+        create: (data: any) => fetchWithAuth('/knowledge-base', {
+            method: 'POST',
+            body: JSON.stringify(data),
+        }),
+        update: (id: string, data: any) => fetchWithAuth(`/knowledge-base/${id}`, {
+            method: 'PUT',
+            body: JSON.stringify(data),
+        }),
+        delete: (id: string) => fetchWithAuth(`/knowledge-base/${id}`, {
+            method: 'DELETE',
+        }),
+    },
+    productPurchases: {
+        getByCustomer: async (userId: string, salonId: string) => {
+            const data = await fetchWithAuth(`/product_purchases?user_id=${userId}&salon_id=${salonId}`);
+            return toArray(data, 'purchases');
+        },
+        create: (data: { user_id: string; salon_id: string; product_name: string; price: number; purchase_date?: string }) =>
+            fetchWithAuth('/product_purchases', {
+                method: 'POST',
+                body: JSON.stringify(data),
+            }),
+    },
+    loyalty: {
+        getSettings: (salonId: string) => fetchWithAuth(`/loyalty/settings?salon_id=${salonId}`),
+        updateSettings: (data: any) => fetchWithAuth('/loyalty/settings', {
+            method: 'POST',
+            body: JSON.stringify(data),
+        }),
+        getRewards: async (salonId: string, activeOnly: boolean = false) => {
+            const data = await fetchWithAuth(`/loyalty/rewards?salon_id=${salonId}${activeOnly ? '&active_only=true' : ''}`);
+            return toArray(data, 'rewards');
+        },
+        createReward: (data: any) => fetchWithAuth('/loyalty/rewards', {
+            method: 'POST',
+            body: JSON.stringify(data),
+        }),
+        deleteReward: (salonId: string, rewardId: string) => fetchWithAuth(`/loyalty/rewards/${rewardId}?salon_id=${salonId}`, {
+            method: 'DELETE',
+        }),
+        getMyPoints: async (salonId: string) => {
+            const data = await fetchWithAuth(`/loyalty/my-points?salon_id=${salonId}`);
+            return data?.points || 0;
+        },
+        redeem: (salonId: string, rewardId: string) => fetchWithAuth('/loyalty/redeem', {
+            method: 'POST',
+            body: JSON.stringify({ salon_id: salonId, reward_id: rewardId }),
+        }),
+    }
 };
 
 export default api;

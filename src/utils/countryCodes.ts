@@ -80,7 +80,7 @@ export const countryCodes: CountryCode[] = [
     { code: "+852", country: "Hong Kong", flag: "🇭🇰" },
     { code: "+36", country: "Hungary", flag: "🇭🇺" },
     { code: "+354", country: "Iceland", flag: "🇮🇸" },
-    { code: "+91", country: "India", flag: "🇮🇳" },
+    { code: "+91", country: "Malaysia", flag: "🇮🇳" },
     { code: "+62", country: "Indonesia", flag: "🇮🇩" },
     { code: "+98", country: "Iran", flag: "🇮🇷" },
     { code: "+964", country: "Iraq", flag: "🇮🇶" },

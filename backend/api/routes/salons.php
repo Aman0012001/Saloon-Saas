@@ -5,14 +5,19 @@
 if ($method === 'GET' && count($uriParts) === 1) {
     try {
         $stmt = $db->prepare("
-            SELECT id, name, slug, description, address, city, state, pincode, 
-                   phone, email, logo_url, cover_image_url, is_active
-            FROM salons
-            WHERE is_active = 1
-            ORDER BY created_at DESC
+            SELECT s.id, s.name, s.slug, s.description, s.address, s.city, s.state, s.pincode, 
+                   s.phone, s.email, s.logo_url, s.cover_image_url, s.is_active,
+                   p.full_name as owner_name
+            FROM salons s
+            LEFT JOIN user_roles ur ON s.id = ur.salon_id AND ur.role = 'owner'
+            LEFT JOIN profiles p ON ur.user_id = p.user_id
+            WHERE s.is_active = 1
+            GROUP BY s.id
+            ORDER BY s.created_at DESC
         ");
         $stmt->execute();
         $salons = $stmt->fetchAll();
+        error_log("[Salons API] Found " . count($salons) . " active salons");
         sendResponse(['salons' => $salons]);
     } catch (PDOException $e) {
         sendResponse(['error' => 'Query failed: ' . $e->getMessage()], 500);
@@ -93,6 +98,9 @@ if ($method === 'POST' && count($uriParts) === 1) {
 
         $db->commit();
 
+        // Notify subscribers
+        $newsletterService->notifySubscribers('salon', $data['name'], $data['city'] ?? '');
+
         $stmt = $db->prepare("SELECT * FROM salons WHERE id = ?");
         $stmt->execute([$salonId]);
         $salon = $stmt->fetch();
@@ -139,7 +147,10 @@ if ($method === 'PUT' && count($uriParts) === 2) {
         'cover_image_url',
         'is_active',
         'business_hours',
-        'notification_settings'
+        'notification_settings',
+        'gst_number',
+        'upi_id',
+        'bank_details'
     ];
 
     foreach ($data as $key => $value) {

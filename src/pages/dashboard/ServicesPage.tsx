@@ -8,7 +8,7 @@ import {
   Edit,
   Trash2,
   Clock,
-  DollarSign,
+  Banknote,
   Star,
   TrendingUp,
   Filter,
@@ -73,7 +73,7 @@ export default function ServicesPage() {
   const navigate = useNavigate();
   const { toast } = useToast();
   const { user, loading: authLoading } = useAuth();
-  const { currentSalon, loading: salonLoading, isOwner, isManager } = useSalon();
+  const { currentSalon, loading: salonLoading, isOwner, isManager, subscription, refreshSalons } = useSalon();
   const [services, setServices] = useState<Service[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState("");
@@ -84,6 +84,7 @@ export default function ServicesPage() {
   const [uploadingImage, setUploadingImage] = useState(false);
   const [uploadingLogo, setUploadingLogo] = useState(false);
   const [viewMode, setViewMode] = useState<"grid" | "list">("grid");
+  const [customCategory, setCustomCategory] = useState("");
   const [formData, setFormData] = useState({
     name: "",
     description: "",
@@ -101,7 +102,10 @@ export default function ServicesPage() {
   }, [user, authLoading, navigate]);
 
   const fetchServices = async () => {
-    if (!currentSalon) return;
+    if (!currentSalon) {
+      if (!salonLoading) setLoading(false);
+      return;
+    }
 
     setLoading(true);
     try {
@@ -134,6 +138,7 @@ export default function ServicesPage() {
       is_active: true,
     });
     setEditingService(null);
+    setCustomCategory("");
   };
 
   const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -173,15 +178,21 @@ export default function ServicesPage() {
 
   const openEditDialog = (service: Service) => {
     setEditingService(service);
+    const isPredefined = service.category && CATEGORIES.includes(service.category) && service.category !== "Other";
     setFormData({
       name: service.name,
       description: service.description || "",
       price: service.price.toString(),
       duration_minutes: service.duration_minutes.toString(),
-      category: service.category || "",
+      category: service.category ? (isPredefined ? service.category : "Other") : "",
       image_url: service.image_url || "",
       is_active: service.is_active,
     });
+    if (service.category && !isPredefined) {
+      setCustomCategory(service.category);
+    } else {
+      setCustomCategory("");
+    }
     setIsAddDialogOpen(true);
   };
 
@@ -195,7 +206,7 @@ export default function ServicesPage() {
         description: formData.description || null,
         price: parseFloat(formData.price),
         duration_minutes: parseInt(formData.duration_minutes),
-        category: formData.category || null,
+        category: formData.category === "Other" ? customCategory : (formData.category || null),
         image_url: formData.image_url || null,
         is_active: formData.is_active,
         salon_id: currentSalon.id,
@@ -212,6 +223,7 @@ export default function ServicesPage() {
       setIsAddDialogOpen(false);
       resetForm();
       fetchServices();
+      await refreshSalons();
     } catch (error: any) {
       console.error("Error saving service:", error);
       toast({
@@ -229,6 +241,7 @@ export default function ServicesPage() {
       await api.services.delete(serviceId);
       toast({ title: "Success", description: "Service deleted from local database" });
       fetchServices();
+      await refreshSalons();
     } catch (error) {
       console.error("Error deleting service:", error);
       toast({
@@ -305,13 +318,23 @@ export default function ServicesPage() {
       showBackButton={true}
       headerActions={
         (isOwner || isManager) && (
-          <Button
-            onClick={() => setIsAddDialogOpen(true)}
-            size="sm"
-            className="bg-gradient-to-r from-accent to-accent/90 text-white"
-          >
-            <Plus className="w-4 h-4" />
-          </Button>
+          <div className="flex flex-col items-end gap-1">
+            {subscription && (
+              <span className="text-[10px] font-black uppercase text-slate-400">
+                Limit: {subscription.current_service_count} / {subscription.max_services}
+              </span>
+            )}
+            <Button
+              onClick={() => setIsAddDialogOpen(true)}
+              size="sm"
+              disabled={subscription ? subscription.current_service_count >= subscription.max_services : false}
+              className="bg-gradient-to-r from-accent to-accent/90 text-white disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              {subscription && subscription.current_service_count >= subscription.max_services
+                ? "Limit Reached"
+                : <><Plus className="w-4 h-4 mr-1" /> Add Service</>}
+            </Button>
+          </div>
         )
       }
     >
@@ -409,9 +432,9 @@ export default function ServicesPage() {
 
                     <div className="grid grid-cols-2 gap-4">
                       <div className="space-y-2">
-                        <Label htmlFor="price" className="text-xs font-black uppercase tracking-widest text-muted-foreground ml-1">Price ($)</Label>
+                        <Label htmlFor="price" className="text-xs font-black uppercase tracking-widest text-muted-foreground ml-1">Price (RM)</Label>
                         <div className="relative">
-                          <DollarSign className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-accent/50" />
+                          <Banknote className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-accent/50" />
                           <Input
                             id="price"
                             type="number"
@@ -534,9 +557,10 @@ export default function ServicesPage() {
                       <Label htmlFor="category" className="text-xs font-black uppercase tracking-widest text-muted-foreground ml-1">Category</Label>
                       <Select
                         value={formData.category}
-                        onValueChange={(v) =>
-                          setFormData({ ...formData, category: v })
-                        }
+                        onValueChange={(v) => {
+                          setFormData({ ...formData, category: v });
+                          if (v !== "Other") setCustomCategory("");
+                        }}
                       >
                         <SelectTrigger className="h-12 bg-secondary/30 border-none focus:ring-0 rounded-xl font-medium">
                           <div className="flex items-center gap-2">
@@ -561,6 +585,19 @@ export default function ServicesPage() {
                           ))}
                         </SelectContent>
                       </Select>
+
+                      {formData.category === "Other" && (
+                        <div className="mt-2 animate-in fade-in slide-in-from-top-2 duration-300">
+                          <Label htmlFor="custom-category" className="text-[10px] font-black uppercase tracking-widest text-accent ml-1">Specify Category</Label>
+                          <Input
+                            id="custom-category"
+                            placeholder="e.g., Massage, Body Scrub..."
+                            value={customCategory}
+                            onChange={(e) => setCustomCategory(e.target.value)}
+                            className="h-12 bg-accent/5 border-accent/20 focus:ring-2 focus:ring-accent/20 rounded-xl font-medium mt-1"
+                          />
+                        </div>
+                      )}
                     </div>
 
                     <div className="flex items-center justify-between p-4 rounded-2xl bg-accent/5 border border-accent/10 shadow-inner">
@@ -630,13 +667,13 @@ export default function ServicesPage() {
               <div className="flex items-center justify-between relative z-10">
                 <div>
                   <p className="text-sm font-semibold text-emerald-600/80 uppercase tracking-wider">Avg. Price</p>
-                  <p className="text-4xl font-black text-emerald-900 mt-2">${Math.round(avgPrice)}</p>
+                  <p className="text-4xl font-black text-emerald-900 mt-2">RM {Math.round(avgPrice)}</p>
                   <p className="text-xs font-medium text-emerald-600 mt-1 flex items-center gap-1">
                     <TrendingUp className="w-3 h-3" /> Standard Rate
                   </p>
                 </div>
                 <div className="w-14 h-14 bg-white shadow-lg rounded-2xl flex items-center justify-center group-hover:rotate-12 transition-transform duration-300">
-                  <DollarSign className="w-7 h-7 text-emerald-600" />
+                  <Banknote className="w-7 h-7 text-emerald-600" />
                 </div>
               </div>
             </CardContent>
@@ -865,7 +902,7 @@ export default function ServicesPage() {
                     <div className="space-y-1">
                       <p className={`text-[10px] font-black uppercase tracking-[0.2em] text-muted-foreground/60 leading-none ${viewMode === "list" ? "hidden" : ""}`}>Price</p>
                       <p className="text-3xl font-black text-foreground flex items-center tracking-tighter">
-                        <span className="text-lg font-medium mr-1 opacity-60">$</span>
+                        <span className="text-lg font-medium mr-1 opacity-60">RM</span>
                         {service.price.toLocaleString()}
                       </p>
                     </div>

@@ -78,12 +78,12 @@ const Footer = () => {
               <FooterLink to="/about" label="About Us" />
               <FooterLink to="/salons" label="Our Services" />
               <FooterLink to="/book" label="Book Appointment" />
-              <FooterLink to="/admin-access" label="Admin Login" />
+              {/* <FooterLink to="/admin-access" label="Admin Login" /> */}
             </ul>
           </div>
 
           {/* Newsletter / Hours */}
-          <div className="space-y-6">
+          {/* <div className="space-y-6">
             <h3 className="text-foreground font-semibold text-lg">Opening Hours</h3>
             <div className="p-5 rounded-2xl bg-white dark:bg-gray-800/50 border border-border/50 shadow-sm backdrop-blur-sm">
               <div className="space-y-3 text-sm">
@@ -108,16 +108,16 @@ const Footer = () => {
                 <ArrowRight className="w-4 h-4" />
               </Link>
             </div>
-          </div>
+          </div> */}
         </div>
 
         {/* Bottom Bar */}
         <div className="pt-8 mt-8 border-t border-border/40 flex flex-col md:flex-row justify-between items-center gap-4 text-sm text-muted-foreground">
           <p>© {currentYear} Noamskin Salon. All rights reserved.</p>
           <div className="flex gap-6">
-            <a href="#" className="hover:text-accent transition-colors">Privacy Policy</a>
-            <a href="#" className="hover:text-accent transition-colors">Terms of Service</a>
-            <a href="#" className="hover:text-accent transition-colors">Cookies</a>
+            <Link to="/privacy" className="hover:text-accent transition-colors">Privacy Policy</Link>
+            <Link to="/terms" className="hover:text-accent transition-colors">Terms of Service</Link>
+            <Link to="/cookies" className="hover:text-accent transition-colors">Cookies</Link>
           </div>
         </div>
       </div>

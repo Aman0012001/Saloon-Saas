@@ -2,35 +2,33 @@ import { useEffect, useState, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
 import {
   Calendar,
-  DollarSign,
+  Banknote,
   Users,
   Clock,
   TrendingUp,
   ArrowUpRight,
-  ArrowDownRight,
   Plus,
   Star,
   Activity,
-  Target,
   Zap,
   CheckCircle,
   XCircle,
-  RotateCcw,
-  Phone,
   User,
   Bell,
   AlertCircle,
   RefreshCw,
   Scissors,
   Store,
+  LayoutDashboard,
+  ShieldCheck,
+  ChevronRight,
+  BarChart3,
+  Users2
 } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Progress } from "@/components/ui/progress";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { Separator } from "@/components/ui/separator";
-import { DashboardLayout } from "@/components/dashboard/DashboardLayout";
 import { ResponsiveDashboardLayout } from "@/components/dashboard/ResponsiveDashboardLayout";
 import { useSalon } from "@/hooks/useSalon";
 import { useAuth } from "@/hooks/useAuth";
@@ -38,6 +36,9 @@ import { useMobile } from "@/hooks/use-mobile";
 import api from "@/services/api";
 import { useToast } from "@/hooks/use-toast";
 import { format, isToday, parseISO } from "date-fns";
+import { motion, AnimatePresence } from "framer-motion";
+import { cn } from "@/lib/utils";
+import { StaffDashboard } from "@/components/dashboard/StaffDashboard";
 
 interface DashboardStats {
   todayAppointments: number;
@@ -82,7 +83,7 @@ interface Booking {
 export default function DashboardHome() {
   const navigate = useNavigate();
   const { user, loading: authLoading } = useAuth();
-  const { currentSalon, loading: salonLoading, salons } = useSalon();
+  const { currentSalon, loading: salonLoading, isOwner, isStaff, subscription } = useSalon();
   const isMobile = useMobile();
   const { toast } = useToast();
 
@@ -95,52 +96,49 @@ export default function DashboardHome() {
   });
   const [recentBookings, setRecentBookings] = useState<Booking[]>([]);
   const [pendingBookings, setPendingBookings] = useState<Booking[]>([]);
-  const [todaysAppointments, setTodaysAppointments] = useState<Booking[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [lastRefresh, setLastRefresh] = useState<Date>(new Date());
 
-  const refreshBookings = useCallback(async (showToast = false) => {
+  const refreshBookings = useCallback(async (manual = false) => {
     if (!currentSalon) return;
 
-    setRefreshing(true);
+    if (manual) setRefreshing(true);
     try {
       const todayDate = format(new Date(), "yyyy-MM-dd");
-
-      // Fetch all bookings from the local PHP API
       const allBookings = await api.bookings.getAll({ salon_id: currentSalon.id });
 
       const enrich = (list: any[]) => list.map(b => ({
         ...b,
+        user_name: b.full_name || b.user_name,
+        user_phone: b.phone || b.user_phone,
         service: b.service_name ? {
           id: b.service_id,
           name: b.service_name,
           price: Number(b.price || 0),
           duration_minutes: Number(b.duration_minutes || 30)
         } : null,
-        customer: b.user_name ? {
+        customer: (b.full_name || b.user_name) ? {
           user_id: b.user_id,
-          full_name: b.user_name,
-          phone: b.user_phone,
+          full_name: b.full_name || b.user_name,
+          phone: b.phone || b.user_phone,
           avatar_url: b.user_avatar || null
         } : null,
-        customerType: 'returning' // Simplified for now
+        customerType: 'returning'
       }));
 
-      const enrichedAll = enrich(allBookings);
+      const bookingsArray = allBookings;
 
-      // Filtering and stats calculation
-      const recent = enrichedAll.slice(0, 10);
+      const enrichedAll = enrich(bookingsArray as any[]);
+      const recent = enrichedAll.slice(0, 8);
       const today = enrichedAll.filter(b => b.booking_date === todayDate && b.status !== 'cancelled');
-      const pending = enrichedAll.filter(b => b.status === "pending" || (b.status === "confirmed" && isToday(new Date(b.created_at || ''))));
+      const pending = enrichedAll.filter(b => b.status === "pending");
 
       const confirmedToday = today.filter(b => b.status === "confirmed" || b.status === "completed");
-      const todayRevenue = confirmedToday.reduce((sum, b) => sum + (b.price || b.service?.price || 0), 0);
-
+      const todayRevenue = confirmedToday.reduce((sum, b) => sum + Number(b.price || b.service?.price || 0), 0);
       const uniqueCustomerCount = new Set(enrichedAll.map(b => b.user_id)).size;
 
       setRecentBookings(recent);
-      setTodaysAppointments(today);
       setPendingBookings(pending);
 
       setStats({
@@ -153,72 +151,56 @@ export default function DashboardHome() {
 
       setLastRefresh(new Date());
 
-      if (showToast && pending.length > 0) {
+      if (manual) {
         toast({
-          title: "Bookings Updated",
-          description: `Found ${pending.length} pending entries.`,
+          title: "Data Refreshed",
+          description: "Your dashboard has been updated with the latest records.",
         });
       }
     } catch (error) {
-      console.error("Error refreshing dashboard bookings:", error);
+      console.error("Dashboard refresh error:", error);
     } finally {
-      setRefreshing(false);
+      if (manual) setRefreshing(false);
     }
   }, [currentSalon, toast]);
 
   const updateBookingStatus = async (bookingId: string, newStatus: string) => {
-    if (!currentSalon) return;
-
     try {
       await api.bookings.updateStatus(bookingId, newStatus);
       await refreshBookings();
       toast({
-        title: "Status Updated",
-        description: `Booking updated successfully in local DB.`,
+        title: newStatus === 'confirmed' ? "Booking Confirmed" : "Booking Cancelled",
+        description: `Status updated successfully.`,
       });
     } catch (error) {
-      console.error("Error updating booking status:", error);
+      console.error("Status update error:", error);
     }
   };
 
   useEffect(() => {
-    if (!authLoading && !user) {
-      navigate("/login");
-    }
+    if (!authLoading && !user) navigate("/login");
   }, [user, authLoading, navigate]);
 
-  // Removed aggressive auto-redirect to prevent navigation loops
-  // Users will see the "No Saloon Found" state with a manual "Register" button instead
-
   useEffect(() => {
-    if (!currentSalon) return;
+    if (!currentSalon) {
+      if (!salonLoading) setLoading(false);
+      return;
+    }
+    refreshBookings().finally(() => setLoading(false));
 
-    const fetchInitialData = async () => {
-      setLoading(true);
-      await refreshBookings();
-      setLoading(false);
-    };
-
-    fetchInitialData();
-
-    // Use polling instead of real-time for local backend
-    const interval = setInterval(() => {
-      refreshBookings();
-    }, 60000); // 1 minute
-
+    const interval = setInterval(() => refreshBookings(), 60000);
     return () => clearInterval(interval);
   }, [currentSalon, refreshBookings]);
 
-  // Loading states
   if (authLoading || salonLoading) {
     return (
       <ResponsiveDashboardLayout>
         <div className="flex flex-col items-center justify-center h-[70vh] space-y-6">
-          <div className="relative w-20 h-20">
+          <div className="relative w-16 h-16">
             <div className="absolute inset-0 border-4 border-slate-100 rounded-full"></div>
             <div className="absolute inset-0 border-4 border-accent rounded-full border-t-transparent animate-spin"></div>
           </div>
-          <p className="text-slate-400 font-black uppercase tracking-[0.3em] text-xs">Initializing Station...</p>
+          <p className="text-slate-400 font-bold uppercase tracking-widest text-xs">Loading Dashboard...</p>
         </div>
       </ResponsiveDashboardLayout>
     );
@@ -227,17 +209,28 @@ export default function DashboardHome() {
   if (!currentSalon) {
     return (
       <ResponsiveDashboardLayout>
-        <div className="flex flex-col items-center justify-center h-[70vh] text-center space-y-6">
-          <div className="w-20 h-20 bg-slate-50 rounded-3xl flex items-center justify-center">
-            <Store className="w-10 h-10 text-slate-300" />
+        <div className="flex flex-col items-center justify-center h-[70vh] text-center space-y-8 px-6">
+          <div className="relative">
+            <div className="absolute inset-0 bg-accent/20 blur-3xl rounded-full scale-150" />
+            <div className="relative w-24 h-24 bg-white rounded-[2rem] flex items-center justify-center shadow-2xl border border-slate-100">
+              <Store className="w-10 h-10 text-slate-300" />
+            </div>
           </div>
-          <div>
-            <h2 className="text-2xl font-black text-slate-900 tracking-tight">No Saloon Found</h2>
-            <p className="text-slate-500 mt-2 font-medium">Your local node is active, but no saloon registration exists.</p>
+          <div className="space-y-2">
+            <h2 className="text-3xl font-bold text-slate-900 tracking-tight">
+              {isStaff ? "Account Initialized" : "No Salon Linked"}
+            </h2>
+            <p className="text-slate-500 font-medium max-w-sm mx-auto">
+              {isStaff
+                ? "Your staff account is ready. Please wait for your salon administrator to link you to their workspace."
+                : "Please link your salon to start managing your business."}
+            </p>
           </div>
-          <Button onClick={() => navigate("/dashboard/create-salon")} className="bg-slate-900 text-white rounded-2xl h-14 px-8 font-black shadow-xl">
-            REGISTER NEW SALOON
-          </Button>
+          {!isStaff && (
+            <Button onClick={() => navigate("/dashboard/create-salon")} className="bg-slate-900 text-white rounded-2xl h-14 px-10 font-bold shadow-xl transition-all transform hover:scale-105">
+              Create Your Salon
+            </Button>
+          )}
         </div>
       </ResponsiveDashboardLayout>
     );
@@ -245,237 +238,308 @@ export default function DashboardHome() {
 
   const statCards = [
     {
-      title: "Pending Bookings",
+      title: "Pending Requests",
       value: stats.pendingAppointments,
-      icon: AlertCircle,
-      trend: stats.newBookingsCount > 0 ? `${stats.newBookingsCount} new today` : "No new today",
-      trendUp: stats.newBookingsCount > 0,
-      color: stats.pendingAppointments > 0 ? "from-blue-500 to-blue-600" : "from-green-500 to-green-600",
-      bgColor: stats.pendingAppointments > 0 ? "bg-blue-50" : "bg-green-50",
-      iconColor: stats.pendingAppointments > 0 ? "text-blue-600" : "text-green-600",
-      urgent: stats.pendingAppointments > 0,
+      icon: Clock,
+      label: stats.newBookingsCount > 0 ? `${stats.newBookingsCount} new today` : "No new requests",
+      color: "bg-[#F2A93B]",
+      iconColor: "text-white",
+      accent: true,
     },
     {
-      title: "Today's Appointments",
+      title: "Today's Bookings",
       value: stats.todayAppointments,
       icon: Calendar,
-      trend: `${format(new Date(), "MMM d")}`,
-      trendUp: stats.todayAppointments > 0,
-      color: "from-indigo-500 to-indigo-600",
-      bgColor: "bg-indigo-50",
-      iconColor: "text-indigo-600",
-      urgent: false,
+      label: "Confirmed appointments",
+      color: "bg-white",
+      iconColor: "text-slate-400",
     },
     {
-      title: "Today's Revenue",
-      value: `$${stats.todayRevenue.toLocaleString()}`,
-      icon: DollarSign,
-      trend: `${stats.todayAppointments} scheduled`,
-      trendUp: stats.todayRevenue > 0,
-      color: "from-emerald-500 to-emerald-600",
-      bgColor: "bg-emerald-50",
-      iconColor: "text-emerald-600",
-      urgent: false,
+      title: "Daily Revenue",
+      value: `RM ${new Intl.NumberFormat('en-MY', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(stats.todayRevenue)}`,
+      icon: Banknote,
+      label: "Revenue generated today",
+      color: "bg-white",
+      iconColor: "text-slate-400",
     },
     {
-      title: "Total Customers",
+      title: "Active Customers",
       value: stats.totalCustomers,
       icon: Users,
-      trend: `All time Customers`,
-      trendUp: true,
-      color: "from-purple-500 to-purple-600",
-      bgColor: "bg-purple-50",
-      iconColor: "text-purple-600",
-      urgent: false,
+      label: "Total customer base",
+      color: "bg-white",
+      iconColor: "text-slate-400",
     },
   ];
 
+  if (isStaff) {
+    return (
+      <ResponsiveDashboardLayout>
+        <div className="py-6 px-4">
+          <StaffDashboard />
+        </div>
+      </ResponsiveDashboardLayout>
+    );
+  }
+
   return (
     <ResponsiveDashboardLayout>
-      <div className={`space-y-${isMobile ? '6' : '8'}`}>
-        {/* Header */}
-        <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-6">
-          <div className="space-y-2">
+      <div className="max-w-[1400px] mx-auto space-y-10 py-6 px-4">
+        {/* Modern Header */}
+        <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-6">
+          <div className="space-y-1">
             <div className="flex items-center gap-3">
-              <h1 className={`${isMobile ? 'text-2xl' : 'text-3xl'} font-bold bg-gradient-to-r from-foreground to-muted-foreground bg-clip-text text-transparent`}>
-                Booking Dashboard
-              </h1>
-              <Badge className="bg-gradient-to-r from-accent to-accent/80 text-white border-0">
-                Active
-              </Badge>
-            </div>
-            <p className={`text-muted-foreground ${isMobile ? 'text-base' : 'text-lg'}`}>
-              Manage bookings from local records for <span className="font-medium text-foreground">{currentSalon.name}</span>
-            </p>
-            <div className="flex items-center gap-2 text-sm text-muted-foreground">
-              <Clock className="w-4 h-4" />
-              <span>Last updated: {format(lastRefresh, 'h:mm:ss a')}</span>
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={() => refreshBookings(true)}
-                disabled={refreshing}
-                className="h-6 px-2"
-              >
-                <RefreshCw className={`w-3 h-3 ${refreshing ? 'animate-spin' : ''}`} />
-              </Button>
+              <div className="w-12 h-12 bg-[#F2A93B] rounded-2xl flex items-center justify-center shadow-lg overflow-hidden group">
+                <LayoutDashboard className="w-6 h-6 text-white" />
+              </div>
+              <div>
+                <h1 className="text-3xl font-bold text-slate-900 tracking-tight">Business Overview</h1>
+                <div className="flex items-center gap-2 text-xs font-semibold text-slate-400 uppercase tracking-wider">
+                  <span>{currentSalon.name}</span>
+                  <div className="w-1 h-1 bg-slate-200 rounded-full" />
+                  <p className="flex items-center gap-1.5 transition-colors">
+                    <Clock className="w-3 h-3 text-accent" />
+                    Last Updated: {format(lastRefresh, 'HH:mm')}
+                  </p>
+                </div>
+              </div>
             </div>
           </div>
-          {!isMobile && (
-            <div className="flex items-center gap-3">
-              <Button
-                variant="outline"
-                onClick={() => navigate("/dashboard/appointments")}
-                className="border-border/50 hover:bg-secondary/50 font-bold"
-              >
-                <Activity className="w-4 h-4 mr-2" />
-                All Appointments
-              </Button>
-              <Button
-                onClick={() => navigate("/dashboard/appointments")}
-                className="bg-gradient-to-r from-accent to-accent/90 hover:from-accent/90 hover:to-accent text-white shadow-lg shadow-accent/25 font-black"
-              >
-                <Plus className="w-4 h-4 mr-2" />
-                New Appointment
-              </Button>
-            </div>
-          )}
+
+          <div className="flex items-center gap-3">
+            <Button
+              variant="outline"
+              onClick={() => refreshBookings(true)}
+              disabled={refreshing}
+              className="h-12 w-12 rounded-xl border-slate-200 bg-white shadow-sm flex items-center justify-center hover:bg-slate-50 transition-all"
+            >
+              <RefreshCw className={`w-4 h-4 text-slate-500 ${refreshing ? 'animate-spin' : ''}`} />
+            </Button>
+            <Button
+              onClick={() => navigate("/dashboard/appointments")}
+              className="h-12 px-6 bg-[#F2A93B] hover:bg-[#E29A2B] text-white rounded-xl font-bold shadow-lg transition-all flex items-center gap-2"
+            >
+              <Plus className="w-4 h-4" />
+              New Booking
+            </Button>
+          </div>
         </div>
 
-        {/* Stats Grid */}
-        <div className={`grid grid-cols-2 ${isMobile ? 'lg:grid-cols-4 gap-4' : 'sm:grid-cols-2 lg:grid-cols-4 gap-6'}`}>
+        {/* Modular Stat Grid */}
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-6">
           {statCards.map((stat, index) => (
-            <Card
+            <motion.div
               key={index}
-              className={`border-0 shadow-lg hover:shadow-xl transition-all duration-300 bg-white/80 backdrop-blur-sm ${stat.urgent ? 'ring-2 ring-blue-200' : ''
-                }`}
+              initial={{ opacity: 0, y: 15 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: index * 0.1 }}
             >
-              <CardContent className={`${isMobile ? 'p-4' : 'p-6'}`}>
-                <div className="flex items-start justify-between">
-                  <div className="space-y-3">
-                    <p className={`${isMobile ? 'text-xs' : 'text-sm'} font-medium text-muted-foreground`}>{stat.title}</p>
-                    <p className={`${isMobile ? 'text-xl' : 'text-3xl'} font-bold text-foreground`}>
-                      {loading ? (
-                        <div className={`${isMobile ? 'w-12 h-6' : 'w-16 h-8'} bg-secondary/50 rounded animate-pulse`} />
-                      ) : (
-                        stat.value
-                      )}
+              <Card className={cn(
+                "border-none shadow-[0_15px_40px_-15px_rgba(0,0,0,0.04)] rounded-[2rem] overflow-hidden transition-all hover:shadow-[0_25px_60px_-15px_rgba(0,0,0,0.08)]",
+                stat.color === 'bg-[#F2A93B]' ? 'bg-[#F2A93B] text-white' : stat.color === 'bg-slate-900' ? 'bg-slate-900 text-white' : 'bg-white'
+              )}>
+                <CardContent className="p-7 space-y-4">
+                  <div className="flex items-center justify-between">
+                    <div className={cn(
+                      "w-10 h-10 rounded-xl flex items-center justify-center transition-colors",
+                      stat.color === 'bg-[#F2A93B]' || stat.color === 'bg-slate-900' ? 'bg-white/20' : 'bg-slate-50'
+                    )}>
+                      <stat.icon className={cn("w-5 h-5", stat.iconColor)} />
+                    </div>
+                    {stat.accent && <div className={cn("w-2 h-2 rounded-full animate-pulse", stat.color === 'bg-[#F2A93B]' ? 'bg-white' : 'bg-accent')} />}
+                  </div>
+                  <div className="space-y-0.5">
+                    <p className={cn(
+                      "text-[10px] font-bold uppercase tracking-wider",
+                      stat.color !== 'bg-white' ? 'text-white/70' : 'text-slate-400'
+                    )}>{stat.title}</p>
+                    <p className="text-2xl font-bold tracking-tight">
+                      {loading ? "..." : stat.value}
                     </p>
                   </div>
-                  <div className={`${isMobile ? 'w-10 h-10' : 'w-12 h-12'} rounded-xl ${stat.bgColor} flex items-center justify-center`}>
-                    <stat.icon className={`${isMobile ? 'w-5 h-5' : 'w-6 h-6'} ${stat.iconColor}`} />
+                  <div className={cn(
+                    "text-[10px] font-semibold",
+                    stat.color !== 'bg-white' ? 'text-white/90' : stat.accent ? 'text-accent' : 'text-slate-400'
+                  )}>
+                    {stat.label}
                   </div>
-                </div>
-                <div className={`${isMobile ? 'mt-3' : 'mt-4'} flex items-center gap-2 text-xs`}>
-                  <span className="font-medium">{stat.trend}</span>
-                </div>
-              </CardContent>
-            </Card>
+                </CardContent>
+              </Card>
+            </motion.div>
           ))}
         </div>
 
-        {/* Pending Approval Section */}
-        {pendingBookings.length > 0 && (
-          <Card className="border-0 shadow-lg bg-gradient-to-br from-blue-50 to-indigo-50 border-l-4 border-l-blue-500">
-            <CardHeader>
-              <div className="flex items-center justify-between">
-                <CardTitle className="text-xl font-bold flex items-center gap-2">
-                  <Bell className="w-6 h-6 text-blue-600" />
-                  Action Required ({pendingBookings.length})
-                </CardTitle>
-                <Badge className="bg-blue-200 text-blue-800 font-bold">New Entries</Badge>
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+          {/* Live Queue */}
+          <div className="lg:col-span-2 space-y-5">
+            <div className="flex items-center justify-between px-2">
+              <div className="flex items-center gap-3">
+                <h3 className="text-xl font-bold text-slate-900 leading-none">Live Queue</h3>
+                <Badge variant="outline" className="bg-accent/5 text-accent border-accent/20 font-bold px-2 py-0.5">
+                  {pendingBookings.length} Awaiting
+                </Badge>
               </div>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              {pendingBookings.slice(0, 3).map((booking) => (
-                <Card key={booking.id} className="bg-white border-none shadow-sm group">
-                  <CardContent className="p-4 flex items-center justify-between gap-4">
-                    <div className="flex items-center gap-4">
-                      <Avatar className="w-12 h-12">
-                        <AvatarFallback className="bg-blue-100 text-blue-600 font-bold">
-                          {(booking.user_name || "U").charAt(0).toUpperCase()}
-                        </AvatarFallback>
-                      </Avatar>
-                      <div>
-                        <h4 className="font-bold text-slate-900">{booking.user_name || "Guest"}</h4>
-                        <p className="text-sm text-slate-500">{booking.service_name || "Service"}</p>
-                        <p className="text-xs text-slate-400 mt-1">{formatBookingTime(booking.booking_date, booking.booking_time)}</p>
-                      </div>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <Button size="sm" onClick={() => updateBookingStatus(booking.id, 'confirmed')} className="bg-emerald-500 hover:bg-emerald-600 text-white font-bold h-9">
-                        <CheckCircle className="w-4 h-4 mr-1" /> Accept
-                      </Button>
-                      <Button size="sm" variant="outline" onClick={() => updateBookingStatus(booking.id, 'cancelled')} className="border-red-200 text-red-600 hover:bg-red-50 font-bold h-9">
-                        <XCircle className="w-4 h-4 mr-1" /> Reject
-                      </Button>
-                    </div>
-                  </CardContent>
-                </Card>
-              ))}
-            </CardContent>
-          </Card>
-        )}
-
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-          {/* Recent Bookings */}
-          <Card className="border-0 shadow-lg bg-white overflow-hidden rounded-2xl">
-            <CardHeader className="flex flex-row items-center justify-between">
-              <CardTitle className="text-lg font-bold">Recent Activity</CardTitle>
-              <Button variant="ghost" size="sm" onClick={() => navigate("/dashboard/appointments")} className="text-accent font-bold">
-                View All <ArrowUpRight className="w-4 h-4 ml-1" />
+              <Button variant="ghost" onClick={() => navigate("/dashboard/appointments")} className="text-[10px] font-bold uppercase tracking-widest text-slate-400 hover:text-slate-900 hover:bg-transparent">
+                View Register <ChevronRight className="w-3 h-3 ml-1" />
               </Button>
-            </CardHeader>
-            <CardContent className="p-0">
-              <div className="divide-y">
-                {recentBookings.length === 0 ? (
-                  <div className="p-12 text-center text-muted-foreground">No recent bookings found.</div>
+            </div>
+
+            <div className="space-y-4">
+              <AnimatePresence mode="popLayout">
+                {pendingBookings.length === 0 ? (
+                  <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="p-16 text-center bg-slate-50/50 rounded-[2rem] border border-slate-100">
+                    <ShieldCheck className="w-10 h-10 text-slate-200 mx-auto mb-3" />
+                    <p className="text-slate-400 font-semibold text-xs uppercase tracking-wider">No pending requests at the moment</p>
+                  </motion.div>
                 ) : (
-                  recentBookings.map(b => (
-                    <div key={b.id} className="p-4 flex items-center justify-between hover:bg-slate-50 transition-colors">
-                      <div className="flex items-center gap-3">
-                        <div className="w-10 h-10 rounded-xl bg-slate-100 flex items-center justify-center">
-                          <User className="w-5 h-5 text-slate-400" />
+                  pendingBookings.slice(0, 4).map((booking, idx) => (
+                    <motion.div
+                      key={booking.id}
+                      initial={{ opacity: 0, x: -10 }}
+                      animate={{ opacity: 1, x: 0 }}
+                      transition={{ delay: idx * 0.1 }}
+                      className="group p-5 bg-white rounded-2xl border border-slate-100 hover:border-accent/10 shadow-sm hover:shadow-xl transition-all duration-300"
+                    >
+                      <div className="flex items-center justify-between gap-4">
+                        <div className="flex items-center gap-4">
+                          <Avatar className="w-14 h-14 rounded-xl border border-slate-100 shadow-sm">
+                            <AvatarFallback className="bg-[#F2A93B] text-white font-bold text-lg">
+                              {(() => {
+                                const walkInMatch = booking.notes?.match(/Walk-in:\s*([^|#\n]+)/);
+                                if (walkInMatch && walkInMatch[1].trim() && walkInMatch[1].trim() !== "undefined") {
+                                  return walkInMatch[1].trim().charAt(0).toUpperCase();
+                                }
+                                return (booking.user_name || "G").charAt(0).toUpperCase();
+                              })()}
+                            </AvatarFallback>
+                          </Avatar>
+                          <div className="space-y-0.5">
+                            <div className="flex items-center gap-2">
+                              <h4 className="font-bold text-slate-900 text-base">
+                                {(() => {
+                                  const walkInMatch = booking.notes?.match(/Walk-in:\s*([^|#\n]+)/);
+                                  if (walkInMatch && walkInMatch[1].trim() && walkInMatch[1].trim() !== "undefined") {
+                                    return walkInMatch[1].trim();
+                                  }
+
+                                  if (booking.user_name && (booking.user_id === user?.id || booking.user_name === user?.full_name)) {
+                                    return "Walk-in Customer";
+                                  }
+
+                                  return booking.user_name || "Guest";
+                                })()}
+                              </h4>
+                              {booking.notes?.includes("Walk-in:") && (
+                                <Badge className="bg-slate-100 text-slate-500 border-none text-[8px] font-bold uppercase tracking-widest px-1.5 h-4">
+                                  Walk-in
+                                </Badge>
+                              )}
+                            </div>
+                            <div className="flex items-center gap-2">
+                              <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">{booking.service_name}</span>
+                              <div className="w-1 h-1 bg-slate-200 rounded-full" />
+                              <span className="text-[10px] font-bold text-accent">{formatBookingTime(booking.booking_date, booking.booking_time)}</span>
+                            </div>
+                          </div>
                         </div>
-                        <div>
-                          <p className="font-bold text-slate-900">{b.user_name || "Guest"}</p>
-                          <p className="text-xs text-slate-500">{b.service_name}</p>
+                        <div className="flex items-center gap-2">
+                          <Button size="icon" onClick={() => updateBookingStatus(booking.id, 'confirmed')} className="w-12 h-12 bg-[#F2A93B] hover:bg-[#E29A2B] text-white rounded-xl shadow-md transition-all">
+                            <CheckCircle className="w-5 h-5" />
+                          </Button>
+                          <Button size="icon" variant="ghost" onClick={() => updateBookingStatus(booking.id, 'cancelled')} className="w-12 h-12 bg-slate-100 hover:bg-red-50 text-slate-400 hover:text-red-500 rounded-xl transition-all">
+                            <XCircle className="w-5 h-5" />
+                          </Button>
                         </div>
                       </div>
-                      <div className="text-right">
-                        <p className="font-bold text-accent">${b.price}</p>
-                        <p className="text-[10px] text-slate-400 uppercase tracking-wider">{format(new Date(b.booking_date), "MMM d")}</p>
-                      </div>
-                    </div>
+                    </motion.div>
                   ))
                 )}
-              </div>
-            </CardContent>
-          </Card>
+              </AnimatePresence>
+            </div>
+          </div>
 
-          {/* Quick Stats/Links */}
-          <Card className="border-0 shadow-lg bg-white rounded-2xl p-6">
-            <h3 className="text-lg font-bold mb-6">Salon Operations</h3>
-            <div className="grid grid-cols-2 gap-4">
+          {/* Quick Controls */}
+          <div className="space-y-6">
+            <div className="px-2">
+              <h3 className="text-xl font-bold text-slate-900">Manage Business</h3>
+              <p className="text-[10px] font-bold uppercase text-slate-400 tracking-widest mt-1">Direct access to controls</p>
+            </div>
+
+            <div className="grid grid-cols-1 gap-4">
               {[
-                { label: "My Services", icon: Scissors, path: "/dashboard/services", color: "bg-orange-50 text-orange-600" },
-                { label: "Our Staff", icon: Users, path: "/dashboard/staff", color: "bg-blue-50 text-blue-600" },
-                { label: "Customers", icon: Users, path: "/dashboard/customers", color: "bg-purple-50 text-purple-600" },
-                { label: "Reporting", icon: Activity, path: "/dashboard/reports", color: "bg-emerald-50 text-emerald-600" },
+                { label: "Our Services", icon: Scissors, path: "/dashboard/services", desc: "Manage treatment catalog", color: "text-orange-500", bg: "bg-orange-50" },
+                { label: "Team Management", icon: Users2, path: "/dashboard/staff", desc: "Staff & specialist profiles", color: "text-blue-500", bg: "bg-blue-50" },
+                { label: "Customer List", icon: Users, path: "/dashboard/customers", desc: "View customer history", color: "text-purple-500", bg: "bg-purple-50" },
+                { label: "Analytics", icon: BarChart3, path: "/dashboard/reports", desc: "Performance reports", color: "text-emerald-500", bg: "bg-emerald-50" },
               ].map(item => (
                 <button
                   key={item.label}
                   onClick={() => navigate(item.path)}
-                  className="p-4 rounded-2xl border border-slate-100 hover:border-accent/20 hover:bg-accent/5 transition-all flex flex-col items-center gap-3 text-center group"
+                  className="p-5 bg-white rounded-2xl border border-slate-100 flex items-center gap-4 text-left group transition-all hover:bg-slate-50 hover:shadow-md"
                 >
-                  <div className={`w-12 h-12 rounded-2xl ${item.color} flex items-center justify-center group-hover:scale-110 transition-transform`}>
-                    <item.icon className="w-6 h-6" />
+                  <div className={`w-12 h-12 rounded-xl ${item.bg} flex items-center justify-center shrink-0 transition-transform group-hover:scale-110`}>
+                    <item.icon className={`w-5 h-5 ${item.color}`} />
                   </div>
-                  <span className="font-bold text-slate-700 text-sm">{item.label}</span>
+                  <div className="flex-1 space-y-0.5">
+                    <span className="font-bold text-slate-900 text-sm tracking-tight leading-none">{item.label}</span>
+                    <p className="text-[10px] font-medium text-slate-400">{item.desc}</p>
+                  </div>
+                  <ChevronRight className="w-4 h-4 text-slate-200 group-hover:text-slate-900 group-hover:translate-x-1 transition-all" />
                 </button>
               ))}
             </div>
-          </Card>
+
+            {isOwner && (
+              <Card className="border-none bg-[#F2A93B] rounded-[2rem] p-7 text-white relative overflow-hidden">
+                <div className="absolute top-0 right-0 w-32 h-32 bg-white/20 blur-3xl rounded-full -translate-y-1/2 translate-x-1/2" />
+                <div className="space-y-4 relative z-10">
+                  <div className="flex items-center justify-between">
+                    <div className="p-2 bg-white/20 rounded-xl text-white">
+                      <Zap className="w-4 h-4" />
+                    </div>
+                    <Badge className="bg-white/20 text-white border-0 font-bold text-[9px] px-2 py-0.5 tracking-wider">
+                      {subscription?.plan_name || 'FREE PLAN'}
+                    </Badge>
+                  </div>
+                  <div className="space-y-1 text-white">
+                    <h4 className="font-bold text-sm">Current Authority</h4>
+                    <div className="text-[10px] font-medium text-white/80 leading-relaxed space-y-1">
+                      {subscription ? (
+                        <>
+                          <div className="flex justify-between">
+                            <span>Staff Limit:</span>
+                            <span>{subscription.current_staff_count} / {subscription.max_staff}</span>
+                          </div>
+                          <div className="flex justify-between">
+                            <span>Service Limit:</span>
+                            <span>{subscription.current_service_count} / {subscription.max_services}</span>
+                          </div>
+                        </>
+                      ) : "Free Plan Limits Active"}
+                    </div>
+                  </div>
+                </div>
+              </Card>
+            )}
+
+            {!isOwner && !isStaff && (
+              <Card className="border-none bg-[#F2A93B] rounded-[2rem] p-7 text-white relative overflow-hidden">
+                <div className="absolute top-0 right-0 w-32 h-32 bg-white/20 blur-3xl rounded-full -translate-y-1/2 translate-x-1/2" />
+                <div className="space-y-4 relative z-10">
+                  <div className="flex items-center justify-between">
+                    <div className="p-2 bg-white/20 rounded-xl text-white">
+                      <Zap className="w-4 h-4" />
+                    </div>
+                    <Badge className="bg-white/20 text-white border-0 font-bold text-[9px] px-2 py-0.5 tracking-wider">REVENUE ACTIVE</Badge>
+                  </div>
+                  <div className="space-y-1 text-white">
+                    <h4 className="font-bold text-sm">System Healthy</h4>
+                    <p className="text-[10px] font-medium text-white/80 leading-relaxed">Your salon dashboard is currently syncing live booking data.</p>
+                  </div>
+                </div>
+              </Card>
+            )}
+          </div>
         </div>
       </div>
     </ResponsiveDashboardLayout>
@@ -487,7 +551,7 @@ export default function DashboardHome() {
       const bookingDateTime = new Date(bookingDate);
       const [h, m] = time.split(':');
       bookingDateTime.setHours(parseInt(h), parseInt(m));
-      return isToday(bookingDate) ? `Today at ${format(bookingDateTime, 'h:mm a')}` : `${format(bookingDate, 'MMM d')} at ${format(bookingDateTime, 'h:mm a')}`;
+      return isToday(bookingDate) ? `at ${format(bookingDateTime, 'h:mm a')}` : `${format(bookingDate, 'MMM d')} @ ${format(bookingDateTime, 'h:mm a')}`;
     } catch {
       return `${date} at ${time}`;
     }

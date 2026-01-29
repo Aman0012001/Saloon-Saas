@@ -66,19 +66,13 @@ if ($method === 'GET' && count($uriParts) === 2) {
 
 // POST /api/services - Create new service
 if ($method === 'POST' && count($uriParts) === 1) {
-    $userData = Auth::getUserFromToken();
-    if (!$userData) {
-        sendResponse(['error' => 'Unauthorized'], 401);
-    }
-
     $data = getRequestBody();
     $salonId = $data['salon_id'];
 
-    // Check if user has permission
-    $stmt = $db->prepare("SELECT id FROM user_roles WHERE user_id = ? AND salon_id = ? AND role IN ('owner', 'manager')");
-    $stmt->execute([$userData['user_id'], $salonId]);
-    if (!$stmt->fetch()) {
-        sendResponse(['error' => 'Forbidden'], 403);
+    $userData = protectRoute(['owner', 'manager'], 'manage_services', $salonId);
+
+    if (!$membershipService->canAddService($salonId)) {
+        sendResponse(['error' => 'Plan limit reached. Please upgrade your subscription.'], 403);
     }
 
     $serviceId = Auth::generateUuid();
@@ -101,16 +95,14 @@ if ($method === 'POST' && count($uriParts) === 1) {
     $stmt->execute([$serviceId]);
     $service = $stmt->fetch();
 
+    // Notify subscribers
+    $newsletterService->notifySubscribers('service', $data['name'], "Price: RM " . $data['price']);
+
     sendResponse(['service' => $service], 201);
 }
 
 // PUT /api/services/:id - Update service
 if ($method === 'PUT' && count($uriParts) === 2) {
-    $userData = Auth::getUserFromToken();
-    if (!$userData) {
-        sendResponse(['error' => 'Unauthorized'], 401);
-    }
-
     $serviceId = $uriParts[1];
     $data = getRequestBody();
 
@@ -123,11 +115,7 @@ if ($method === 'PUT' && count($uriParts) === 2) {
         sendResponse(['error' => 'Service not found'], 404);
     }
 
-    $stmt = $db->prepare("SELECT id FROM user_roles WHERE user_id = ? AND salon_id = ? AND role IN ('owner', 'manager')");
-    $stmt->execute([$userData['user_id'], $service['salon_id']]);
-    if (!$stmt->fetch()) {
-        sendResponse(['error' => 'Forbidden'], 403);
-    }
+    $userData = protectRoute(['owner', 'manager'], 'manage_services', $service['salon_id']);
 
     $stmt = $db->prepare("
         UPDATE services SET
@@ -154,11 +142,6 @@ if ($method === 'PUT' && count($uriParts) === 2) {
 
 // DELETE /api/services/:id - Delete service
 if ($method === 'DELETE' && count($uriParts) === 2) {
-    $userData = Auth::getUserFromToken();
-    if (!$userData) {
-        sendResponse(['error' => 'Unauthorized'], 401);
-    }
-
     $serviceId = $uriParts[1];
 
     // Get service and check permission
@@ -170,11 +153,7 @@ if ($method === 'DELETE' && count($uriParts) === 2) {
         sendResponse(['error' => 'Service not found'], 404);
     }
 
-    $stmt = $db->prepare("SELECT id FROM user_roles WHERE user_id = ? AND salon_id = ? AND role IN ('owner', 'manager')");
-    $stmt->execute([$userData['user_id'], $service['salon_id']]);
-    if (!$stmt->fetch()) {
-        sendResponse(['error' => 'Forbidden'], 403);
-    }
+    $userData = protectRoute(['owner', 'manager'], 'manage_services', $service['salon_id']);
 
     $stmt = $db->prepare("DELETE FROM services WHERE id = ?");
     $stmt->execute([$serviceId]);

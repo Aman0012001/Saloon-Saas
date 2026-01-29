@@ -58,7 +58,7 @@ const AboutUs = () => {
     {
       year: "2022",
       title: "Founded",
-      description: "Started with a vision to digitize salon management in India"
+      description: "Started with a vision to digitize salon management in Malaysia"
     },
     {
       year: "2023",
@@ -73,7 +73,7 @@ const AboutUs = () => {
     {
       year: "2024",
       title: "500+ Salons",
-      description: "Now trusted by 500+ salons across India"
+      description: "Now trusted by 500+ salons across Malaysia"
     }
   ];
 
@@ -90,7 +90,7 @@ const AboutUs = () => {
           <h1 className="text-4xl md:text-6xl font-bold mb-6 bg-gradient-to-r from-foreground to-muted-foreground bg-clip-text text-transparent">
             Empowering Salons
             <br />
-            <span className="text-accent">Across India</span>
+            <span className="text-accent">Across Malaysia</span>
           </h1>
           <p className="text-lg md:text-xl text-muted-foreground max-w-3xl mx-auto mb-8">
             We're on a mission to transform how salons operate, helping beauty professionals
@@ -144,10 +144,10 @@ const AboutUs = () => {
                 <p>
                   After struggling with appointment books, manual billing, and customer management,
                   she envisioned a digital solution that would be simple, affordable, and designed
-                  specifically for Indian salons.
+                  specifically for Malaysian salons.
                 </p>
                 <p>
-                  Today, we're proud to serve 500+ salons across India, helping them streamline
+                  Today, we're proud to serve 500+ salons across Malaysia, helping them streamline
                   operations, increase revenue, and provide better customer experiences.
                 </p>
               </div>
@@ -201,7 +201,7 @@ const AboutUs = () => {
           <div className="text-center mb-12">
             <h2 className="text-3xl md:text-4xl font-bold mb-4">Mission & Vision</h2>
             <p className="text-muted-foreground max-w-2xl mx-auto">
-              Driving the digital transformation of India's beauty industry
+              Driving the digital transformation of Malaysia's beauty industry
             </p>
           </div>
           <div className="grid md:grid-cols-2 gap-8">
@@ -212,7 +212,7 @@ const AboutUs = () => {
                 </div>
                 <h3 className="text-2xl font-bold mb-4">Our Mission</h3>
                 <p className="text-muted-foreground">
-                  To empower every salon owner in India with technology that simplifies business
+                  To empower every salon owner in Malaysia with technology that simplifies business
                   management, increases profitability, and enhances customer satisfaction. We believe
                   every salon, regardless of size, deserves access to world-class management tools.
                 </p>
@@ -225,7 +225,7 @@ const AboutUs = () => {
                 </div>
                 <h3 className="text-2xl font-bold mb-4">Our Vision</h3>
                 <p className="text-muted-foreground">
-                  To become India's leading salon management platform, transforming how beauty
+                  To become Malaysia's leading salon management platform, transforming how beauty
                   businesses operate and grow. We envision a future where technology seamlessly
                   integrates with creativity, allowing salon professionals to focus on their craft.
                 </p>
@@ -305,7 +305,7 @@ const AboutUs = () => {
           <div className="text-center mb-12">
             <h2 className="text-3xl md:text-4xl font-bold mb-4">Why Salons Choose Us</h2>
             <p className="text-muted-foreground max-w-2xl mx-auto">
-              Built specifically for Indian salons with features that matter
+              Built specifically for Malaysian salons with features that matter
             </p>
           </div>
           <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-8">

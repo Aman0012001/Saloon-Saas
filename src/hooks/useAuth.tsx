@@ -6,6 +6,7 @@ export interface User {
   email: string;
   full_name?: string;
   user_type?: 'customer' | 'salon_owner' | 'admin' | string;
+  salon_role?: 'owner' | 'manager' | 'staff' | null;
 }
 
 interface AuthContextType {

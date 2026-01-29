@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import {
   Building2,
   Users,
@@ -13,7 +13,7 @@ import {
   AlertCircle,
   Megaphone,
   Settings,
-  DollarSign,
+  Banknote,
   Activity,
   Star,
   MapPin,
@@ -94,7 +94,9 @@ export default function AdminDashboardEnhanced() {
   const [dashboardStats, setDashboardStats] = useState<DashboardStats | null>(null);
   const [loading, setLoading] = useState(true);
   const [errorStatus, setErrorStatus] = useState<number | null>(null);
+  const [errorMessage, setErrorMessage] = useState<string>("");
   const { toast } = useToast();
+  const navigate = useNavigate();
 
   const fetchEnhancedStats = async () => {
     try {
@@ -117,33 +119,46 @@ export default function AdminDashboardEnhanced() {
         .sort((a, b) => b.count - a.count)
         .slice(0, 5);
 
+      const salonsList = Array.isArray(salons) ? salons : [];
+      const usersList = Array.isArray(users) ? users : [];
+
+      if (!stats) {
+        throw new Error("No governance stats returned from registry node.");
+      }
+
       setDashboardStats({
         totalSalons: stats.total_salons || 0,
         activeSalons: stats.active_salons || 0,
         pendingSalons: stats.pending_salons || 0,
         totalUsers: stats.total_users || 0,
-        totalOwners: users.filter((u: any) => u.role === 'owner' || u.is_owner).length,
-        todayBookings: 0, // Bookings removed from governance
+        totalOwners: usersList.filter((u: any) => u.role === 'owner' || u.is_owner).length,
+        todayBookings: 0,
         weeklyBookings: 0,
         monthlyRevenue: stats.total_revenue || 0,
         topCities,
-        recentActivity: [], // Active bookings feed removed
+        recentActivity: [],
         revenueData: {
           monthly: [],
           annual: [{ name: "2024", value: stats.total_revenue || 0 }]
         },
         popularTreatments: [],
         customerStats: {
-          new: users.length,
+          new: usersList.length,
           existing: 0,
-          total: users.length
+          total: usersList.length
         }
       });
 
     } catch (error: any) {
       console.error("Error fetching local enhanced admin stats:", error);
-      if (error.message?.includes('403')) {
+      const msg = error.message || "";
+      setErrorMessage(msg);
+      if (msg.includes('403') || msg.includes('Access Denied') || msg.includes('governance')) {
         setErrorStatus(403);
+      } else if (msg.includes('401') || msg.includes('Unauthorized')) {
+        navigate('/login');
+      } else {
+        setErrorStatus(500);
       }
     } finally {
       setLoading(false);
@@ -180,8 +195,9 @@ export default function AdminDashboardEnhanced() {
   if (loading) {
     return (
       <AdminLayout>
-        <div className="flex items-center justify-center h-screen">
+        <div className="flex flex-col items-center justify-center h-[70vh] space-y-4">
           <Loader2 className="animate-spin h-12 w-12 text-accent" />
+          <p className="text-slate-500 font-bold animate-pulse">Synchronizing Governance Data...</p>
         </div>
       </AdminLayout>
     );
@@ -208,6 +224,35 @@ export default function AdminDashboardEnhanced() {
             <Link to="/login" className="text-slate-500 hover:text-white font-bold text-sm transition-colors">
               Login as different user
             </Link>
+          </div>
+        </div>
+      </AdminLayout>
+    );
+  }
+
+  if (errorStatus === 500 || (!dashboardStats && !loading)) {
+    return (
+      <AdminLayout>
+        <div className="flex flex-col items-center justify-center min-h-[60vh] space-y-6 text-center">
+          <div className="w-20 h-20 bg-red-50 text-red-500 rounded-[2rem] flex items-center justify-center">
+            <AlertCircle className="w-10 h-10" />
+          </div>
+          <div className="space-y-2">
+            <h2 className="text-2xl font-black text-white">Registry Sync Failure</h2>
+            <p className="text-slate-400 max-w-md mx-auto">The local MySQL node could not be reached or returned an invalid response.</p>
+            {errorMessage && (
+              <div className="mt-4 p-4 bg-red-500/10 border border-red-500/20 rounded-2xl">
+                <p className="text-red-400 text-xs font-mono break-all">{errorMessage}</p>
+              </div>
+            )}
+          </div>
+          <div className="flex flex-col gap-3 w-full max-w-sm mx-auto">
+            <Button onClick={fetchEnhancedStats} className="bg-slate-800 text-white rounded-xl h-12 font-bold hover:bg-slate-700">
+              Retry Connection
+            </Button>
+            <Button onClick={handleFixPermissions} variant="ghost" className="text-accent hover:text-accent/80 font-bold text-xs uppercase tracking-widest">
+              Emergency Permission Reset
+            </Button>
           </div>
         </div>
       </AdminLayout>
@@ -245,7 +290,7 @@ export default function AdminDashboardEnhanced() {
             { label: "Total Salons", value: dashboardStats.totalSalons, active: `${dashboardStats.activeSalons} Active`, icon: Building2, color: "text-blue-500", bg: "bg-blue-50" },
             { label: "Total Users", value: dashboardStats.totalUsers, active: `${dashboardStats.totalOwners} Owners`, icon: Users, color: "text-emerald-500", bg: "bg-emerald-50" },
             { label: "Daily Volume", value: dashboardStats.todayBookings, active: "Bookings Today", icon: Calendar, color: "text-amber-500", bg: "bg-amber-50" },
-            { label: "Total Revenue", value: `$${dashboardStats.monthlyRevenue}`, active: "Gross Earnings", icon: DollarSign, color: "text-purple-500", bg: "bg-purple-50" },
+            { label: "Total Revenue", value: `RM ${dashboardStats.monthlyRevenue}`, active: "Gross Earnings", icon: Banknote, color: "text-purple-500", bg: "bg-purple-50" },
           ].map((stat, i) => (
             <Card key={i} className="border-none shadow-sm bg-white rounded-3xl group hover:shadow-xl transition-all">
               <CardContent className="p-6">

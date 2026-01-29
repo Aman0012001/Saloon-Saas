@@ -112,6 +112,7 @@
   * {
     @apply border-border;
   }
+
   body {
     @apply bg-background text-foreground font-sans;
   }
@@ -122,7 +123,7 @@
   .shadow-card {
     box-shadow: var(--shadow-card);
   }
-  
+
   .shadow-card-hover {
     box-shadow: var(--shadow-card-hover);
   }
@@ -131,7 +132,7 @@
     -ms-overflow-style: none;
     scrollbar-width: none;
   }
-  
+
   .scrollbar-hide::-webkit-scrollbar {
     display: none;
   }
@@ -196,7 +197,7 @@
     --amber: 38 92% 50%;
     --sage: 140 30% 50%;
     --cream: 40 33% 97%;
-    
+
     /* Shadows */
     --shadow-card: 0 4px 24px -4px hsla(0, 0%, 0%, 0.08);
     --shadow-card-hover: 0 8px 32px -4px hsla(0, 0%, 0%, 0.12);
@@ -240,7 +241,7 @@
     --border: 0 0% 20%;
     --input: 0 0% 20%;
     --ring: 0 0% 80%;
-    
+
     --sidebar-background: 240 5.9% 10%;
     --sidebar-foreground: 240 4.8% 95.9%;
     --sidebar-primary: 224.3 76.3% 48%;
@@ -267,11 +268,11 @@
   .text-gradient {
     @apply bg-clip-text text-transparent bg-gradient-to-r from-foreground to-muted-foreground;
   }
-  
+
   .shadow-card {
     box-shadow: var(--shadow-card);
   }
-  
+
   .shadow-card-hover {
     box-shadow: var(--shadow-card-hover);
   }
@@ -281,7 +282,7 @@
     -ms-overflow-style: none;
     scrollbar-width: none;
   }
-  
+
   .scrollbar-hide::-webkit-scrollbar {
     display: none;
   }
@@ -324,7 +325,9 @@ html {
 
 /* Better touch targets for mobile */
 @media (max-width: 768px) {
-  button, a {
+
+  button,
+  a {
     min-height: 44px;
     min-width: 44px;
   }
@@ -332,40 +335,45 @@ html {
 
 /* Mobile App Specific Styles */
 @media (max-width: 1024px) {
+
   /* Hide scrollbars on mobile for cleaner look */
   ::-webkit-scrollbar {
     display: none;
   }
-  
+
   /* Smooth scrolling */
   html {
     scroll-behavior: smooth;
     -webkit-overflow-scrolling: touch;
   }
-  
+
   /* Prevent zoom on input focus */
-  input, select, textarea {
+  input,
+  select,
+  textarea {
     font-size: 16px !important;
   }
-  
+
   /* App-like spacing */
   .mobile-spacing {
     padding: 1rem;
   }
-  
+
   /* Bottom navigation safe area */
   .bottom-nav-safe {
     padding-bottom: env(safe-area-inset-bottom);
   }
-  
+
   /* Full height for mobile app feel */
   .mobile-full-height {
     min-height: 100vh;
-    min-height: 100dvh; /* Dynamic viewport height */
+    min-height: 100dvh;
+    /* Dynamic viewport height */
   }
 
   /* Mobile-specific touch improvements */
-  button, .clickable {
+  button,
+  .clickable {
     -webkit-tap-highlight-color: rgba(0, 0, 0, 0.1);
     touch-action: manipulation;
   }
@@ -426,16 +434,16 @@ html {
   .page-enter {
     transform: translateX(100%);
   }
-  
+
   .page-enter-active {
     transform: translateX(0);
     transition: transform 300ms ease-out;
   }
-  
+
   .page-exit {
     transform: translateX(0);
   }
-  
+
   .page-exit-active {
     transform: translateX(-100%);
     transition: transform 300ms ease-out;
@@ -444,11 +452,12 @@ html {
 
 /* PWA Display Mode */
 @media (display-mode: standalone) {
+
   /* Hide address bar simulation */
   body {
     padding-top: env(safe-area-inset-top);
   }
-  
+
   /* App-like styling when installed */
   .pwa-installed {
     background: linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%);
@@ -472,43 +481,45 @@ html {
     overflow: hidden;
   }
 }
+
 /* Mobile Responsive Utilities */
 @layer utilities {
   .scrollbar-hide {
     -ms-overflow-style: none;
     scrollbar-width: none;
   }
-  
+
   .scrollbar-hide::-webkit-scrollbar {
     display: none;
   }
-  
+
   .safe-area-top {
     padding-top: env(safe-area-inset-top);
   }
-  
+
   .safe-area-bottom {
     padding-bottom: env(safe-area-inset-bottom);
   }
-  
+
   .pb-safe {
     padding-bottom: max(1rem, env(safe-area-inset-bottom));
   }
 
   .custom-scrollbar::-webkit-scrollbar {
-    width: 6px;
+    width: 5px;
   }
 
   .custom-scrollbar::-webkit-scrollbar-track {
-    background: transparent;
+    background: hsla(var(--muted), 0.3);
+    border-radius: 10px;
   }
 
   .custom-scrollbar::-webkit-scrollbar-thumb {
-    background: rgba(0, 0, 0, 0.1);
+    background: hsla(var(--primary), 0.2);
     border-radius: 10px;
   }
 
   .custom-scrollbar::-webkit-scrollbar-thumb:hover {
-    background: rgba(0, 0, 0, 0.2);
+    background: hsla(var(--accent), 0.5);
   }
 }

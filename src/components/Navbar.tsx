@@ -1,7 +1,7 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { Button } from "@/components/ui/button";
-import { User, Menu, LogOut, CalendarDays, Store, Shield } from "lucide-react";
+import { User, Menu, LogOut, CalendarDays, Store, Shield, LayoutDashboard } from "lucide-react";
 import {
   Sheet,
   SheetContent,
@@ -18,23 +18,45 @@ import {
 } from "@/components/ui/dropdown-menu";
 import logo from "@/assets/logo.png";
 import { useAuth } from "@/hooks/useAuth";
+import api from "@/services/api";
+import { UserNotificationSystem } from "./UserNotificationSystem";
 
 const Navbar = () => {
   const [isOpen, setIsOpen] = useState(false);
   const { user, signOut } = useAuth();
+  const [upcomingCount, setUpcomingCount] = useState(0);
+
+  useEffect(() => {
+    const fetchUpcomingCount = async () => {
+      if (user && user.id && user.user_type === 'customer') {
+        try {
+          const bookings = await api.bookings.getAll({ user_id: user.id });
+          const upcoming = bookings.filter((b: any) =>
+            (b.status === 'pending' || b.status === 'confirmed') &&
+            new Date(b.booking_date) >= new Date(new Date().setHours(0, 0, 0, 0))
+          );
+          setUpcomingCount(upcoming.length);
+        } catch (error) {
+          console.error("Error fetching upcoming bookings:", error);
+        }
+      }
+    };
+
+    fetchUpcomingCount();
+    const interval = setInterval(fetchUpcomingCount, 60000); // Refresh every minute
+    return () => clearInterval(interval);
+  }, [user]);
 
   const navLinks = [
     { name: "Home", href: "/" },
     { name: "Salons", href: "/salons" },
     { name: "All Services", href: "/services" },
+    { name: "Shop", href: "/shop" },
     { name: "Pricing", href: "/pricing" },
     { name: "Contact Us", href: "/contact" },
     { name: "About Us", href: "/about" },
   ];
 
-  const salonOwnerLinks = [
-    { name: "For Salon Owners", href: "/salon-owner/signup", isButton: true },
-  ];
 
   return (
     <nav className="fixed top-0 left-0 right-0 z-50 bg-background/95 backdrop-blur-sm border-b border-border safe-area-top">
@@ -57,58 +79,27 @@ const Navbar = () => {
               </Link>
             ))}
 
-            {/* Salon Owner Menu */}
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  className="text-sm font-medium text-accent hover:text-accent/80 hover:bg-accent/10 gap-2"
-                >
-                  <Store className="w-4 h-4" />
-                  For Salon Owners
-                </Button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="center" className="w-56">
-                <DropdownMenuItem asChild>
-                  <Link to="/salon-owner/signup" className="w-full cursor-pointer">
-                    <Store className="w-4 h-4 mr-2" />
-                    Salon Owner Signup
-                  </Link>
-                </DropdownMenuItem>
-                <DropdownMenuItem asChild>
-                  <Link to="/salon-owner/login" className="w-full cursor-pointer">
-                    <User className="w-4 h-4 mr-2" />
-                    Salon Owner Login
-                  </Link>
-                </DropdownMenuItem>
-                <DropdownMenuSeparator />
-                <DropdownMenuItem asChild>
-                  <Link to="/dashboard/create-salon" className="w-full cursor-pointer">
-                    <Store className="w-4 h-4 mr-2" />
-                    Start Free Trial
-                  </Link>
-                </DropdownMenuItem>
-                <DropdownMenuItem asChild>
-                  <Link to="/dashboard" className="w-full cursor-pointer">
-                    <CalendarDays className="w-4 h-4 mr-2" />
-                    Dashboard
-                  </Link>
-                </DropdownMenuItem>
-              </DropdownMenuContent>
-            </DropdownMenu>
           </div>
 
           {/* Medium Screen - Simplified Navigation */}
           <div className="hidden md:flex lg:hidden items-center gap-3">
             {user ? (
               <>
-                <Link to="/my-bookings">
-                  <Button variant="outline" size="sm" className="rounded-full px-3 gap-2">
-                    <CalendarDays className="w-4 h-4" />
-                    Bookings
-                  </Button>
-                </Link>
+                {user.user_type === 'customer' ? (
+                  <Link to="/my-bookings">
+                    <Button variant="outline" size="sm" className="rounded-full px-3 gap-2">
+                      <CalendarDays className="w-4 h-4" />
+                      Bookings
+                    </Button>
+                  </Link>
+                ) : (
+                  <Link to="/dashboard">
+                    <Button variant="outline" size="sm" className="rounded-full px-3 gap-2 border-accent/20 text-accent font-bold">
+                      <LayoutDashboard className="w-4 h-4" />
+                      Hub
+                    </Button>
+                  </Link>
+                )}
                 <Button
                   variant="ghost"
                   size="sm"
@@ -120,40 +111,16 @@ const Navbar = () => {
               </>
             ) : (
               <>
-                <DropdownMenu>
-                  <DropdownMenuTrigger asChild>
-                    <Button variant="outline" size="sm" className="rounded-full px-4">
-                      Login
-                    </Button>
-                  </DropdownMenuTrigger>
-                  <DropdownMenuContent align="end" className="w-48">
-                    <DropdownMenuItem asChild>
-                      <Link to="/login" className="w-full cursor-pointer">
-                        <User className="w-4 h-4 mr-2" />
-                        Customer Login
-                      </Link>
-                    </DropdownMenuItem>
-                    <DropdownMenuItem asChild>
-                      <Link to="/salon-owner/login" className="w-full cursor-pointer">
-                        <Store className="w-4 h-4 mr-2" />
-                        Salon Owner Login
-                      </Link>
-                    </DropdownMenuItem>
-                    <DropdownMenuSeparator />
-                    <DropdownMenuItem asChild>
-                      <Link to="/signup" className="w-full cursor-pointer">
-                        <User className="w-4 h-4 mr-2" />
-                        Customer Signup
-                      </Link>
-                    </DropdownMenuItem>
-                    <DropdownMenuItem asChild>
-                      <Link to="/salon-owner/signup" className="w-full cursor-pointer">
-                        <Store className="w-4 h-4 mr-2" />
-                        Salon Owner Signup
-                      </Link>
-                    </DropdownMenuItem>
-                  </DropdownMenuContent>
-                </DropdownMenu>
+                <Link to="/login">
+                  <Button variant="outline" size="sm" className="rounded-full px-4">
+                    Login
+                  </Button>
+                </Link>
+                <Link to="/signup">
+                  <Button variant="default" size="sm" className="rounded-full px-4">
+                    Signup
+                  </Button>
+                </Link>
               </>
             )}
           </div>
@@ -162,16 +129,28 @@ const Navbar = () => {
           <div className="hidden lg:flex items-center gap-3">
             {user ? (
               <>
-                <Link to="/my-bookings">
-                  <Button variant="outline" size="sm" className="rounded-full px-4 gap-2">
-                    <CalendarDays className="w-4 h-4" />
-                    My Bookings
+                {user.user_type === 'customer' ? (
+                  <Link to="/my-bookings">
+                    <Button variant="outline" size="sm" className="rounded-full px-4 gap-2 relative">
+                      <CalendarDays className="w-4 h-4" />
+                      My Bookings
+                    </Button>
+                  </Link>
+                ) : user.user_type !== 'admin' && (
+                  <Link to="/dashboard">
+                    <Button variant="outline" size="sm" className="rounded-full px-4 gap-2 border-accent/20 text-accent font-bold">
+                      <LayoutDashboard className="w-4 h-4" />
+                      Manage Salon
+                    </Button>
+                  </Link>
+                )}
+                <Link to="/profile">
+                  <Button variant="outline" size="sm" className="rounded-full px-4 gap-2 relative">
+                    <User className="w-4 h-4" />
+                    {user.full_name || user.email?.split('@')[0]}
                   </Button>
                 </Link>
-                <Button variant="outline" size="sm" className="rounded-full px-4 gap-2">
-                  <User className="w-4 h-4" />
-                  {user.email?.split('@')[0]}
-                </Button>
+                <UserNotificationSystem />
                 <Button
                   variant="ghost"
                   size="sm"
@@ -181,61 +160,21 @@ const Navbar = () => {
                   <LogOut className="w-4 h-4" />
                   Logout
                 </Button>
-                {user.user_type === 'admin' && (
-                  <Link to="/admin">
-                    <Button variant="default" size="sm" className="rounded-full px-4 gap-2 bg-slate-900 hover:bg-slate-800 text-white border-2 border-accent/20">
-                      <Shield className="w-4 h-4 text-accent" />
-                      Platform Admin
-                    </Button>
-                  </Link>
-                )}
               </>
             ) : (
               <>
-                <DropdownMenu>
-                  <DropdownMenuTrigger asChild>
-                    <Button variant="default" size="sm" className="rounded-full px-6">
-                      Log In
-                    </Button>
-                  </DropdownMenuTrigger>
-                  <DropdownMenuContent align="end" className="w-48">
-                    <DropdownMenuItem asChild>
-                      <Link to="/login" className="w-full cursor-pointer">
-                        <User className="w-4 h-4 mr-2" />
-                        Customer Login
-                      </Link>
-                    </DropdownMenuItem>
-                    <DropdownMenuItem asChild>
-                      <Link to="/salon-owner/login" className="w-full cursor-pointer">
-                        <Store className="w-4 h-4 mr-2" />
-                        Salon Owner Login
-                      </Link>
-                    </DropdownMenuItem>
-                  </DropdownMenuContent>
-                </DropdownMenu>
+                <Link to="/login">
+                  <Button variant="default" size="sm" className="rounded-full px-6">
+                    Log In
+                  </Button>
+                </Link>
 
-                <DropdownMenu>
-                  <DropdownMenuTrigger asChild>
-                    <Button variant="outline" size="sm" className="rounded-full px-4 gap-2">
-                      <User className="w-4 h-4" />
-                      Sign Up
-                    </Button>
-                  </DropdownMenuTrigger>
-                  <DropdownMenuContent align="end" className="w-48">
-                    <DropdownMenuItem asChild>
-                      <Link to="/signup" className="w-full cursor-pointer">
-                        <User className="w-4 h-4 mr-2" />
-                        Customer Signup
-                      </Link>
-                    </DropdownMenuItem>
-                    <DropdownMenuItem asChild>
-                      <Link to="/salon-owner/signup" className="w-full cursor-pointer">
-                        <Store className="w-4 h-4 mr-2" />
-                        Salon Owner Signup
-                      </Link>
-                    </DropdownMenuItem>
-                  </DropdownMenuContent>
-                </DropdownMenu>
+                <Link to="/signup">
+                  <Button variant="outline" size="sm" className="rounded-full px-4 gap-2">
+                    <User className="w-4 h-4" />
+                    Sign Up
+                  </Button>
+                </Link>
               </>
             )}
           </div>
@@ -267,49 +206,37 @@ const Navbar = () => {
                   ))}
                 </nav>
 
-                {/* Salon Owner Section */}
-                <div className="border-t border-border pt-4">
-                  <h3 className="text-sm font-semibold text-accent mb-3 flex items-center gap-2">
-                    <Store className="w-4 h-4" />
-                    For Salon Owners
-                  </h3>
-                  <div className="space-y-2">
-                    <Link to="/salon-owner/signup" onClick={() => setIsOpen(false)}>
-                      <Button variant="ghost" className="w-full justify-start gap-2">
-                        <Store className="w-4 h-4" />
-                        Salon Owner Signup
-                      </Button>
-                    </Link>
-                    <Link to="/salon-owner/login" onClick={() => setIsOpen(false)}>
-                      <Button variant="ghost" className="w-full justify-start gap-2">
-                        <User className="w-4 h-4" />
-                        Salon Owner Login
-                      </Button>
-                    </Link>
-                    <Link to="/dashboard" onClick={() => setIsOpen(false)}>
-                      <Button variant="ghost" className="w-full justify-start gap-2">
-                        <CalendarDays className="w-4 h-4" />
-                        Dashboard
-                      </Button>
-                    </Link>
-                  </div>
-                </div>
 
                 {/* Mobile Auth Buttons */}
                 <div className="flex flex-col gap-3 pt-4 border-t border-border">
-                  <h3 className="text-sm font-semibold text-muted-foreground">Customer Login</h3>
+                  <h3 className="text-sm font-semibold text-muted-foreground">Account</h3>
+                  {user && (
+                    <div className="flex items-center gap-3 mb-2 px-1">
+                      <UserNotificationSystem />
+                      <span className="text-xs font-bold text-slate-500 uppercase tracking-widest">Inbox</span>
+                    </div>
+                  )}
                   {user ? (
                     <>
-                      <div className="flex items-center gap-2 px-3 py-2 bg-muted rounded-lg">
+                      <Link to="/profile" className="flex items-center gap-2 px-3 py-2 bg-muted rounded-lg relative" onClick={() => setIsOpen(false)}>
                         <User className="w-4 h-4" />
-                        <span className="text-sm font-medium">{user.email}</span>
-                      </div>
-                      <Link to="/my-bookings" onClick={() => setIsOpen(false)}>
-                        <Button variant="outline" className="rounded-full w-full gap-2">
-                          <CalendarDays className="w-4 h-4" />
-                          My Bookings
-                        </Button>
+                        <span className="text-sm font-medium">{user.full_name || user.email}</span>
                       </Link>
+                      {user.user_type === 'customer' ? (
+                        <Link to="/my-bookings" onClick={() => setIsOpen(false)}>
+                          <Button variant="outline" className="rounded-full w-full gap-2 relative">
+                            <CalendarDays className="w-4 h-4" />
+                            My Bookings
+                          </Button>
+                        </Link>
+                      ) : user.user_type !== 'admin' && (
+                        <Link to="/dashboard" onClick={() => setIsOpen(false)}>
+                          <Button variant="outline" className="rounded-full w-full gap-2 border-accent/20 text-accent font-bold">
+                            <LayoutDashboard className="w-4 h-4" />
+                            Manage Salon
+                          </Button>
+                        </Link>
+                      )}
                       <Button
                         variant="destructive"
                         className="rounded-full w-full gap-2"
@@ -326,19 +253,13 @@ const Navbar = () => {
                     <>
                       <Link to="/login" onClick={() => setIsOpen(false)}>
                         <Button variant="default" className="rounded-full w-full">
-                          Customer Login
+                          Login
                         </Button>
                       </Link>
                       <Link to="/signup" onClick={() => setIsOpen(false)}>
                         <Button variant="outline" className="rounded-full w-full gap-2">
                           <User className="w-4 h-4" />
-                          Customer Signup
-                        </Button>
-                      </Link>
-                      <Link to="/salon-owner/signup" onClick={() => setIsOpen(false)}>
-                        <Button variant="outline" className="rounded-full w-full gap-2">
-                          <Store className="w-4 h-4" />
-                          Salon Owner Signup
+                          Signup
                         </Button>
                       </Link>
                     </>

@@ -83,7 +83,7 @@ export default function CreateAdminCredentials() {
         if (adminError) {
           // If RLS blocks, try direct SQL approach
           console.log('RLS blocked, trying alternative approach...');
-          
+
           // Create a profile entry first
           const { error: profileError } = await supabase
             .from('profiles')
@@ -157,7 +157,7 @@ export default function CreateAdminCredentials() {
                 </AlertDescription>
               </Alert>
 
-              <Button 
+              <Button
                 onClick={createAdminCredentials}
                 disabled={loading}
                 className="w-full"
@@ -215,7 +215,7 @@ export default function CreateAdminCredentials() {
                 </div>
               )}
 
-              <Button 
+              <Button
                 onClick={loginWithCredentials}
                 className="w-full"
                 size="lg"
@@ -225,8 +225,8 @@ export default function CreateAdminCredentials() {
               </Button>
 
               <div className="text-center">
-                <Button 
-                  variant="link" 
+                <Button
+                  variant="link"
                   onClick={() => navigate("/admin-access")}
                   className="text-sm"
                 >

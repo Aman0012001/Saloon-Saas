@@ -5,7 +5,6 @@ import {
   Search,
   Filter,
   MoreVertical,
-  Ban,
   CheckCircle,
   XCircle,
   Eye,
@@ -63,7 +62,6 @@ interface UserData {
   user_type: string;
   created_at: string;
   last_sign_in_at: string | null;
-  is_blocked: boolean;
   salon_count: number;
   booking_count: number;
 }
@@ -77,10 +75,9 @@ export default function AdminUsersEnhanced() {
   const [searchTerm, setSearchTerm] = useState(searchParams.get('search') || '');
   const [userTypeFilter, setUserTypeFilter] = useState(searchParams.get('type') || 'all');
   const [actionDialog, setActionDialog] = useState<{
-    type: 'block' | 'unblock' | 'view' | null;
+    type: 'view' | null;
     user: UserData | null;
   }>({ type: null, user: null });
-  const [actionReason, setActionReason] = useState('');
   const [actionLoading, setActionLoading] = useState(false);
 
   useEffect(() => {
@@ -91,15 +88,14 @@ export default function AdminUsersEnhanced() {
     try {
       setLoading(true);
       const data = await api.admin.getAllUsers();
-
-      const formatted: UserData[] = data.map((u: any) => ({
+      const usersList = Array.isArray(data) ? data : [];
+      const formatted: UserData[] = usersList.map((u: any) => ({
         id: u.id,
         email: u.email,
         full_name: u.full_name,
         user_type: u.role || 'customer',
         created_at: u.created_at,
         last_sign_in_at: u.last_login,
-        is_blocked: !!u.is_blocked,
         salon_count: Number(u.salon_count || 0),
         booking_count: Number(u.booking_count || 0)
       }));
@@ -112,18 +108,9 @@ export default function AdminUsersEnhanced() {
     }
   };
 
-  const handleUserAction = async (action: 'block' | 'unblock', user: UserData) => {
-    setActionLoading(true);
-    try {
-      if (action === 'block') await blockUser(user.id, actionReason);
-      else await unblockUser(user.id);
-      fetchUsers();
-      setActionDialog({ type: null, user: null });
-    } catch (e) {
-      console.error("Action error:", e);
-    } finally {
-      setActionLoading(false);
-    }
+  const handleUserAction = async (user: UserData) => {
+    // Reserved for viewing details if needed later
+    setActionDialog({ type: 'view', user });
   };
 
   const filteredUsers = users.filter(u => {
@@ -227,10 +214,6 @@ export default function AdminUsersEnhanced() {
                         </DropdownMenuTrigger>
                         <DropdownMenuContent align="end" className="rounded-2xl border-none shadow-2xl p-2 w-48">
                           <DropdownMenuItem className="rounded-xl font-bold py-3"><Eye className="w-4 h-4 mr-2" /> View Dossier</DropdownMenuItem>
-                          <DropdownMenuSeparator />
-                          <DropdownMenuItem onClick={() => setActionDialog({ type: 'block', user: u })} className="rounded-xl font-bold py-3 text-red-600 focus:bg-red-50 focus:text-red-700">
-                            <Ban className="w-4 h-4 mr-2" /> Revoke Access
-                          </DropdownMenuItem>
                         </DropdownMenuContent>
                       </DropdownMenu>
                     </TableCell>
@@ -242,24 +225,7 @@ export default function AdminUsersEnhanced() {
         </Card>
       </div>
 
-      <Dialog open={actionDialog.type === 'block'} onOpenChange={() => setActionDialog({ type: null, user: null })}>
-        <DialogContent className="rounded-[3rem] border-none shadow-2xl p-10">
-          <h2 className="text-3xl font-black text-slate-900 tracking-tighter">Revoke Local Access</h2>
-          <p className="text-slate-500 font-medium mt-2">Provide justification for restricting {actionDialog.user?.full_name}'s local profile.</p>
-          <div className="mt-8 space-y-4">
-            <Textarea
-              placeholder="Reason for suspension..."
-              className="bg-slate-50 border-none rounded-3xl p-6 min-h-[120px] shadow-inner"
-              value={actionReason}
-              onChange={e => setActionReason(e.target.value)}
-            />
-            <div className="flex gap-4">
-              <Button onClick={() => handleUserAction('block', actionDialog.user!)} className="flex-1 h-14 bg-red-600 hover:bg-red-700 text-white font-black rounded-2xl shadow-lg shadow-red-600/20">Suspend Identity</Button>
-              <Button variant="ghost" onClick={() => setActionDialog({ type: null, user: null })} className="font-bold text-slate-400">Cancel</Button>
-            </div>
-          </div>
-        </DialogContent>
-      </Dialog>
+
     </AdminLayout>
   );
 }

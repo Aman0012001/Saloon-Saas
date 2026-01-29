@@ -34,16 +34,40 @@ if ($method === 'GET' && $uriParts[1] === 'my') {
     }
 
     $stmt = $db->prepare("
-        SELECT ss.*, sp.name as plan_name, sp.description as plan_description
+        SELECT ss.*, sp.name as plan_name, sp.description as plan_description, 
+               sp.max_staff, sp.max_services, sp.features
         FROM salon_subscriptions ss
         INNER JOIN subscription_plans sp ON ss.plan_id = sp.id
         WHERE ss.salon_id = ?
         ORDER BY ss.created_at DESC
+        LIMIT 1
     ");
     $stmt->execute([$salonId]);
-    $subscriptions = $stmt->fetchAll();
+    $subscription = $stmt->fetch();
 
-    sendResponse(['subscriptions' => $subscriptions]);
+    if ($subscription) {
+        // Calculate Usage
+        $stmt = $db->prepare("SELECT COUNT(*) FROM staff_profiles WHERE salon_id = ? AND is_active = 1");
+        $stmt->execute([$salonId]);
+        $subscription['current_staff_count'] = $stmt->fetchColumn();
+
+        $stmt = $db->prepare("SELECT COUNT(*) FROM services WHERE salon_id = ? AND is_active = 1");
+        $stmt->execute([$salonId]);
+        $subscription['current_service_count'] = $stmt->fetchColumn();
+
+        // Parse features
+        $subscription['features'] = json_decode($subscription['features'] ?? '[]');
+
+        // Check computed status
+        $isActive = $subscription['status'] === 'active';
+        if ($subscription['subscription_end_date'] && strtotime($subscription['subscription_end_date']) < time()) {
+            $isActive = false;
+            $subscription['status'] = 'expired';
+        }
+        $subscription['is_valid'] = $isActive;
+    }
+
+    sendResponse(['subscription' => $subscription]);
 }
 
 sendResponse(['error' => 'Subscription route not found'], 404);

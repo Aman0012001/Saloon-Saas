@@ -1,488 +1,439 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, useCallback, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
 import {
-  UserCog,
-  Plus,
   Search,
+  Users,
+  Plus,
+  Edit2,
+  ChevronDown,
   Mail,
   Phone,
+  Settings2,
   MoreVertical,
-  Shield,
-  Trash2,
-  Edit,
+  ChevronRight,
+  UserCircle,
+  History,
+  Layout,
+  Eye
 } from "lucide-react";
-import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Badge } from "@/components/ui/badge";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogHeader,
-  DialogTitle,
-  DialogTrigger,
-  DialogFooter,
-} from "@/components/ui/dialog";
+import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
-  DropdownMenuSeparator,
   DropdownMenuTrigger,
+  DropdownMenuSeparator,
+  DropdownMenuLabel,
 } from "@/components/ui/dropdown-menu";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
-import { DashboardLayout } from "@/components/dashboard/DashboardLayout";
 import { ResponsiveDashboardLayout } from "@/components/dashboard/ResponsiveDashboardLayout";
 import { useSalon } from "@/hooks/useSalon";
 import { useAuth } from "@/hooks/useAuth";
 import api from "@/services/api";
 import { useToast } from "@/hooks/use-toast";
-
-interface StaffMember {
-  id: string;
-  user_id: string;
-  display_name: string;
-  email: string | null;
-  phone: string | null;
-  avatar_url: string | null;
-  specializations: string[];
-  commission_percentage: number;
-  is_active: boolean;
-  role?: 'owner' | 'manager' | 'staff' | 'super_admin';
-}
+import { motion, AnimatePresence } from "framer-motion";
+import { StaffMember } from "@/types/staff";
+import { Badge } from "@/components/ui/badge";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
+import { Checkbox } from "@/components/ui/checkbox";
+import { AddStaffDialog } from "@/components/staff/AddStaffDialog";
+import { EditStaffDialog } from "@/components/staff/EditStaffDialog";
+import { cn } from "@/lib/utils";
 
 export default function StaffPage() {
   const navigate = useNavigate();
   const { toast } = useToast();
   const { user, loading: authLoading } = useAuth();
-  const { currentSalon, loading: salonLoading, isOwner, isManager } = useSalon();
+  const { currentSalon, loading: salonLoading, isOwner, isManager, subscription, refreshSalons } = useSalon();
+
   const [staff, setStaff] = useState<StaffMember[]>([]);
   const [loading, setLoading] = useState(true);
+  const [activeTab, setActiveTab] = useState<"ALL" | "ACTIVE" | "INACTIVE" | "TERMINATED" | "MANAGERS" | "STAFF">("ACTIVE");
+  const [subTab, setSubTab] = useState<"DETAILS" | "LOGS">("DETAILS");
+  const [selectedStaffId, setSelectedStaffId] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
-  const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
-  const [newStaffName, setNewStaffName] = useState("");
-  const [newStaffEmail, setNewStaffEmail] = useState("");
-  const [newStaffPhone, setNewStaffPhone] = useState("");
-  const [newStaffRole, setNewStaffRole] = useState<"manager" | "staff">("staff");
-  const [newStaffCommission, setNewStaffCommission] = useState("0");
-  const [newStaffSpecializations, setNewStaffSpecializations] = useState("");
-  const [creating, setCreating] = useState(false);
+  const [isEditOpen, setIsEditOpen] = useState(false);
 
-  useEffect(() => {
-    if (!authLoading && !user) {
-      navigate("/login");
+  const fetchStaff = useCallback(async () => {
+    if (!currentSalon) {
+      if (!salonLoading) setLoading(false);
+      return;
     }
-  }, [user, authLoading, navigate]);
-
-  const fetchStaff = async () => {
-    if (!currentSalon) return;
 
     setLoading(true);
     try {
       const staffData = await api.staff.getBySalon(currentSalon.id);
 
-      // In local DB, roles might be part of the staff object or fetched separately
-      // Using generic enrichment pattern
-      const enrichedStaff = staffData.map((s: any) => ({
-        ...s,
-        specializations: typeof s.specializations === 'string'
-          ? JSON.parse(s.specializations)
-          : (s.specializations || [])
-      }));
+      if (!Array.isArray(staffData)) {
+        setStaff([]);
+        return;
+      }
 
-      setStaff(enrichedStaff);
-    } catch (error) {
-      console.error("Error fetching staff:", error);
+      setStaff(staffData);
+      if (staffData.length > 0 && !selectedStaffId) {
+        setSelectedStaffId(staffData[0].id);
+      }
+    } catch (error: any) {
       toast({
-        title: "Error",
-        description: "Failed to load staff members from local database",
+        title: "Sync Failed",
+        description: error.message || "Could not access team records.",
         variant: "destructive",
       });
     } finally {
       setLoading(false);
     }
-  };
+  }, [currentSalon, toast, selectedStaffId]);
+
+  useEffect(() => {
+    if (!authLoading && !user) navigate("/login");
+  }, [user, authLoading, navigate]);
 
   useEffect(() => {
     fetchStaff();
-  }, [currentSalon]);
+  }, [fetchStaff]);
 
-  const handleAddStaff = async () => {
-    if (!currentSalon || !newStaffName) return;
+  const selectedStaff = useMemo(() => {
+    return staff.find(s => s.id === selectedStaffId) || null;
+  }, [staff, selectedStaffId]);
 
-    setCreating(true);
-    try {
-      await api.staff.create({
-        salon_id: currentSalon.id,
-        display_name: newStaffName,
-        email: newStaffEmail || null,
-        phone: newStaffPhone || null,
-        specializations: newStaffSpecializations.split(",").map(s => s.trim()).filter(Boolean),
-        commission_percentage: parseInt(newStaffCommission) || 0,
-        role: newStaffRole,
-        is_active: true
-      });
+  const filteredStaff = useMemo(() => {
+    return staff.filter(s => {
+      const matchesStatus =
+        activeTab === "ALL" ||
+        (activeTab === "ACTIVE" && s.is_active) ||
+        (activeTab === "INACTIVE" && !s.is_active) ||
+        (activeTab === "TERMINATED" && false) || // Mocking terminated
+        (activeTab === "MANAGERS" && s.role === "manager") ||
+        (activeTab === "STAFF" && s.role === "staff");
 
-      toast({
-        title: "Staff Added",
-        description: `${newStaffName} has been added to your local database.`,
-      });
+      const q = searchQuery.toLowerCase();
+      const matchesSearch = s.display_name.toLowerCase().includes(q) ||
+        s.email?.toLowerCase().includes(q);
 
-      setIsAddDialogOpen(false);
-      resetForm();
-      fetchStaff();
-    } catch (error: any) {
-      console.error("Error adding staff:", error);
-      toast({
-        title: "Error",
-        description: error.message || "Failed to add staff member locally.",
-        variant: "destructive",
-      });
-    } finally {
-      setCreating(false);
-    }
-  };
+      return matchesStatus && matchesSearch;
+    });
+  }, [staff, activeTab, searchQuery]);
 
-  const resetForm = () => {
-    setNewStaffName("");
-    setNewStaffEmail("");
-    setNewStaffPhone("");
-    setNewStaffCommission("0");
-    setNewStaffSpecializations("");
-    setNewStaffRole("staff");
-  };
-
-  const updateStaffStatus = async (staffId: string, isActive: boolean) => {
-    try {
-      await api.staff.update(staffId, { is_active: isActive });
-      toast({
-        title: "Success",
-        description: `Staff member ${isActive ? "activated" : "deactivated"} locally`,
-      });
-      fetchStaff();
-    } catch (error) {
-      console.error("Error updating staff:", error);
-      toast({
-        title: "Error",
-        description: "Failed to update staff member locally",
-        variant: "destructive",
-      });
-    }
-  };
-
-  const getInitials = (name: string) => {
-    return name
-      .split(" ")
-      .map((n) => n[0])
-      .join("")
-      .toUpperCase()
-      .slice(0, 2);
-  };
-
-  const getRoleBadge = (role?: string) => {
-    switch (role) {
-      case "owner":
-        return <Badge className="bg-accent/20 text-accent border-0">Owner</Badge>;
-      case "manager":
-        return <Badge className="bg-emerald-100 text-emerald-700 border-0">Manager</Badge>;
-      default:
-        return <Badge variant="secondary">Staff</Badge>;
-    }
-  };
-
-  const filteredStaff = staff.filter(
-    (s) =>
-      s.display_name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      s.email?.toLowerCase().includes(searchQuery.toLowerCase())
-  );
+  const counts = useMemo(() => ({
+    ALL: staff.length,
+    ACTIVE: staff.filter(s => s.is_active).length,
+    INACTIVE: staff.filter(s => !s.is_active).length,
+    TERMINATED: 0,
+    MANAGERS: staff.filter(s => s.role === "manager").length,
+    STAFF: staff.filter(s => s.role === "staff").length,
+  }), [staff]);
 
   if (authLoading || salonLoading) {
     return (
-      <DashboardLayout>
-        <div className="flex items-center justify-center h-64">
-          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-accent"></div>
+      <ResponsiveDashboardLayout>
+        <div className="flex flex-col items-center justify-center h-[70vh] space-y-6">
+          <div className="relative w-16 h-16">
+            <div className="absolute inset-0 border-4 border-slate-100 rounded-full"></div>
+            <div className="absolute inset-0 border-4 border-[#F2A93B] rounded-full border-t-transparent animate-spin"></div>
+          </div>
+          <p className="text-slate-400 font-bold uppercase tracking-widest text-[10px]">Synchronizing Team Registry...</p>
         </div>
-      </DashboardLayout>
+      </ResponsiveDashboardLayout>
     );
   }
 
   return (
-    <ResponsiveDashboardLayout
-      showBackButton={true}
-      headerActions={
-        (isOwner || isManager) && (
-          <Button
-            onClick={() => setIsAddDialogOpen(true)}
-            size="sm"
-            className="bg-gradient-to-r from-accent to-accent/90 text-white"
-          >
-            <Plus className="w-4 h-4" />
-          </Button>
-        )
-      }
-    >
-      <div className="space-y-6">
-        {/* Header */}
-        <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
-          <div>
-            <h1 className="text-3xl font-black text-foreground tracking-tight">Staff Management</h1>
-            <p className="text-muted-foreground font-medium">
-              Manage your local team members from the XAMPP database
-            </p>
+    <ResponsiveDashboardLayout showBackButton={true}>
+      <div className="min-h-screen bg-[#F8F9FA] pb-20">
+        <div className="max-w-[1400px] mx-auto pt-8 px-6 space-y-8">
+
+          {/* Top Status Tabs & Enhanced Filter */}
+          <div className="flex items-center gap-4 mb-6">
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <button
+                  className={cn(
+                    "flex items-center gap-3 px-6 py-2.5 rounded-xl font-black text-xs tracking-[0.2em] transition-all bg-[#F2A93B] text-white shadow-lg shadow-[#F2A93B]/20 hover:scale-[1.02] active:scale-[0.98]",
+                  )}
+                >
+                  <Layout className="w-3.5 h-3.5" />
+                  {activeTab} <ChevronDown className="w-4 h-4" />
+                </button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent className="w-56 mt-2 p-2 rounded-2xl border-none shadow-2xl bg-white/95 backdrop-blur-xl">
+                <DropdownMenuLabel className="text-[10px] font-black text-slate-400 uppercase tracking-widest px-3 py-2">Filter Registry</DropdownMenuLabel>
+                <DropdownMenuSeparator className="bg-slate-100" />
+
+                <DropdownMenuItem onClick={() => setActiveTab("ALL")} className="rounded-xl py-3 px-3 cursor-pointer focus:bg-[#F2A93B]/10 group">
+                  <div className="flex items-center justify-between w-full">
+                    <span className="text-xs font-bold text-slate-700 group-hover:text-[#F2A93B]">ALL PERSONNEL</span>
+                    <span className="text-[10px] font-black text-slate-300">{counts.ALL}</span>
+                  </div>
+                </DropdownMenuItem>
+
+                <DropdownMenuSeparator className="bg-slate-100" />
+
+                <DropdownMenuItem onClick={() => setActiveTab("ACTIVE")} className="rounded-xl py-3 px-3 cursor-pointer focus:bg-emerald-50 group">
+                  <div className="flex items-center justify-between w-full">
+                    <div className="flex items-center gap-2">
+                      <div className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
+                      <span className="text-xs font-bold text-slate-700 group-hover:text-emerald-600 uppercase">Active</span>
+                    </div>
+                    <span className="text-[10px] font-black text-slate-300">{counts.ACTIVE}</span>
+                  </div>
+                </DropdownMenuItem>
+
+                <DropdownMenuItem onClick={() => setActiveTab("INACTIVE")} className="rounded-xl py-3 px-3 cursor-pointer focus:bg-slate-50 group">
+                  <div className="flex items-center justify-between w-full">
+                    <div className="flex items-center gap-2">
+                      <div className="w-1.5 h-1.5 rounded-full bg-slate-300" />
+                      <span className="text-xs font-bold text-slate-700 group-hover:text-slate-900 uppercase">Inactive</span>
+                    </div>
+                    <span className="text-[10px] font-black text-slate-300">{counts.INACTIVE}</span>
+                  </div>
+                </DropdownMenuItem>
+
+                <DropdownMenuItem onClick={() => setActiveTab("TERMINATED")} className="rounded-xl py-3 px-3 cursor-pointer focus:bg-rose-50 group">
+                  <div className="flex items-center justify-between w-full">
+                    <div className="flex items-center gap-2">
+                      <div className="w-1.5 h-1.5 rounded-full bg-rose-500" />
+                      <span className="text-xs font-bold text-slate-700 group-hover:text-rose-600 uppercase">Terminated</span>
+                    </div>
+                    <span className="text-[10px] font-black text-slate-300">{counts.TERMINATED}</span>
+                  </div>
+                </DropdownMenuItem>
+
+                <DropdownMenuSeparator className="bg-slate-100" />
+
+                <DropdownMenuItem onClick={() => setActiveTab("MANAGERS")} className="rounded-xl py-3 px-3 cursor-pointer focus:bg-amber-50 group">
+                  <div className="flex items-center justify-between w-full">
+                    <span className="text-xs font-bold text-slate-700 group-hover:text-amber-600 uppercase tracking-tight">Management</span>
+                    <span className="text-[10px] font-black text-slate-300">{counts.MANAGERS}</span>
+                  </div>
+                </DropdownMenuItem>
+
+                <DropdownMenuItem onClick={() => setActiveTab("STAFF")} className="rounded-xl py-3 px-3 cursor-pointer focus:bg-amber-50 group">
+                  <div className="flex items-center justify-between w-full">
+                    <span className="text-xs font-bold text-slate-700 group-hover:text-amber-600 uppercase tracking-tight">Service Staff</span>
+                    <span className="text-[10px] font-black text-slate-300">{counts.STAFF}</span>
+                  </div>
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+
+            <div className="h-4 w-px bg-slate-200 mx-2" />
+
+            <div className="flex items-center gap-4">
+              <span className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em]">Showing {filteredStaff.length} Result{filteredStaff.length !== 1 ? 's' : ''}</span>
+            </div>
           </div>
-          {(isOwner || isManager) && (
-            <Dialog open={isAddDialogOpen} onOpenChange={setIsAddDialogOpen}>
-              <DialogTrigger asChild>
-                <Button className="bg-accent hover:bg-accent/90 text-white font-bold h-11 px-6 rounded-2xl shadow-lg shadow-accent/20 transition-all hover:scale-105">
-                  <Plus className="w-4 h-4 mr-2" />
-                  Add Team Member
-                </Button>
-              </DialogTrigger>
-              <DialogContent className="max-w-md rounded-3xl border-none">
-                <DialogHeader>
-                  <DialogTitle className="text-2xl font-black">Register Staff</DialogTitle>
-                  <DialogDescription className="font-medium">
-                    Create a new staff record in your local salon database.
-                  </DialogDescription>
-                </DialogHeader>
-                <div className="space-y-4 py-4 max-h-[60vh] overflow-y-auto px-1">
-                  <div className="space-y-2">
-                    <Label htmlFor="name" className="text-xs font-black uppercase tracking-widest text-muted-foreground">Full Name *</Label>
-                    <Input
-                      id="name"
-                      placeholder="e.g. Sarah Jones"
-                      value={newStaffName}
-                      onChange={(e) => setNewStaffName(e.target.value)}
-                      className="h-11 bg-secondary/30 border-none rounded-xl"
-                    />
+
+          {/* Featured Staff Card */}
+          <AnimatePresence mode="wait">
+            {selectedStaff && (
+              <motion.div
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -20 }}
+                className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden"
+              >
+                <div className="p-8 flex items-start gap-8 relative">
+                  <div className="relative">
+                    <Avatar className="w-24 h-24 border-2 border-slate-100 shadow-lg">
+                      <AvatarImage src={selectedStaff.avatar_url || ""} />
+                      <AvatarFallback className="bg-[#F2A93B] text-white text-2xl font-black">
+                        {selectedStaff.display_name.charAt(0)}
+                      </AvatarFallback>
+                    </Avatar>
                   </div>
 
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <div className="space-y-2">
-                      <Label htmlFor="email" className="text-xs font-black uppercase tracking-widest text-muted-foreground">Email (Optional)</Label>
-                      <Input
-                        id="email"
-                        type="email"
-                        placeholder="staff@example.com"
-                        value={newStaffEmail}
-                        onChange={(e) => setNewStaffEmail(e.target.value)}
-                        className="h-11 bg-secondary/30 border-none rounded-xl"
-                      />
+                  <div className="flex-1 space-y-6">
+                    <div>
+                      <h2 className="text-3xl font-bold text-slate-900">{selectedStaff.display_name}</h2>
+                      <p className="text-[#F2A93B] font-bold uppercase tracking-widest text-[10px]">{selectedStaff.role?.replace('_', ' ').toUpperCase() || "STAFF MEMBER"}</p>
                     </div>
-                    <div className="space-y-2">
-                      <Label htmlFor="phone" className="text-xs font-black uppercase tracking-widest text-muted-foreground">Phone (Optional)</Label>
-                      <Input
-                        id="phone"
-                        placeholder="+1 234..."
-                        value={newStaffPhone}
-                        onChange={(e) => setNewStaffPhone(e.target.value)}
-                        className="h-11 bg-secondary/30 border-none rounded-xl"
-                      />
-                    </div>
-                  </div>
 
-                  <div className="space-y-2">
-                    <Label htmlFor="specializations" className="text-xs font-black uppercase tracking-widest text-muted-foreground">Specializations (comma separated)</Label>
-                    <Input
-                      id="specializations"
-                      placeholder="e.g. Haircut, Styling"
-                      value={newStaffSpecializations}
-                      onChange={(e) => setNewStaffSpecializations(e.target.value)}
-                      className="h-11 bg-secondary/30 border-none rounded-xl"
-                    />
-                  </div>
-
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <div className="space-y-2">
-                      <Label htmlFor="commission" className="text-xs font-black uppercase tracking-widest text-muted-foreground">Commission (%)</Label>
-                      <Input
-                        id="commission"
-                        type="number"
-                        min="0"
-                        max="100"
-                        value={newStaffCommission}
-                        onChange={(e) => setNewStaffCommission(e.target.value)}
-                        className="h-11 bg-secondary/30 border-none rounded-xl font-bold"
-                      />
-                    </div>
-                    <div className="space-y-2">
-                      <Label htmlFor="role" className="text-xs font-black uppercase tracking-widest text-muted-foreground">Role</Label>
-                      <Select value={newStaffRole} onValueChange={(v: "manager" | "staff") => setNewStaffRole(v)}>
-                        <SelectTrigger className="h-11 bg-secondary/30 border-none rounded-xl">
-                          <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent className="rounded-xl border-none shadow-2xl">
-                          {isOwner && <SelectItem value="manager">Manager</SelectItem>}
-                          <SelectItem value="staff">Staff Member</SelectItem>
-                        </SelectContent>
-                      </Select>
-                    </div>
-                  </div>
-                </div>
-                <DialogFooter className="gap-2">
-                  <Button variant="ghost" onClick={() => setIsAddDialogOpen(false)} className="rounded-xl font-bold">
-                    Cancel
-                  </Button>
-                  <Button
-                    onClick={handleAddStaff}
-                    disabled={!newStaffName || creating}
-                    className="bg-accent hover:bg-accent/90 text-white font-black px-8 rounded-xl"
-                  >
-                    {creating ? "Saving..." : "Register Staff"}
-                  </Button>
-                </DialogFooter>
-              </DialogContent>
-            </Dialog>
-          )}
-        </div>
-
-        {/* Search */}
-        <div className="relative group">
-          <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-muted-foreground group-focus-within:text-accent transition-colors" />
-          <Input
-            placeholder="Search by name, role or email..."
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            className="pl-12 h-14 bg-white border-none shadow-sm rounded-2xl text-lg font-medium"
-          />
-        </div>
-
-        {/* Staff Grid */}
-        {
-          loading ? (
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-              {[1, 2, 3].map(i => (
-                <Card key={i} className="border-none shadow-sm h-48 animate-pulse bg-white rounded-[2rem]" />
-              ))}
-            </div>
-          ) : filteredStaff.length === 0 ? (
-            <Card className="border-none shadow-sm bg-white/50 backdrop-blur-sm rounded-[2rem]">
-              <CardContent className="py-24 text-center">
-                <div className="w-20 h-20 bg-accent/10 rounded-3xl flex items-center justify-center mx-auto mb-6">
-                  <UserCog className="w-10 h-10 text-accent opacity-50" />
-                </div>
-                <h3 className="text-xl font-bold text-foreground">Your Team is Waiting</h3>
-                <p className="text-muted-foreground mt-2 max-w-xs mx-auto font-medium">Add staff members to start managing commissions and schedules.</p>
-                {(isOwner || isManager) && (
-                  <Button
-                    variant="link"
-                    className="mt-4 text-accent font-black"
-                    onClick={() => setIsAddDialogOpen(true)}
-                  >
-                    Add your first team member
-                  </Button>
-                )}
-              </CardContent>
-            </Card>
-          ) : (
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-              {filteredStaff.map((member) => (
-                <Card key={member.id} className={`group border-none shadow-sm hover:shadow-xl transition-all duration-300 bg-white rounded-[2rem] overflow-hidden ${!member.is_active ? "opacity-60" : ""}`}>
-                  <CardContent className="p-6">
-                    <div className="flex items-start justify-between">
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-y-4 gap-x-12">
                       <div className="flex items-center gap-4">
-                        <div className="relative">
-                          <Avatar className="w-16 h-16 border-2 border-white shadow-md ring-2 ring-accent/5">
-                            <AvatarImage src={member.avatar_url || ""} />
-                            <AvatarFallback className="bg-gradient-to-br from-accent/20 to-accent/10 text-accent font-black text-lg">
-                              {getInitials(member.display_name)}
-                            </AvatarFallback>
-                          </Avatar>
-                          {member.is_active && (
-                            <div className="absolute -bottom-1 -right-1 w-5 h-5 bg-emerald-500 rounded-full border-2 border-white shadow-sm" />
-                          )}
-                        </div>
-                        <div>
-                          <h3 className="font-black text-slate-900 text-lg leading-tight">
-                            {member.display_name}
-                          </h3>
-                          <div className="mt-1">{getRoleBadge(member.role)}</div>
-                        </div>
+                        <span className="text-[11px] font-black text-slate-400 uppercase tracking-widest min-w-[60px]">PHONET</span>
+                        <span className="text-sm font-bold text-slate-600">: {selectedStaff.phone || "(Not Provided)"}</span>
                       </div>
-                      {(isOwner || (isManager && member.role !== "owner")) && (
-                        <DropdownMenu>
-                          <DropdownMenuTrigger asChild>
-                            <Button variant="ghost" size="icon" className="rounded-full hover:bg-slate-100 opacity-0 group-hover:opacity-100 transition-opacity">
-                              <MoreVertical className="w-5 h-5 text-slate-400" />
-                            </Button>
-                          </DropdownMenuTrigger>
-                          <DropdownMenuContent align="end" className="w-56 p-2 rounded-2xl border-none shadow-2xl">
-                            <DropdownMenuItem className="rounded-xl py-3 font-bold">
-                              <Edit className="w-4 h-4 mr-3 text-blue-500" />
-                              Edit Privileges
-                            </DropdownMenuItem>
-                            <DropdownMenuItem className="rounded-xl py-3 font-bold">
-                              <Shield className="w-4 h-4 mr-3 text-purple-500" />
-                              Assign Tasks
-                            </DropdownMenuItem>
-                            <DropdownMenuSeparator className="opacity-50" />
-                            <DropdownMenuItem
-                              className={`rounded-xl py-3 font-bold ${member.is_active ? "text-red-500 focus:bg-red-50 focus:text-red-600" : "text-emerald-500 focus:bg-emerald-50 focus:text-emerald-600"}`}
-                              onClick={() => updateStaffStatus(member.id, !member.is_active)}
-                            >
-                              {member.is_active ? "Suspend Staff" : "Reactivate Staff"}
-                            </DropdownMenuItem>
-                          </DropdownMenuContent>
-                        </DropdownMenu>
-                      )}
-                    </div>
-
-                    <div className="mt-6 space-y-3">
-                      {member.email && (
-                        <div className="flex items-center gap-3 text-sm font-medium text-slate-500">
-                          <div className="w-8 h-8 rounded-lg bg-slate-50 flex items-center justify-center">
-                            <Mail className="w-4 h-4" />
-                          </div>
-                          <span className="truncate">{member.email}</span>
-                        </div>
-                      )}
-                      {member.phone && (
-                        <div className="flex items-center gap-3 text-sm font-medium text-slate-500">
-                          <div className="w-8 h-8 rounded-lg bg-slate-50 flex items-center justify-center">
-                            <Phone className="w-4 h-4" />
-                          </div>
-                          <span>{member.phone}</span>
-                        </div>
-                      )}
-                    </div>
-
-                    {member.specializations && member.specializations.length > 0 && (
-                      <div className="mt-6 flex flex-wrap gap-2">
-                        {member.specializations.map((spec, i) => (
-                          <Badge key={i} className="bg-slate-50 text-slate-600 hover:bg-accent/10 hover:text-accent border-none px-3 py-1 text-[10px] font-black uppercase tracking-widest rounded-lg">
-                            {spec}
-                          </Badge>
-                        ))}
+                      <div className="flex items-center gap-4">
+                        <span className="text-[11px] font-black text-slate-400 uppercase tracking-widest min-w-[60px]">EMAIL</span>
+                        <span className="text-sm font-bold text-slate-600">: {selectedStaff.email || "no-email@registry.com"}</span>
                       </div>
-                    )}
 
-                    <div className="mt-6 pt-5 border-t border-slate-50 flex items-center justify-between">
-                      <div className="flex flex-col">
-                        <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest leading-none">Commission</span>
-                        <span className="text-xl font-black text-slate-900 mt-1">{member.commission_percentage}%</span>
-                      </div>
-                      <Badge
-                        className={`font-black tracking-tighter uppercase px-4 py-1.5 rounded-xl border-none ${member.is_active ? "bg-emerald-100 text-emerald-700" : "bg-slate-100 text-slate-500"}`}
-                      >
-                        {member.is_active ? "Active" : "Inactive"}
-                      </Badge>
                     </div>
-                  </CardContent>
-                </Card>
-              ))}
+                  </div>
+
+                  <Button
+                    onClick={() => navigate(`/dashboard/staff/${selectedStaff.id}`)}
+                    className="absolute top-8 right-8 bg-[#F2A93B] hover:bg-[#E29A2B] text-white font-bold h-10 px-8 rounded-md"
+                  >
+                    View
+                  </Button>
+                </div>
+              </motion.div>
+            )}
+          </AnimatePresence>
+
+          {/* Sub Tabs */}
+          <div className="flex items-center border-b border-slate-200 mt-12 mb-6">
+            <button
+              onClick={() => setSubTab("DETAILS")}
+              className={cn(
+                "px-8 py-3 text-sm font-black tracking-widest transition-all relative",
+                subTab === "DETAILS" ? "text-slate-900" : "text-slate-400 hover:text-slate-600"
+              )}
+            >
+              DETAILS
+              {subTab === "DETAILS" && <div className="absolute bottom-0 left-0 right-0 h-1 bg-[#F2A93B]" />}
+            </button>
+            <button
+              onClick={() => setSubTab("LOGS")}
+              className={cn(
+                "px-8 py-3 text-sm font-black tracking-widest transition-all relative ml-4",
+                subTab === "LOGS" ? "text-slate-900" : "text-slate-400 hover:text-slate-600"
+              )}
+            >
+              LOGS
+              {subTab === "LOGS" && <div className="absolute bottom-0 left-0 right-0 h-1 bg-[#F2A93B]" />}
+            </button>
+          </div>
+
+          {/* Table Controls (Mini) */}
+          <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm flex items-center gap-4 mb-4">
+            <div className="w-10 h-10 bg-[#F2A93B]/10 text-[#F2A93B] rounded flex items-center justify-center">
+              <Users className="w-5 h-5" />
             </div>
-          )
-        }
-      </div >
-    </ResponsiveDashboardLayout >
+            <div className="flex-1">
+              <Input
+                placeholder="Search registry..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                className="h-10 bg-slate-50 border-slate-100 rounded-md text-xs font-bold w-64"
+              />
+            </div>
+            <div className="flex items-center gap-2">
+              {(isOwner || isManager) && currentSalon && (
+                <div className="flex flex-col items-end gap-1">
+                  {subscription && (
+                    <span className="text-[10px] font-black uppercase text-slate-400">
+                      Plan limit: {subscription.current_staff_count} / {subscription.max_staff}
+                    </span>
+                  )}
+                  <AddStaffDialog
+                    salonId={currentSalon.id}
+                    staffCount={staff.length}
+                    onSuccess={async () => {
+                      await fetchStaff();
+                      await refreshSalons();
+                    }}
+                    trigger={
+                      <Button
+                        disabled={subscription ? subscription.current_staff_count >= subscription.max_staff : false}
+                        className="h-10 bg-[#F2A93B] hover:bg-[#E29A2B] text-white font-bold rounded-md flex items-center gap-2 px-6 disabled:opacity-50 disabled:cursor-not-allowed">
+                        <Plus className="w-4 h-4" />
+                        {subscription && subscription.current_staff_count >= subscription.max_staff
+                          ? "Limit Reached"
+                          : "Add Member"}
+                      </Button>
+                    }
+                  />
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* Staff Table */}
+          <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
+            <Table>
+              <TableHeader>
+                <TableRow className="bg-[#F8F9FA] hover:bg-[#F8F9FA]">
+                  <TableHead className="w-[50px]">
+                    <Checkbox className="border-slate-300" />
+                  </TableHead>
+                  <TableHead className="text-[11px] font-black text-[#64748B] uppercase tracking-widest">
+                    NAME
+                  </TableHead>
+                  <TableHead className="text-[11px] font-black text-[#64748B] uppercase tracking-widest">
+                    POSITION
+                  </TableHead>
+                  <TableHead className="text-[11px] font-black text-[#64748B] uppercase tracking-widest">
+                    WORK PHONE
+                  </TableHead>
+                  <TableHead className="text-[11px] font-black text-[#64748B] uppercase tracking-widest">
+                    EMAIL
+                  </TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {filteredStaff.length === 0 ? (
+                  <TableRow>
+                    <TableCell colSpan={5} className="h-64 text-center">
+                      <div className="flex flex-col items-center justify-center space-y-4">
+                        <div className="w-16 h-16 bg-slate-50 rounded-full flex items-center justify-center text-slate-300">
+                          <Users className="w-8 h-8" />
+                        </div>
+                        <p className="font-bold text-slate-400">No members found in this category.</p>
+                      </div>
+                    </TableCell>
+                  </TableRow>
+                ) : filteredStaff.map((member) => (
+                  <TableRow
+                    key={member.id}
+                    className={cn(
+                      "cursor-pointer transition-colors",
+                      selectedStaffId === member.id ? "bg-slate-50/50" : "hover:bg-slate-50"
+                    )}
+                    onClick={() => setSelectedStaffId(member.id)}
+                  >
+                    <TableCell onClick={(e) => e.stopPropagation()}>
+                      <Checkbox
+                        checked={selectedStaffId === member.id}
+                        onCheckedChange={() => setSelectedStaffId(member.id)}
+                        className="border-slate-300"
+                      />
+                    </TableCell>
+                    <TableCell>
+                      <div className="flex items-center gap-3">
+                        <Avatar className="w-10 h-10 border border-slate-100">
+                          <AvatarImage src={member.avatar_url || ""} />
+                          <AvatarFallback className="bg-[#F2A93B] text-white text-[10px] uppercase">
+                            {member.display_name.charAt(0)}
+                          </AvatarFallback>
+                        </Avatar>
+                        <span className="font-bold text-slate-700">{member.display_name}</span>
+                      </div>
+                    </TableCell>
+                    <TableCell className="text-slate-500 font-medium italic">
+                      {member.role?.replace('_', ' ').toLowerCase() || "staff"}
+                    </TableCell>
+                    <TableCell className="text-slate-600 font-bold">
+                      {member.phone || "(Not Available)"}
+                    </TableCell>
+                    <TableCell className="text-slate-500 font-medium">
+                      {member.email}
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </div>
+        </div>
+      </div>
+
+      {selectedStaff && (
+        <EditStaffDialog
+          staff={selectedStaff}
+          isOpen={isEditOpen}
+          onClose={() => setIsEditOpen(false)}
+          onSuccess={fetchStaff}
+        />
+      )}
+    </ResponsiveDashboardLayout>
   );
 }

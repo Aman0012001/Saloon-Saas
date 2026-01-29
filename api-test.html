@@ -1,0 +1,170 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>API Test - Salon Booking</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 1200px;
+            margin: 50px auto;
+            padding: 20px;
+            background: #f5f5f5;
+        }
+
+        .container {
+            background: white;
+            padding: 30px;
+            border-radius: 8px;
+            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+        }
+
+        h1 {
+            color: #333;
+            margin-bottom: 20px;
+        }
+
+        .status {
+            padding: 15px;
+            margin: 10px 0;
+            border-radius: 4px;
+        }
+
+        .success {
+            background: #d4edda;
+            color: #155724;
+            border: 1px solid #c3e6cb;
+        }
+
+        .error {
+            background: #f8d7da;
+            color: #721c24;
+            border: 1px solid #f5c6cb;
+        }
+
+        .info {
+            background: #d1ecf1;
+            color: #0c5460;
+            border: 1px solid #bee5eb;
+        }
+
+        pre {
+            background: #f8f9fa;
+            padding: 15px;
+            border-radius: 4px;
+            overflow-x: auto;
+        }
+
+        button {
+            background: #007bff;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 4px;
+            cursor: pointer;
+            margin: 5px;
+        }
+
+        button:hover {
+            background: #0056b3;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="container">
+        <h1>🧪 Salon Booking API Test</h1>
+
+        <div class="status info">
+            <strong>Testing Connection to:</strong> http://localhost:8000/backend/api
+        </div>
+
+        <button onclick="testConnection()">Test Database Connection</button>
+        <button onclick="testSalonsAPI()">Test Salons API</button>
+        <button onclick="testFrontendAPI()">Test Frontend API Call</button>
+
+        <div id="results"></div>
+    </div>
+
+    <script>
+        const resultsDiv = document.getElementById('results');
+
+        function showResult(title, data, isError = false) {
+            const statusClass = isError ? 'error' : 'success';
+            resultsDiv.innerHTML += `
+                <div class="status ${statusClass}">
+                    <h3>${title}</h3>
+                    <pre>${JSON.stringify(data, null, 2)}</pre>
+                </div>
+            `;
+        }
+
+        async function testConnection() {
+            resultsDiv.innerHTML = '';
+            try {
+                const response = await fetch('http://localhost:8000/backend/api');
+                const data = await response.json();
+                showResult('✅ Backend Connection', data);
+            } catch (error) {
+                showResult('❌ Backend Connection Failed', { error: error.message }, true);
+            }
+        }
+
+        async function testSalonsAPI() {
+            resultsDiv.innerHTML = '';
+            try {
+                const response = await fetch('http://localhost:8000/backend/api/salons');
+                const data = await response.json();
+                showResult(`✅ Salons API (Found ${data.data?.salons?.length || 0} salons)`, data);
+            } catch (error) {
+                showResult('❌ Salons API Failed', { error: error.message }, true);
+            }
+        }
+
+        async function testFrontendAPI() {
+            resultsDiv.innerHTML = '';
+            try {
+                // Simulate the frontend API call
+                const API_BASE_URL = 'http://localhost:8000/backend/api';
+                const response = await fetch(`${API_BASE_URL}/salons`, {
+                    headers: {
+                        'Content-Type': 'application/json'
+                    }
+                });
+
+                if (!response.ok) {
+                    throw new Error(`HTTP ${response.status}`);
+                }
+
+                const json = await response.json();
+                const data = json.data !== undefined ? json.data : json;
+
+                // Handle different response formats (same as frontend)
+                let salons = [];
+                if (Array.isArray(data)) {
+                    salons = data;
+                } else if (data && Array.isArray(data.salons)) {
+                    salons = data.salons;
+                }
+
+                showResult(`✅ Frontend API Simulation (${salons.length} salons)`, {
+                    raw_response: json,
+                    parsed_salons: salons
+                });
+            } catch (error) {
+                showResult('❌ Frontend API Simulation Failed', { error: error.message }, true);
+            }
+        }
+
+        // Auto-run tests on page load
+        window.onload = () => {
+            testConnection();
+            setTimeout(testSalonsAPI, 500);
+            setTimeout(testFrontendAPI, 1000);
+        };
+    </script>
+</body>
+
+</html>

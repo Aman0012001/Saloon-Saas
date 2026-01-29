@@ -18,10 +18,13 @@ import {
   CalendarDays,
   Users,
   Scissors,
+  FileText,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
+import { CalendarView } from "@/components/dashboard/CalendarView";
+import { sendAppointmentConfirmation } from "@/utils/whatsapp";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
@@ -54,7 +57,8 @@ import { useAuth } from "@/hooks/useAuth";
 import { useMobile } from "@/hooks/use-mobile";
 import api from "@/services/api";
 import { useToast } from "@/hooks/use-toast";
-import { format, addDays, startOfWeek, isSameDay } from "date-fns";
+import { format, addDays, startOfWeek, isSameDay, addMonths } from "date-fns";
+import { cn } from "@/lib/utils";
 
 interface Booking {
   id: string;
@@ -69,6 +73,8 @@ interface Booking {
   duration_minutes?: number;
   user_name?: string;
   user_phone?: string;
+  staff_id?: string;
+  staff_name?: string;
   // For compatibility with UI
   service?: {
     id: string;
@@ -80,6 +86,10 @@ interface Booking {
     full_name: string | null;
     phone: string | null;
   };
+  isReturning?: boolean;
+  price_paid?: number;
+  discount_amount?: number;
+  coupon_code?: string;
 }
 
 export default function AppointmentsPage() {
@@ -92,6 +102,7 @@ export default function AppointmentsPage() {
   const [loading, setLoading] = useState(true);
   const [selectedDate, setSelectedDate] = useState(new Date());
   const [viewMode, setViewMode] = useState<"day" | "week" | "all">("all");
+  const [viewType, setViewType] = useState<"list" | "calendar">("list");
   const [searchQuery, setSearchQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState<string>("all");
   const [showSearch, setShowSearch] = useState(false);
@@ -103,11 +114,84 @@ export default function AppointmentsPage() {
     customerName: "",
     customerPhone: "",
     serviceId: "",
+    staffId: "",
     date: format(new Date(), "yyyy-MM-dd"),
     time: "10:00",
     notes: "",
   });
+  const [staffMembers, setStaffMembers] = useState<any[]>([]);
   const [creatingBooking, setCreatingBooking] = useState(false);
+
+  // Staff Assignment State
+  const [showStaffAssignment, setShowStaffAssignment] = useState(false);
+  const [selectedBooking, setSelectedBooking] = useState<Booking | null>(null);
+  const [assigningStaff, setAssigningStaff] = useState(false);
+
+  const assignStaffToBooking = async (staffId: string) => {
+    if (!selectedBooking) return;
+
+    setAssigningStaff(true);
+    try {
+      await api.bookings.updateStatus(selectedBooking.id, selectedBooking.status, staffId);
+
+      toast({
+        title: "Staff Assigned",
+        description: "The specialist has been successfully assigned to this booking.",
+      });
+
+      // Update local state to reflect change
+      setBookings(prev => prev.map(b =>
+        b.id === selectedBooking.id
+          ? { ...b, staff_id: staffId, staff_name: staffMembers.find(s => s.id === staffId)?.display_name }
+          : b
+      ));
+
+      setShowStaffAssignment(false);
+    } catch (error) {
+      console.error("Error assigning staff:", error);
+      toast({
+        title: "Error",
+        description: "Failed to assign staff member",
+        variant: "destructive",
+      });
+    } finally {
+      setAssigningStaff(false);
+    }
+  };
+
+  // Follow-up Reminder State
+  const [showFollowupDialog, setShowFollowupDialog] = useState(false);
+  const [followupDate, setFollowupDate] = useState("");
+  const [followupTime, setFollowupTime] = useState("09:00");
+  const [selectedBookingForFollowup, setSelectedBookingForFollowup] = useState<any>(null);
+
+  const handleScheduleFollowup = (booking: any) => {
+    setSelectedBookingForFollowup(booking);
+    // Default to 1 month later
+    setFollowupDate(format(addMonths(new Date(), 1), "yyyy-MM-dd"));
+    setShowFollowupDialog(true);
+  };
+
+  const confirmFollowup = async () => {
+    if (!selectedBookingForFollowup || !followupDate) return;
+    try {
+      await api.reminders.create({
+        user_id: selectedBookingForFollowup.user_id,
+        salon_id: currentSalon?.id,
+        booking_id: selectedBookingForFollowup.id,
+        title: "Follow-up Reminder",
+        message: `Hi ${selectedBookingForFollowup.user_name || 'there'}, we hope you're doing well! It's time to book your next ${selectedBookingForFollowup.service_name || 'session'} at ${currentSalon?.name}.`,
+        scheduled_at: `${followupDate} ${followupTime}:00`,
+        reminder_type: 'automated_followup'
+      });
+      toast({ title: "Follow-up Scheduled", description: "Customer will be automatically reminded." });
+      setShowFollowupDialog(false);
+    } catch (e) {
+      console.error(e);
+      toast({ title: "Error", description: "Failed to schedule reminder", variant: "destructive" });
+    }
+  };
+
 
   useEffect(() => {
     if (!authLoading && !user) {
@@ -141,19 +225,27 @@ export default function AppointmentsPage() {
       });
 
       // Enrich data for UI if backend returns flat structure
-      const enriched = data.map((b: any) => ({
-        ...b,
-        service: b.service_name ? {
-          id: b.service_id,
-          name: b.service_name,
-          price: Number(b.price || 0),
-          duration_minutes: Number(b.duration_minutes || 30)
-        } : undefined,
-        customer: b.user_name ? {
-          full_name: b.user_name,
-          phone: b.user_phone
-        } : undefined
-      }));
+      const enriched = data.map((b: any) => {
+        // Find if returning customer
+        const prevCount = data.filter((prev: any) => prev.user_id === b.user_id && prev.id !== b.id).length;
+
+        return {
+          ...b,
+          isReturning: prevCount > 0,
+          service: b.service_name ? {
+            id: b.service_id,
+            name: b.service_name,
+            price: Number(b.price || 0),
+            duration_minutes: Number(b.duration_minutes || 30)
+          } : undefined,
+          customer: b.full_name ? {
+            full_name: b.full_name,
+            phone: b.phone
+          } : undefined,
+          user_name: b.full_name,
+          user_phone: b.phone
+        };
+      });
 
       setBookings(enriched);
     } catch (error) {
@@ -174,17 +266,21 @@ export default function AppointmentsPage() {
 
   // Fetch available services for new appointment
   useEffect(() => {
-    const fetchServices = async () => {
+    const fetchServicesAndStaff = async () => {
       if (!currentSalon) return;
       try {
-        const data = await api.services.getBySalon(currentSalon.id);
-        setAvailableServices(data.filter((s: any) => s.is_active));
+        const [servicesData, staffData] = await Promise.all([
+          api.services.getBySalon(currentSalon.id),
+          api.staff.getBySalon(currentSalon.id)
+        ]);
+        setAvailableServices(servicesData.filter((s: any) => s.is_active));
+        setStaffMembers(staffData.filter((s: any) => s.is_active));
       } catch (e) {
-        console.error("Error fetching services:", e);
+        console.error("Error fetching services/staff:", e);
       }
     };
 
-    fetchServices();
+    fetchServicesAndStaff();
   }, [currentSalon]);
 
   const createNewAppointment = async () => {
@@ -197,11 +293,29 @@ export default function AppointmentsPage() {
       return;
     }
 
+    // Duplicate Check
+    const hasConflict = bookings.some(b =>
+      b.booking_date === newBooking.date &&
+      b.booking_time === newBooking.time &&
+      b.staff_id === newBooking.staffId &&
+      b.status !== 'cancelled'
+    );
+
+    if (hasConflict) {
+      toast({
+        title: "Schedule Conflict",
+        description: "This staff member already has an appointment at this time.",
+        variant: "destructive",
+      });
+      return;
+    }
+
     setCreatingBooking(true);
     try {
       await api.bookings.create({
         salon_id: currentSalon.id,
         service_id: newBooking.serviceId,
+        staff_id: newBooking.staffId || null,
         booking_date: newBooking.date,
         booking_time: newBooking.time,
         notes: `Walk-in: ${newBooking.customerName}${newBooking.customerPhone ? ' | ' + newBooking.customerPhone : ''}${newBooking.notes ? ' | ' + newBooking.notes : ''}`,
@@ -213,11 +327,25 @@ export default function AppointmentsPage() {
         description: `Appointment for ${newBooking.customerName} has been scheduled locally`,
       });
 
+      // Quick WhatsApp Confirmation
+      if (newBooking.customerPhone) {
+        const salonInfo = currentSalon;
+        const msgBooking = {
+          user_name: newBooking.customerName,
+          user_phone: newBooking.customerPhone,
+          booking_date: newBooking.date,
+          booking_time: newBooking.time,
+          service_name: availableServices.find(s => s.id === newBooking.serviceId)?.name || 'Service'
+        };
+        sendAppointmentConfirmation(msgBooking, salonInfo);
+      }
+
       // Reset form
       setNewBooking({
         customerName: "",
         customerPhone: "",
         serviceId: "",
+        staffId: "",
         date: format(new Date(), "yyyy-MM-dd"),
         time: "10:00",
         notes: "",
@@ -278,7 +406,7 @@ export default function AppointmentsPage() {
         return (
           <Badge className="bg-gradient-to-r from-amber-100 to-amber-200 text-amber-700 border-0 font-medium text-xs">
             <Clock className="w-3 h-3 mr-1" />
-            Pending
+            Needs Assignment
           </Badge>
         );
       case "cancelled":
@@ -468,6 +596,19 @@ export default function AppointmentsPage() {
                         </SelectContent>
                       </Select>
                     </div>
+                    <div className="space-y-2">
+                      <Label>Staff Member (Assign to)</Label>
+                      <Select value={newBooking.staffId} onValueChange={v => setNewBooking({ ...newBooking, staffId: v })}>
+                        <SelectTrigger>
+                          <SelectValue placeholder="Select staff (Optional)" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {staffMembers.map(s => (
+                            <SelectItem key={s.id} value={s.id}>{s.display_name}</SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
                     <div className="grid grid-cols-2 gap-4">
                       <div className="space-y-2">
                         <Label>Date</Label>
@@ -528,6 +669,25 @@ export default function AppointmentsPage() {
           </div>
 
           <div className="flex items-center gap-2 bg-secondary/30 p-1 rounded-xl">
+            <Button
+              variant={viewType === "list" ? "default" : "ghost"}
+              size="sm"
+              onClick={() => setViewType("list")}
+              className={`px-4 font-bold ${viewType === "list" ? "bg-white text-slate-900 shadow-sm" : "text-muted-foreground"}`}
+            >
+              List
+            </Button>
+            <Button
+              variant={viewType === "calendar" ? "default" : "ghost"}
+              size="sm"
+              onClick={() => setViewType("calendar")}
+              className={`px-4 font-bold ${viewType === "calendar" ? "bg-white text-slate-900 shadow-sm" : "text-muted-foreground"}`}
+            >
+              Calendar
+            </Button>
+          </div>
+
+          <div className="flex items-center gap-2 bg-secondary/30 p-1 rounded-xl">
             {["all", "day", "week"].map(mode => (
               <Button
                 key={mode}
@@ -542,8 +702,20 @@ export default function AppointmentsPage() {
           </div>
         </div>
 
-        {/* Date Navigation for day/week views */}
-        {viewMode !== "all" && (
+        {/* Calendar View Body */}
+        {viewType === "calendar" && (
+          <CalendarView
+            bookings={bookings}
+            selectedDate={selectedDate}
+            onDateSelect={(d) => {
+              setSelectedDate(d);
+              if (viewMode === "all") setViewMode("day");
+            }}
+          />
+        )}
+
+        {/* Date Navigation for day/week views - Only in List mode or if specific mode selected */}
+        {viewType === "list" && viewMode !== "all" && (
           <Card className="border-0 shadow-sm bg-white overflow-hidden">
             <CardContent className="p-0">
               <div className="flex items-center justify-between p-4 border-b">
@@ -582,8 +754,8 @@ export default function AppointmentsPage() {
           </Card>
         )}
 
-        {/* Desktop Search Bar (Standalone when expanded) */}
-        {!isMobile && (
+        {/* Desktop Search Bar (Standalone when expanded) - List mode only */}
+        {!isMobile && viewType === "list" && (
           <div className="relative">
             <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-muted-foreground" />
             <Input
@@ -595,126 +767,291 @@ export default function AppointmentsPage() {
           </div>
         )}
 
-        {/* Appointments List */}
-        <div className="space-y-4">
-          {loading ? (
-            [1, 2, 3].map(i => (
-              <Card key={i} className="border-0 shadow-sm animate-pulse h-24 bg-white" />
-            ))
-          ) : filteredBookings.length === 0 ? (
-            <Card className="border-0 shadow-sm bg-white/50 backdrop-blur-sm p-12 text-center">
-              <Calendar className="w-16 h-16 text-muted-foreground/20 mx-auto mb-4" />
-              <h3 className="text-xl font-bold text-foreground">No bookings found</h3>
-              <p className="text-muted-foreground mt-1">No appointments match your current filters or selected date.</p>
-              <Button
-                variant="outline"
-                className="mt-6 border-accent/20 text-accent font-bold rounded-xl"
-                onClick={() => { setStatusFilter("all"); setSearchQuery(""); setViewMode("all"); }}
-              >
-                Clear all filters
-              </Button>
-            </Card>
-          ) : (
-            filteredBookings.map((booking) => (
-              <Card
-                key={booking.id}
-                className="group border-0 shadow-sm hover:shadow-md transition-all duration-300 bg-white overflow-hidden rounded-2xl"
-              >
-                <div className="flex flex-col md:flex-row md:items-center">
-                  {/* Time Badge - Styled for prominence */}
-                  <div className="bg-slate-50 md:w-32 p-6 flex md:flex-col items-center justify-center border-b md:border-b-0 md:border-r gap-3 md:gap-1">
-                    <span className="text-2xl font-black text-slate-900 tracking-tighter">
-                      {booking.booking_time.slice(0, 5)}
-                    </span>
-                    <Badge variant="secondary" className="bg-white border-slate-200 text-slate-500 font-bold text-[10px] uppercase px-2">
-                      {booking.duration_minutes || booking.service?.duration_minutes || 30} MINS
-                    </Badge>
-                  </div>
+        {/* Appointments List - Switches visibility but also shows details below calendar in desktop if needed? 
+            For now, let's keep it strictly List mode only or filter it to show only selected day if coming from calendar */}
+        {viewType === "list" && (
+          <div className="space-y-4">
+            {loading ? (
+              [1, 2, 3].map(i => (
+                <Card key={i} className="border-0 shadow-sm animate-pulse h-24 bg-white" />
+              ))
+            ) : filteredBookings.length === 0 ? (
+              <Card className="border-0 shadow-sm bg-white/50 backdrop-blur-sm p-12 text-center">
+                <Calendar className="w-16 h-16 text-muted-foreground/20 mx-auto mb-4" />
+                <h3 className="text-xl font-bold text-foreground">No bookings found</h3>
+                <p className="text-muted-foreground mt-1">No appointments match your current filters or selected date.</p>
+                <Button
+                  variant="outline"
+                  className="mt-6 border-accent/20 text-accent font-bold rounded-xl"
+                  onClick={() => { setStatusFilter("all"); setSearchQuery(""); setViewMode("all"); }}
+                >
+                  Clear all filters
+                </Button>
+              </Card>
+            ) : (
+              filteredBookings.map((booking) => (
+                <Card
+                  key={booking.id}
+                  className="group border-0 shadow-sm hover:shadow-md transition-all duration-300 bg-white overflow-hidden rounded-2xl"
+                >
+                  <div className="flex flex-col md:flex-row md:items-center">
+                    {/* Time Badge - Styled for prominence */}
+                    <div className="bg-slate-50 md:w-32 p-6 flex md:flex-col items-center justify-center border-b md:border-b-0 md:border-r gap-3 md:gap-1">
+                      <span className="text-2xl font-black text-slate-900 tracking-tighter">
+                        {booking.booking_time.slice(0, 5)}
+                      </span>
+                      <Badge variant="secondary" className="bg-white border-slate-200 text-slate-500 font-bold text-[10px] uppercase px-2">
+                        {booking.duration_minutes || booking.service?.duration_minutes || 30} MINS
+                      </Badge>
+                    </div>
 
-                  <CardContent className="p-6 flex-1 flex flex-col md:flex-row md:items-center justify-between gap-6">
-                    <div className="flex items-center gap-4">
-                      <Avatar className="w-12 h-12 border-2 border-white shadow-sm ring-2 ring-accent/5">
-                        <AvatarImage src="" />
-                        <AvatarFallback className="bg-gradient-to-br from-accent/20 to-accent/10 text-accent font-black">
-                          {(booking.user_name || "W").charAt(0).toUpperCase()}
-                        </AvatarFallback>
-                      </Avatar>
-                      <div className="space-y-1">
-                        <h4 className="text-lg font-black text-slate-900 flex items-center gap-2">
-                          {booking.user_name || booking.customer?.full_name || "Walk-in Customer"}
-                          {isSameDay(new Date(booking.booking_date), new Date()) && (
-                            <span className="inline-block w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
-                          )}
-                        </h4>
-                        <div className="flex flex-wrap items-center gap-3 text-sm font-medium text-slate-500">
-                          <span className="flex items-center gap-1.5 bg-slate-100/80 px-2 py-0.5 rounded-lg text-slate-600">
-                            <Scissors className="w-3.5 h-3.5" />
-                            {booking.service_name || booking.service?.name || "General Service"}
-                          </span>
-                          {viewMode === "all" || viewMode === "week" ? (
-                            <span className="flex items-center gap-1.5">
-                              <CalendarDays className="w-3.5 h-3.5" />
-                              {format(new Date(booking.booking_date), "MMM d")}
+                    <CardContent className="p-6 flex-1 flex flex-col md:flex-row md:items-center justify-between gap-6">
+                      <div className="flex items-center gap-4">
+                        <Avatar className="w-12 h-12 border-2 border-white shadow-sm ring-2 ring-accent/5">
+                          <AvatarImage src="" />
+                          <AvatarFallback className="bg-gradient-to-br from-accent/20 to-accent/10 text-accent font-black">
+                            {(booking.user_name || "W").charAt(0).toUpperCase()}
+                          </AvatarFallback>
+                        </Avatar>
+                        <div className="space-y-1">
+                          <h4 className="text-lg font-black text-slate-900 flex items-center gap-2">
+                            {(() => {
+                              const walkInMatch = booking.notes?.match(/Walk-in:\s*([^|#\n]+)/);
+                              if (walkInMatch && walkInMatch[1].trim() && walkInMatch[1].trim() !== "undefined") {
+                                return walkInMatch[1].trim();
+                              }
+
+                              if (booking.user_name && (booking.user_id === user?.id || booking.user_name === user?.full_name)) {
+                                return "Walk-in Customer";
+                              }
+
+                              return booking.user_name || "Walk-in Customer";
+                            })()}
+                            {booking.isReturning ? (
+                              <Badge className="bg-blue-500/10 text-blue-600 border-none font-black text-[8px] uppercase tracking-widest px-1.5 h-4">Returning</Badge>
+                            ) : (
+                              <Badge className="bg-[#F2A93B]/10 text-[#F2A93B] border-none font-black text-[8px] uppercase tracking-widest px-1.5 h-4">New</Badge>
+                            )}
+                            {isSameDay(new Date(booking.booking_date), new Date()) && (
+                              <span className="inline-block w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+                            )}
+                          </h4>
+                          <div className="flex flex-wrap items-center gap-3 text-sm font-medium text-slate-500">
+                            <span className="flex items-center gap-1.5 bg-slate-100/80 px-2 py-0.5 rounded-lg text-slate-600">
+                              <Scissors className="w-3.5 h-3.5" />
+                              {booking.service_name || booking.service?.name || "General Service"}
                             </span>
-                          ) : null}
-                          {booking.user_phone && (
-                            <span className="flex items-center gap-1.5">
-                              <Phone className="w-3.5 h-3.5" />
-                              {booking.user_phone}
-                            </span>
-                          )}
+                            {viewMode === "all" || viewMode === "week" ? (
+                              <span className="flex items-center gap-1.5">
+                                <CalendarDays className="w-3.5 h-3.5" />
+                                {format(new Date(booking.booking_date), "MMM d")}
+                              </span>
+                            ) : null}
+                            {booking.staff_name && (
+                              <span className="flex items-center gap-1.5 bg-amber-50 px-2 py-0.5 rounded-lg text-amber-700">
+                                <User className="w-3.5 h-3.5" />
+                                {booking.staff_name}
+                              </span>
+                            )}
+                            {booking.user_phone && (
+                              <span className="flex items-center gap-1.5">
+                                <Phone className="w-3.5 h-3.5" />
+                                {booking.user_phone}
+                              </span>
+                            )}
+                          </div>
                         </div>
                       </div>
-                    </div>
 
-                    <div className="flex items-center gap-6 self-end md:self-auto">
-                      <div className="text-right">
-                        <p className="text-xl font-black text-slate-900">${booking.price || booking.service?.price || 0}</p>
-                        <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">Paid Amount</p>
-                      </div>
-
-                      <div className="flex items-center gap-2">
-                        {getStatusBadge(booking.status)}
-
-                        <DropdownMenu>
-                          <DropdownMenuTrigger asChild>
-                            <Button variant="ghost" size="icon" className="rounded-xl hover:bg-slate-100">
-                              <MoreHorizontal className="w-5 h-5 text-slate-400" />
-                            </Button>
-                          </DropdownMenuTrigger>
-                          <DropdownMenuContent align="end" className="w-56 p-2 rounded-2xl border-none shadow-2xl">
-                            {(isOwner || isManager) && booking.status === "pending" && (
-                              <>
-                                <DropdownMenuItem onClick={() => updateBookingStatus(booking.id, "confirmed")} className="rounded-xl py-3 font-bold text-emerald-600 focus:bg-emerald-50 focus:text-emerald-700">
-                                  <CheckCircle className="w-4 h-4 mr-3" />
-                                  Accept Booking
-                                </DropdownMenuItem>
-                                <DropdownMenuItem onClick={() => updateBookingStatus(booking.id, "cancelled")} className="rounded-xl py-3 font-bold text-red-600 focus:bg-red-50 focus:text-red-700">
-                                  <XCircle className="w-4 h-4 mr-3" />
-                                  Reject Booking
-                                </DropdownMenuItem>
-                              </>
+                      <div className="flex items-center gap-6 self-end md:self-auto">
+                        <div className="text-right">
+                          <p className="text-xl font-black text-slate-900 flex items-center justify-end gap-2">
+                            {booking.discount_amount > 0 && (
+                              <Badge className="bg-green-500/10 text-green-600 border-none text-[8px] font-black uppercase tracking-tighter">
+                                Discount
+                              </Badge>
                             )}
-                            {(isOwner || isManager) && booking.status === "confirmed" && (
-                              <DropdownMenuItem onClick={() => updateBookingStatus(booking.id, "completed")} className="rounded-xl py-3 font-bold text-blue-600 focus:bg-blue-50 focus:text-blue-700">
-                                <Star className="w-4 h-4 mr-3" />
-                                Mark as Completed
+                            ${Number(booking.price || 0).toFixed(2)}
+                          </p>
+                          <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">
+                            {booking.coupon_code ? `Promo: ${booking.coupon_code}` : 'Paid Amount'}
+                          </p>
+                        </div>
+
+                        <div className="flex items-center gap-2">
+                          {getStatusBadge(booking.status)}
+
+                          <DropdownMenu>
+                            <DropdownMenuTrigger asChild>
+                              <Button variant="ghost" size="icon" className="rounded-xl hover:bg-slate-100">
+                                <MoreHorizontal className="w-5 h-5 text-slate-400" />
+                              </Button>
+                            </DropdownMenuTrigger>
+                            <DropdownMenuContent align="end" className="w-56 p-2 rounded-2xl border-none shadow-2xl">
+                              {(isOwner || isManager) && (
+                                <>
+                                  <DropdownMenuItem
+                                    onClick={() => {
+                                      setSelectedBooking(booking);
+                                      setShowStaffAssignment(true);
+                                    }}
+                                    className="rounded-xl py-3 font-bold text-amber-600 focus:bg-amber-50 focus:text-amber-700"
+                                  >
+                                    <Users className="w-4 h-4 mr-3" />
+                                    Assign Specialist
+                                  </DropdownMenuItem>
+
+                                  {booking.status === "pending" && (
+                                    <>
+                                      <DropdownMenuItem onClick={() => updateBookingStatus(booking.id, "confirmed")} className="rounded-xl py-3 font-bold text-emerald-600 focus:bg-emerald-50 focus:text-emerald-700">
+                                        <CheckCircle className="w-4 h-4 mr-3" />
+                                        Confirm Booking
+                                      </DropdownMenuItem>
+                                      <DropdownMenuItem onClick={() => updateBookingStatus(booking.id, "cancelled")} className="rounded-xl py-3 font-bold text-red-600 focus:bg-red-50 focus:text-red-700">
+                                        <XCircle className="w-4 h-4 mr-3" />
+                                        Reject Booking
+                                      </DropdownMenuItem>
+                                    </>
+                                  )}
+                                </>
+                              )}
+                              {(isOwner || isManager) && booking.status === "confirmed" && (
+                                <DropdownMenuItem onClick={() => updateBookingStatus(booking.id, "completed")} className="rounded-xl py-3 font-bold text-blue-600 focus:bg-blue-50 focus:text-blue-700">
+                                  <Star className="w-4 h-4 mr-3" />
+                                  Mark as Completed
+                                </DropdownMenuItem>
+                              )}
+                              {booking.status === "completed" && (
+                                <DropdownMenuItem onClick={() => navigate(`/dashboard/customers/${booking.user_id}?tab=history&bookingId=${booking.id}`)} className="rounded-xl py-3 font-bold text-blue-600 focus:bg-blue-50">
+                                  <FileText className="w-4 h-4 mr-3" />
+                                  Edit Treatment Record
+                                </DropdownMenuItem>
+                              )}
+
+                              {(isOwner || isManager) && (
+                                <DropdownMenuItem onClick={() => handleScheduleFollowup(booking)} className="rounded-xl py-3 font-bold text-indigo-600 focus:bg-indigo-50">
+                                  <Clock className="w-4 h-4 mr-3" />
+                                  Schedule Follow-up
+                                </DropdownMenuItem>
+                              )}
+
+                              <DropdownMenuItem onClick={() => navigate(`/dashboard/customers/${booking.user_id}`)} className="rounded-xl py-3 font-bold">
+                                <User className="w-4 h-4 mr-3" />
+                                View Customer Profile
                               </DropdownMenuItem>
-                            )}
-                            <DropdownMenuItem onClick={() => navigate(`/dashboard/customers/${booking.user_id}`)} className="rounded-xl py-3 font-bold">
-                              <User className="w-4 h-4 mr-3" />
-                              View Customer Profile
-                            </DropdownMenuItem>
-                          </DropdownMenuContent>
-                        </DropdownMenu>
+
+                              {booking.user_phone && (
+                                <DropdownMenuItem
+                                  onClick={() => sendAppointmentConfirmation(booking, currentSalon)}
+                                  className="rounded-xl py-3 font-bold text-emerald-600 focus:bg-emerald-50"
+                                >
+                                  <Phone className="w-4 h-4 mr-3" />
+                                  Confirm via WhatsApp
+                                </DropdownMenuItem>
+                              )}
+                            </DropdownMenuContent>
+                          </DropdownMenu>
+                        </div>
                       </div>
-                    </div>
-                  </CardContent>
-                </div>
-              </Card>
-            ))
-          )}
-        </div>
+                    </CardContent>
+                  </div>
+                </Card>
+              ))
+            )}
+          </div>
+        )}
+
+        {/* Staff Assignment Dialog */}
+        <Dialog open={showStaffAssignment} onOpenChange={setShowStaffAssignment}>
+          <DialogContent className="max-w-md">
+            <DialogHeader>
+              <DialogTitle className="text-2xl font-bold">Assign Specialist</DialogTitle>
+              <DialogDescription>
+                Select a team member to handle this {selectedBooking?.service_name || 'service'}.
+              </DialogDescription>
+            </DialogHeader>
+            <div className="space-y-4 py-4">
+              <div className="grid grid-cols-1 gap-3">
+                {staffMembers.length === 0 ? (
+                  <p className="text-center py-4 text-muted-foreground">No active staff members found.</p>
+                ) : (
+                  staffMembers.map((staff) => (
+                    <button
+                      key={staff.id}
+                      disabled={assigningStaff}
+                      onClick={() => assignStaffToBooking(staff.id)}
+                      className={cn(
+                        "flex items-center justify-between p-4 rounded-2xl border-2 transition-all group hover:border-accent hover:bg-accent/5",
+                        selectedBooking?.staff_id === staff.id ? "border-accent bg-accent/5" : "border-slate-100"
+                      )}
+                    >
+                      <div className="flex items-center gap-3">
+                        <Avatar className="w-10 h-10 border-2 border-white shadow-sm ring-2 ring-accent/5">
+                          <AvatarImage src={staff.avatar_url} />
+                          <AvatarFallback className="bg-accent/10 text-accent font-bold">
+                            {staff.display_name.charAt(0)}
+                          </AvatarFallback>
+                        </Avatar>
+                        <div className="text-left">
+                          <p className="font-bold text-slate-900">{staff.display_name}</p>
+                          <p className="text-xs text-slate-500">{staff.role || 'Specialist'}</p>
+                        </div>
+                      </div>
+                      <Plus className="w-5 h-5 text-slate-300 group-hover:text-accent transition-colors" />
+                    </button>
+                  ))
+                )}
+              </div>
+            </div>
+            <div className="flex justify-end gap-3">
+              <Button variant="outline" onClick={() => {
+                setShowStaffAssignment(false);
+                setSelectedBooking(null);
+              }}>Cancel</Button>
+            </div>
+          </DialogContent>
+        </Dialog>
+
+        {/* Follow-up Scheduler Dialog */}
+        <Dialog open={showFollowupDialog} onOpenChange={setShowFollowupDialog}>
+          <DialogContent className="sm:max-w-md rounded-2xl">
+            <DialogHeader>
+              <DialogTitle>Schedule Follow-up</DialogTitle>
+              <DialogDescription>
+                Set a reminder for {selectedBookingForFollowup?.user_name} to book their next session.
+              </DialogDescription>
+            </DialogHeader>
+            <div className="space-y-4 py-4">
+              <div className="space-y-2">
+                <Label>Follow-up Date</Label>
+                <Input
+                  type="date"
+                  value={followupDate}
+                  onChange={(e) => setFollowupDate(e.target.value)}
+                  min={format(new Date(), "yyyy-MM-dd")}
+                />
+              </div>
+              <div className="space-y-2">
+                <Label>Preferred Time (Optional)</Label>
+                <Input
+                  type="time"
+                  value={followupTime}
+                  onChange={(e) => setFollowupTime(e.target.value)}
+                />
+              </div>
+              <p className="text-xs text-slate-500 bg-slate-50 p-3 rounded-lg border border-slate-100">
+                <Clock className="w-3 h-3 inline mr-1 mb-0.5" />
+                This will automatically notify the customer on the selected date.
+              </p>
+            </div>
+            <div className="flex justify-end gap-3">
+              <Button variant="ghost" onClick={() => setShowFollowupDialog(false)}>Cancel</Button>
+              <Button onClick={confirmFollowup} className="bg-indigo-600 hover:bg-indigo-700 text-white">
+                Set Reminder
+              </Button>
+            </div>
+          </DialogContent>
+        </Dialog>
       </div>
     </ResponsiveDashboardLayout>
   );

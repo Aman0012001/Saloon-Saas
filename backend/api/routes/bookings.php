@@ -12,26 +12,38 @@ if ($method === 'GET' && count($uriParts) === 1) {
     $userId = $_GET['user_id'] ?? $userData['user_id'];
 
     if ($salonId) {
-        // Check if user has access to salon
-        $stmt = $db->prepare("SELECT id FROM user_roles WHERE user_id = ? AND salon_id = ?");
-        $stmt->execute([$userData['user_id'], $salonId]);
-        if (!$stmt->fetch()) {
-            sendResponse(['error' => 'Forbidden'], 403);
+        $userData = protectRoute(['owner', 'manager', 'staff'], 'view_bookings', $salonId);
+
+        $date = $_GET['date'] ?? null;
+        $status = $_GET['status'] ?? null;
+        $params = [$salonId];
+        $whereSql = "WHERE b.salon_id = ?";
+
+        if ($date) {
+            $whereSql .= " AND b.booking_date = ?";
+            $params[] = $date;
+        }
+        if ($status) {
+            $whereSql .= " AND b.status = ?";
+            $params[] = $status;
         }
 
         $stmt = $db->prepare("
-            SELECT b.*, s.name as service_name, s.price, s.duration_minutes, s.category,
+            SELECT b.*, s.name as service_name, s.price as service_price, s.duration_minutes, s.category,
                    sal.name as salon_name, sal.address as salon_address, sal.city as salon_city,
-                   u.email, p.full_name, p.phone
+                   u.email, p.full_name, p.phone,
+                   sp.display_name as staff_name,
+                   COALESCE(b.price_paid, s.price) as price
             FROM bookings b
             INNER JOIN services s ON b.service_id = s.id
             INNER JOIN salons sal ON b.salon_id = sal.id
             INNER JOIN users u ON b.user_id = u.id
             LEFT JOIN profiles p ON u.id = p.user_id
-            WHERE b.salon_id = ?
+            LEFT JOIN staff_profiles sp ON b.staff_id = sp.id
+            $whereSql
             ORDER BY b.booking_date DESC, b.booking_time DESC
         ");
-        $stmt->execute([$salonId]);
+        $stmt->execute($params);
     } else {
         // Get user's bookings
         $stmt = $db->prepare("
@@ -101,29 +113,72 @@ if ($method === 'POST' && count($uriParts) === 1) {
     $data = getRequestBody();
     $bookingId = Auth::generateUuid();
 
-    // Check if slot is available
-    $stmt = $db->prepare("
-        SELECT id FROM bookings
-        WHERE salon_id = ? AND booking_date = ? AND booking_time = ? AND status != 'cancelled'
-    ");
-    $stmt->execute([$data['salon_id'], $data['booking_date'], $data['booking_time']]);
-    if ($stmt->fetch()) {
-        sendResponse(['error' => 'Slot not available'], 409);
+    // 1. Intelligent Staff Availability Check
+    $targetStaffId = $data['staff_id'] ?? null;
+    $serviceId = $data['service_id'];
+    $bookingDate = $data['booking_date'];
+    $bookingTime = $data['booking_time'];
+
+    if ($targetStaffId) {
+        // Specific staff selected - check if they handle the service AND are free
+        $bookingStatus = $data['status'] ?? 'confirmed';
+        $stmt = $db->prepare("SELECT id FROM staff_services WHERE staff_id = ? AND service_id = ?");
+        $stmt->execute([$targetStaffId, $serviceId]);
+        if (!$stmt->fetch()) {
+            sendResponse(['error' => 'The selected specialist does not handle this specific service.'], 400);
+        }
+
+        $stmt = $db->prepare("SELECT id FROM bookings WHERE staff_id = ? AND booking_date = ? AND booking_time = ? AND status != 'cancelled'");
+        $stmt->execute([$targetStaffId, $bookingDate, $bookingTime]);
+        if ($stmt->fetch()) {
+            sendResponse(['error' => 'The selected specialist is already occupied at this time slot.'], 409);
+        }
+    } else {
+        // No staff selected - find ANY free staff that handles this service
+        $stmt = $db->prepare("
+            SELECT s.id 
+            FROM staff_profiles s
+            INNER JOIN staff_services ss ON s.id = ss.staff_id
+            WHERE ss.service_id = ? AND s.is_active = 1
+            AND NOT EXISTS (
+                SELECT 1 FROM bookings b 
+                WHERE b.staff_id = s.id 
+                AND b.booking_date = ? 
+                AND b.booking_time = ? 
+                AND b.status != 'cancelled'
+            )
+            LIMIT 1
+        ");
+        $stmt->execute([$serviceId, $bookingDate, $bookingTime]);
+        $availableStaff = $stmt->fetch();
+
+        if (!$availableStaff) {
+            // Instead of failing, we allow the booking but mark it as pending assignment
+            $targetStaffId = null;
+            $bookingStatus = 'pending';
+        } else {
+            $targetStaffId = $availableStaff['id'];
+            $bookingStatus = $data['status'] ?? 'confirmed';
+        }
     }
 
     $stmt = $db->prepare("
-        INSERT INTO bookings (id, user_id, salon_id, service_id, booking_date, booking_time, notes, status)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+        INSERT INTO bookings (id, user_id, salon_id, service_id, staff_id, price_paid, discount_amount, coupon_code, booking_date, booking_time, notes, status)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     ");
     $stmt->execute([
         $bookingId,
         $userData['user_id'],
         $data['salon_id'],
-        $data['service_id'],
-        $data['booking_date'],
-        $data['booking_time'],
+        $serviceId,
+        $targetStaffId,
+        $data['price_paid'] ?? null,
+        $data['discount_amount'] ?? 0,
+        $data['coupon_code'] ?? null,
+        $bookingDate,
+        $bookingTime,
         $data['notes'] ?? null,
-        $data['status'] ?? 'confirmed'
+        $bookingStatus
     ]);
 
     // Get booking with service name
@@ -152,8 +207,10 @@ if ($method === 'POST' && count($uriParts) === 1) {
             $notifId,
             $owner['user_id'],
             $data['salon_id'],
-            'New Appointment',
-            "New session booked for {$booking['service_name']} on " . date('M d', strtotime($booking['booking_date'])),
+            $targetStaffId ? 'New Appointment' : 'Staff Assignment Required',
+            $targetStaffId
+            ? "New session booked for {$booking['service_name']} on " . date('M d', strtotime($booking['booking_date']))
+            : "A new booking for {$booking['service_name']} needs a specialist assigned for " . date('M d', strtotime($booking['booking_date'])),
             'booking',
             '/dashboard/appointments'
         ]);
@@ -181,20 +238,61 @@ if ($method === 'PUT' && count($uriParts) === 2) {
         sendResponse(['error' => 'Booking not found'], 404);
     }
 
-    // Check permission
-    $hasAccess = ($booking['user_id'] === $userData['user_id']);
-    if (!$hasAccess) {
-        $stmt = $db->prepare("SELECT id FROM user_roles WHERE user_id = ? AND salon_id = ?");
-        $stmt->execute([$userData['user_id'], $booking['salon_id']]);
-        $hasAccess = (bool) $stmt->fetch();
+    // Check if user is the one who made the booking OR is salon staff
+    $isOwner = ($booking['user_id'] === $userData['user_id']);
+
+    if (!$isOwner) {
+        $userData = protectRoute(['owner', 'manager', 'staff'], 'manage_bookings', $booking['salon_id']);
     }
 
-    if (!$hasAccess) {
-        sendResponse(['error' => 'Forbidden'], 403);
+    // Only allow customers to CANCEL, other status updates are for staff
+    if ($isOwner && $data['status'] !== 'cancelled' && $userData['role'] === 'customer') {
+        sendResponse(['error' => 'Customers can only cancel their appointments.'], 403);
     }
 
-    $stmt = $db->prepare("UPDATE bookings SET status = ? WHERE id = ?");
-    $stmt->execute([$data['status'], $bookingId]);
+    $status = $data['status'] ?? $booking['status'];
+    $staffId = $data['staff_id'] ?? $booking['staff_id'];
+
+    $stmt = $db->prepare("UPDATE bookings SET status = ?, staff_id = ? WHERE id = ?");
+    $success = $stmt->execute([$status, $staffId, $bookingId]);
+
+    if (!$success) {
+        sendResponse(['error' => 'Failed to update booking in database.'], 500);
+    }
+
+    // Loyalty Points Integration
+    if ($status === 'completed' && $booking['status'] !== 'completed') {
+        require_once __DIR__ . '/../../Services/LoyaltyService.php';
+        $loyaltyService = new LoyaltyService($db);
+
+        // Calculate amount paid (price_paid or service price)
+        $amount = $booking['price_paid'] ?? $booking['price'] ?? 0;
+        if ($amount > 0) {
+            $loyaltyService->earnPoints($booking['salon_id'], $booking['user_id'], $amount, $bookingId);
+        }
+    }
+
+    // Notify owner if customer cancelled
+    if ($status === 'cancelled' && $isOwner) {
+        $stmt = $db->prepare("SELECT user_id FROM user_roles WHERE salon_id = ? AND role = 'owner'");
+        $stmt->execute([$booking['salon_id']]);
+        $owner = $stmt->fetch();
+
+        if ($owner) {
+            $stmt = $db->prepare("
+                INSERT INTO notifications (id, user_id, salon_id, title, message, type, link)
+                VALUES (?, ?, ?, ?, ?, 'booking', ?)
+            ");
+            $stmt->execute([
+                Auth::generateUuid(),
+                $owner['user_id'],
+                $booking['salon_id'],
+                'Appointment Cancelled',
+                "A booking has been cancelled by the customer.",
+                '/dashboard/appointments'
+            ]);
+        }
+    }
 
     $stmt = $db->prepare("SELECT * FROM bookings WHERE id = ?");
     $stmt->execute([$bookingId]);

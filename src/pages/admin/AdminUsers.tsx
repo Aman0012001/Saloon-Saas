@@ -16,6 +16,7 @@ import {
   Clock,
   AlertTriangle,
   Download,
+  Trash2
 } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -49,6 +50,7 @@ import { Label } from "@/components/ui/label";
 import { AdminLayout } from "@/components/admin/AdminLayout";
 import api from "@/services/api";
 import { format } from "date-fns";
+import { useToast } from "@/hooks/use-toast";
 
 interface User {
   id: string;
@@ -70,6 +72,7 @@ export default function AdminUsers() {
   const [typeFilter, setTypeFilter] = useState("all");
   const [selectedUser, setSelectedUser] = useState<User | null>(null);
   const [showDetailsDialog, setShowDetailsDialog] = useState(false);
+  const { toast } = useToast();
 
   const fetchUsers = async () => {
     setLoading(true);
@@ -80,6 +83,19 @@ export default function AdminUsers() {
       console.error('Error fetching admin users:', error);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleDeleteUser = async (user: User) => {
+    if (!confirm(`Are you sure you want to delete ${user.full_name}? This will remove their login, profile, and roles. This action cannot be undone.`)) return;
+
+    try {
+      await api.admin.deleteUser(user.id);
+      toast({ title: "User Deleted", description: "The user has been permanently removed." });
+      setUsers(users.filter(u => u.id !== user.id));
+      setShowDetailsDialog(false);
+    } catch (error: any) {
+      toast({ title: "Error", description: error.message, variant: "destructive" });
     }
   };
 
@@ -230,9 +246,14 @@ export default function AdminUsers() {
                         </div>
                       </TableCell>
                       <TableCell className="text-right px-8">
-                        <Button variant="ghost" size="sm" onClick={() => { setSelectedUser(user); setShowDetailsDialog(true); }} className="rounded-xl font-bold hover:bg-slate-100">
-                          <Eye className="w-4 h-4 mr-2" /> View
-                        </Button>
+                        <div className="flex justify-end gap-2">
+                          <Button variant="ghost" size="sm" onClick={() => { setSelectedUser(user); setShowDetailsDialog(true); }} className="rounded-xl font-bold hover:bg-slate-100">
+                            <Eye className="w-4 h-4 mr-2" /> View
+                          </Button>
+                          <Button variant="ghost" size="sm" onClick={() => handleDeleteUser(user)} className="rounded-xl font-bold hover:bg-red-50 text-red-600">
+                            <Trash2 className="w-4 h-4 mr-2" /> Remove
+                          </Button>
+                        </div>
                       </TableCell>
                     </TableRow>
                   ))}
@@ -285,7 +306,7 @@ export default function AdminUsers() {
 
               <div className="pt-6 border-t border-slate-100 flex gap-3">
                 <Button className="flex-1 bg-slate-900 text-white font-black h-12 rounded-2xl">Audit Logs</Button>
-                <Button variant="ghost" className="bg-red-50 text-red-600 font-black h-12 rounded-2xl">Restrict Access</Button>
+                <Button variant="ghost" onClick={() => selectedUser && handleDeleteUser(selectedUser)} className="bg-red-50 text-red-600 font-black h-12 rounded-2xl">Remove User</Button>
               </div>
             </div>
           )}
