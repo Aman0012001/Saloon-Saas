@@ -2,6 +2,7 @@ import { useState, useEffect } from "react";
 import SalonCard from "./SalonCard";
 import api from "@/services/api";
 import { Loader2 } from "lucide-react";
+import { getImageUrl } from "@/utils/imageUrl";
 
 interface Salon {
   id: string;
@@ -15,21 +16,6 @@ interface Salon {
 const ServicesSection = () => {
   const [salons, setSalons] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
-
-  // Fallback images for salons without images
-  const defaultCoverImages = [
-    "https://images.unsplash.com/photo-1560066984-138dadb4c035?w=600&h=400&fit=crop",
-    "https://images.unsplash.com/photo-1562322140-8baeececf3df?w=600&h=400&fit=crop",
-    "https://images.unsplash.com/photo-1521590832167-7bcbfaa6381f?w=600&h=400&fit=crop",
-    "https://images.unsplash.com/photo-1600948836101-f9ffda59d250?w=600&h=400&fit=crop",
-  ];
-
-  const defaultLogoImages = [
-    "https://images.unsplash.com/photo-1620331311520-246422ff8347?w=120&h=120&fit=crop",
-    "https://images.unsplash.com/photo-1633681926022-84c23e8cb2d6?w=120&h=120&fit=crop",
-    "https://images.unsplash.com/photo-1503951914875-452162b0f3f1?w=120&h=120&fit=crop",
-    "https://images.unsplash.com/photo-1585747860715-2ba37e788b70?w=120&h=120&fit=crop",
-  ];
 
   const fetchSalons = async () => {
     try {
@@ -55,8 +41,8 @@ const ServicesSection = () => {
         rating: 4 + (index % 2),
         services: 2 + (index % 3),
         employees: 2 + (index % 4),
-        coverImage: salon.cover_image_url || defaultCoverImages[index % defaultCoverImages.length],
-        logoImage: salon.logo_url || defaultLogoImages[index % defaultLogoImages.length],
+        coverImage: getImageUrl(salon.cover_image_url, 'cover', salon.id),
+        logoImage: getImageUrl(salon.logo_url, 'logo', salon.id),
         ownerName: salon.owner_name || "Salon Owner",
       }));
 

@@ -1,6 +1,8 @@
 import { ReactNode, useEffect, useState } from "react";
 import { DashboardLayout } from "./DashboardLayout";
 import { MobileLayout } from "./MobileLayout";
+import { useAuth } from "@/hooks/useAuth";
+import { useNavigate } from "react-router-dom";
 
 interface ResponsiveDashboardLayoutProps {
   children: ReactNode;
@@ -10,14 +12,22 @@ interface ResponsiveDashboardLayoutProps {
   showBottomNav?: boolean;
 }
 
-export const ResponsiveDashboardLayout = ({ 
-  children, 
+export const ResponsiveDashboardLayout = ({
+  children,
   title,
   showBackButton,
   headerActions,
   showBottomNav
 }: ResponsiveDashboardLayoutProps) => {
   const [isMobile, setIsMobile] = useState(false);
+  const { user, loading } = useAuth();
+  const navigate = useNavigate();
+
+  useEffect(() => {
+    if (!loading && user?.user_type === 'customer') {
+      navigate("/");
+    }
+  }, [user, loading, navigate]);
 
   useEffect(() => {
     const checkScreenSize = () => {
@@ -29,7 +39,7 @@ export const ResponsiveDashboardLayout = ({
 
     // Listen for resize events
     window.addEventListener('resize', checkScreenSize);
-    
+
     return () => window.removeEventListener('resize', checkScreenSize);
   }, []);
 

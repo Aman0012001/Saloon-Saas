@@ -148,17 +148,7 @@ export function AdminLayout({ children }: AdminLayoutProps) {
           </div>
         )}
 
-        <Link
-          to="/admin/notifications"
-          className="flex items-center justify-between p-3 rounded-lg bg-blue-500/5 border border-blue-500/10 hover:bg-blue-500/10 transition-colors"
-        >
-          <div className="flex items-center gap-2 text-blue-300">
-            <Bell className="w-4 h-4" />
-            <span className="text-sm font-medium">System Alerts</span>
-          </div>
-          {/* We can use a small portion of stats if unread count exists for admin */}
-          <Badge className="bg-blue-600 text-white shadow-lg">Live</Badge>
-        </Link>
+
       </div>
     </div>
   );

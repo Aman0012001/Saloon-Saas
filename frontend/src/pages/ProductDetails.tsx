@@ -24,6 +24,7 @@ import Footer from "@/components/Footer";
 import { motion, AnimatePresence } from "framer-motion";
 import api from "@/services/api";
 import { cn } from "@/lib/utils";
+import { getImageUrl } from "@/utils/imageUrl";
 import { toast } from "@/hooks/use-toast";
 
 interface Product {
@@ -120,7 +121,7 @@ export default function ProductDetails() {
                                     animate={{ opacity: 1 }}
                                     className="w-full h-full flex items-center justify-center"
                                 >
-                                    <img src={activeImage} alt={product.name} className="w-full h-full object-cover" />
+                                    <img src={getImageUrl(activeImage)} alt={product.name} className="w-full h-full object-cover" />
                                 </motion.div>
                             </div>
 
@@ -134,7 +135,7 @@ export default function ProductDetails() {
                                             activeImage === img ? "border-blue-500" : "border-slate-100 hover:border-slate-200"
                                         )}
                                     >
-                                        <img src={img} className="w-full h-full object-cover" />
+                                        <img src={getImageUrl(img)} className="w-full h-full object-cover" />
                                     </button>
                                 ))}
                             </div>
@@ -279,7 +280,7 @@ export default function ProductDetails() {
                                         className="group flex gap-4 bg-white p-3 rounded-xl border border-slate-200 cursor-pointer hover:shadow-lg transition-all"
                                     >
                                         <div className="w-20 h-20 rounded-lg overflow-hidden flex-shrink-0 bg-slate-50 border border-slate-100">
-                                            <img src={p.image_url} className="w-full h-full object-contain p-2 group-hover:scale-110 transition-transform duration-500" />
+                                            <img src={getImageUrl(p.image_url)} className="w-full h-full object-contain p-2 group-hover:scale-110 transition-transform duration-500" />
                                         </div>
                                         <div className="flex-1 space-y-1">
                                             <h4 className="text-sm font-bold text-slate-800 line-clamp-1 group-hover:text-blue-600 transition-colors">{p.name}</h4>

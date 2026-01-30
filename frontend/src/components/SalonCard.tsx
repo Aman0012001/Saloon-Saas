@@ -1,5 +1,6 @@
 import { Star } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { getImageUrl } from "@/utils/imageUrl";
 
 interface SalonCardProps {
   id: string;
@@ -39,6 +40,9 @@ const SalonCard = ({
           src={coverImage}
           alt={name}
           className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
+          onError={(e) => {
+            e.currentTarget.src = getImageUrl(null, 'cover', id);
+          }}
         />
       </div>
 
@@ -51,6 +55,9 @@ const SalonCard = ({
               src={logoImage}
               alt={`${name} logo`}
               className="w-full h-full object-cover"
+              onError={(e) => {
+                e.currentTarget.src = getImageUrl(null, 'logo', id);
+              }}
             />
           </div>
         </div>

@@ -26,6 +26,13 @@ import {
     DialogDescription,
     DialogFooter,
 } from "@/components/ui/dialog";
+import {
+    Select,
+    SelectContent,
+    SelectItem,
+    SelectTrigger,
+    SelectValue,
+} from "@/components/ui/select";
 import { toast } from "@/hooks/use-toast";
 import api from "@/services/api";
 import { cn } from "@/lib/utils";
@@ -272,102 +279,149 @@ export default function AdminMembershipPlans() {
 
             {/* Create/Edit Modal */}
             <Dialog open={showDialog} onOpenChange={setShowDialog}>
-                <DialogContent className="max-w-2xl bg-white rounded-[2rem] p-0 overflow-hidden border-none shadow-2xl">
-                    <div className="p-8 bg-slate-900 text-white relative">
+                <DialogContent className="max-w-2xl bg-white rounded-[2.5rem] p-0 overflow-hidden border-none shadow-2xl [&>button]:text-white [&>button]:top-8 [&>button]:right-8 [&>button]:bg-white/10 [&>button]:hover:bg-white/20 [&>button]:rounded-full [&>button]:w-10 [&>button]:h-10 [&>button]:flex [&>button]:items-center [&>button]:justify-center">
+                    <div className="px-10 py-8 bg-slate-900 text-white relative">
                         <div className="absolute top-0 right-0 w-40 h-40 bg-blue-500/10 blur-3xl" />
-                        <DialogTitle className="text-3xl font-black tracking-tight">
+                        <DialogTitle className="text-3xl font-black tracking-tight mb-2">
                             {currentPlan.id ? "Edit Membership Plan" : "Create Membership Plan"}
                         </DialogTitle>
-                        <DialogDescription className="text-slate-400 font-medium">
+                        <DialogDescription className="text-slate-400 font-medium text-base">
                             Configure pricing and features for saloon owners.
                         </DialogDescription>
                     </div>
 
-                    <div className="p-10 space-y-8 max-h-[70vh] overflow-y-auto custom-scrollbar">
-                        <div className="space-y-4">
-                            <Label className="text-sm font-black text-slate-400 uppercase tracking-widest">Plan Name</Label>
+                    <div className="p-10 space-y-8 max-h-[60vh] overflow-y-auto custom-scrollbar">
+                        <div className="space-y-3">
+                            <Label className="text-xs font-black text-slate-500 uppercase tracking-widest ml-1">Plan Name</Label>
                             <Input
                                 value={currentPlan.name}
                                 onChange={e => setCurrentPlan(prev => ({ ...prev, name: e.target.value }))}
-                                placeholder="Basic, Premium, Enterprise..."
-                                className="h-14 bg-[#F8FAFC] border-none rounded-xl text-lg font-bold px-6 focus:ring-2 focus:ring-blue-500/20"
+                                placeholder="e.g. Creator Pro"
+                                className="h-16 bg-slate-50 border-slate-100 rounded-2xl text-xl font-bold px-6 focus:bg-white focus:border-blue-200 focus:ring-4 focus:ring-blue-500/10 transition-all shadow-sm"
                             />
                         </div>
 
-                        <div className="space-y-4">
-                            <Label className="text-sm font-black text-slate-400 uppercase tracking-widest">Description</Label>
+                        <div className="space-y-3">
+                            <Label className="text-xs font-black text-slate-500 uppercase tracking-widest ml-1">Description</Label>
                             <Textarea
                                 value={currentPlan.description}
                                 onChange={e => setCurrentPlan(prev => ({ ...prev, description: e.target.value }))}
-                                placeholder="Briefly describe what this plan offers..."
-                                className="min-h-[100px] bg-[#F8FAFC] border-none rounded-xl font-medium px-6 py-4 focus:ring-2 focus:ring-blue-500/20"
+                                placeholder="Describe the benefits of this tier..."
+                                className="min-h-[120px] bg-slate-50 border-slate-100 rounded-2xl font-medium px-6 py-5 text-base focus:bg-white focus:border-blue-200 focus:ring-4 focus:ring-blue-500/10 transition-all resize-none shadow-sm"
                             />
                         </div>
 
-                        <div className="grid grid-cols-2 gap-8">
-                            <div className="space-y-4">
-                                <Label className="text-sm font-black text-slate-400 uppercase tracking-widest">Monthly RM</Label>
-                                <Input
-                                    type="number"
-                                    value={currentPlan.monthly_price}
-                                    onChange={e => setCurrentPlan(prev => ({ ...prev, monthly_price: parseFloat(e.target.value) }))}
-                                    className="h-12 bg-[#F8FAFC] border-none rounded-xl font-bold px-6"
-                                />
+                        <div className="grid grid-cols-2 gap-6">
+                            <div className="space-y-3">
+                                <Label className="text-xs font-black text-slate-500 uppercase tracking-widest ml-1">Monthly (RM)</Label>
+                                <div className="relative">
+                                    <Input
+                                        type="number"
+                                        value={currentPlan.monthly_price}
+                                        onChange={e => setCurrentPlan(prev => ({ ...prev, monthly_price: parseFloat(e.target.value) }))}
+                                        className="h-14 bg-slate-50 border-slate-100 rounded-2xl font-bold px-6 focus:bg-white focus:border-blue-200 focus:ring-4 focus:ring-blue-500/10 transition-all shadow-sm"
+                                    />
+                                </div>
                             </div>
-                            <div className="space-y-4">
-                                <Label className="text-sm font-black text-slate-400 uppercase tracking-widest">Annual RM</Label>
+                            <div className="space-y-3">
+                                <Label className="text-xs font-black text-slate-500 uppercase tracking-widest ml-1">Annual (RM)</Label>
                                 <Input
                                     type="number"
                                     value={currentPlan.annual_price}
                                     onChange={e => setCurrentPlan(prev => ({ ...prev, annual_price: parseFloat(e.target.value) }))}
-                                    className="h-12 bg-[#F8FAFC] border-none rounded-xl font-bold px-6"
+                                    className="h-14 bg-slate-50 border-slate-100 rounded-2xl font-bold px-6 focus:bg-white focus:border-blue-200 focus:ring-4 focus:ring-blue-500/10 transition-all shadow-sm"
                                 />
                             </div>
                         </div>
 
-                        <div className="space-y-4">
+                        <div className="space-y-4 pt-4 border-t border-slate-50">
                             <div className="flex items-center justify-between">
-                                <Label className="text-sm font-black text-slate-400 uppercase tracking-widest">Features</Label>
-                                <Button size="sm" onClick={handleAddFeature} variant="ghost" className="text-blue-600 font-bold hover:bg-blue-50 h-8">
-                                    <Plus className="w-4 h-4 mr-2" /> Add Feature
+                                <Label className="text-xs font-black text-slate-500 uppercase tracking-widest ml-1">Feature List</Label>
+                                <Button size="sm" onClick={handleAddFeature} variant="ghost" className="bg-blue-600 text-white font-bold hover:bg-blue-700 h-10 px-6 rounded-xl transition-colors shadow-lg shadow-blue-500/30">
+                                    <Plus className="w-4 h-4 mr-2" /> Add Item
                                 </Button>
                             </div>
                             <div className="space-y-3">
-                                {currentPlan.features?.map((feature, idx) => (
-                                    <div key={idx} className="flex gap-3">
-                                        <Input
-                                            value={feature}
-                                            onChange={e => handleFeatureChange(idx, e.target.value)}
-                                            placeholder="Feature description..."
-                                            className="h-11 bg-[#F8FAFC] border-none rounded-lg text-sm font-bold"
-                                        />
-                                        <Button
-                                            variant="ghost"
-                                            onClick={() => handleRemoveFeature(idx)}
-                                            className="text-slate-300 hover:text-red-500 h-11"
-                                        >
-                                            <Trash2 className="w-4 h-4" />
-                                        </Button>
-                                    </div>
-                                ))}
+                                {currentPlan.features?.map((feature, idx) => {
+                                    const categories = ["Staff Limit", "Service Limit", "Product Limit", "Booking Limit", "Support Access", "Analytics", "Custom"];
+                                    let selectedCategory = "Custom";
+                                    let inputValue = feature;
+
+                                    if (feature.includes(": ")) {
+                                        const [cat, ...rest] = feature.split(": ");
+                                        if (categories.includes(cat)) {
+                                            selectedCategory = cat;
+                                            inputValue = rest.join(": ");
+                                        }
+                                    }
+
+                                    const updateFeature = (cat: string, val: string) => {
+                                        if (cat === "Custom") {
+                                            handleFeatureChange(idx, val);
+                                        } else {
+                                            handleFeatureChange(idx, `${cat}: ${val}`);
+                                        }
+                                    };
+
+                                    return (
+                                        <div key={idx} className="flex gap-3 group items-center">
+                                            <div className="flex-1 flex items-center gap-0 bg-white border border-slate-200 rounded-xl shadow-sm overflow-hidden focus-within:ring-2 focus-within:ring-blue-500/20 focus-within:border-blue-300 transition-all">
+                                                {/* Category Selector */}
+                                                <div className="w-[160px] border-r border-slate-100 bg-slate-50/50">
+                                                    <Select
+                                                        value={selectedCategory}
+                                                        onValueChange={(val) => updateFeature(val, inputValue)}
+                                                    >
+                                                        <SelectTrigger className="w-full h-12 border-0 bg-transparent text-xs font-black uppercase tracking-wide text-slate-500 focus:ring-0 px-4">
+                                                            <SelectValue />
+                                                        </SelectTrigger>
+                                                        <SelectContent>
+                                                            {categories.map(cat => (
+                                                                <SelectItem key={cat} value={cat} className="font-medium text-xs uppercase tracking-wide">
+                                                                    {cat}
+                                                                </SelectItem>
+                                                            ))}
+                                                        </SelectContent>
+                                                    </Select>
+                                                </div>
+
+                                                {/* Value Input */}
+                                                <Input
+                                                    value={inputValue}
+                                                    onChange={(e) => updateFeature(selectedCategory, e.target.value)}
+                                                    placeholder={selectedCategory === "Custom" ? "Feature description..." : "Enter limit/value..."}
+                                                    className="flex-1 h-12 border-0 rounded-none bg-transparent font-bold text-slate-700 placeholder:text-slate-300 px-4 focus-visible:ring-0"
+                                                />
+                                            </div>
+
+                                            <Button
+                                                variant="ghost"
+                                                onClick={() => handleRemoveFeature(idx)}
+                                                className="text-slate-300 hover:text-red-500 hover:bg-red-50 h-10 w-10 rounded-xl transition-all opacity-0 group-hover:opacity-100"
+                                            >
+                                                <Trash2 className="w-5 h-5" />
+                                            </Button>
+                                        </div>
+                                    );
+                                })}
                             </div>
                         </div>
                     </div>
 
-                    <div className="p-8 border-t border-slate-100 flex gap-4 bg-[#F8FAFC]">
+                    <div className="p-8 border-t border-slate-100 flex gap-4 bg-white/50 backdrop-blur-sm">
                         <Button
-                            variant="outline"
+                            variant="ghost"
                             onClick={() => setShowDialog(false)}
-                            className="flex-1 h-14 rounded-2xl font-bold text-slate-600"
+                            className="flex-1 h-16 rounded-2xl font-bold text-slate-500 hover:bg-slate-100 hover:text-slate-700 transition-all"
                         >
                             Cancel
                         </Button>
                         <Button
                             disabled={saving}
                             onClick={handleSubmit}
-                            className="flex-2 min-w-[200px] h-14 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-2xl shadow-xl shadow-blue-500/20"
+                            className="flex-[2] h-16 bg-blue-600 hover:bg-blue-700 text-white font-black text-lg rounded-2xl shadow-xl shadow-blue-500/20 hover:scale-[1.02] active:scale-[0.98] transition-all"
                         >
-                            {saving ? <Loader2 className="w-5 h-5 animate-spin" /> : "Save Plan Configuration"}
+                            {saving ? <Loader2 className="w-6 h-6 animate-spin" /> : "Save Configuration"}
                         </Button>
                     </div>
                 </DialogContent>

@@ -14,6 +14,7 @@ import Footer from "@/components/Footer";
 import { motion, AnimatePresence } from "framer-motion";
 import { useAuth } from "@/hooks/useAuth";
 import api from "@/services/api";
+import { getImageUrl } from "@/utils/imageUrl";
 import {
   Pagination,
   PaginationContent,
@@ -62,10 +63,12 @@ export default function SalonListing() {
       const formattedSalons = salonsArray.map((salon: any) => ({
         id: salon.id,
         name: salon.name,
-        image: salon.cover_image_url || salon.logo_url || "https://images.unsplash.com/photo-1521590832896-76c0f2956662?w=800&auto=format&fit=crop&q=60",
+        image: getImageUrl(salon.cover_image_url, 'cover', salon.id),
+        logo: getImageUrl(salon.logo_url, 'logo', salon.id),
         rating: Number((4.5 + Math.random() * 0.5).toFixed(1)),
         reviews: Math.floor(Math.random() * 200) + 10,
         address: salon.address || "Main Street",
+        city: salon.city || "Local",
         distance: (Math.random() * 5).toFixed(1) + " km",
         categories: salon.categories ? salon.categories.split(',') : ["Beauty", "Spa"],
         status: "Open locally",
@@ -248,9 +251,16 @@ export default function SalonListing() {
 
                           <div className="flex items-center justify-between">
                             <div className="flex items-center gap-2">
-                              <div className="w-8 h-8 rounded-full border border-slate-50 p-0.5">
-                                <div className="w-full h-full rounded-full bg-slate-50 flex items-center justify-center">
-                                  <User className="w-3.5 h-3.5 text-slate-300" />
+                              <div className="w-8 h-8 rounded-full border border-slate-50 p-0.5 overflow-hidden">
+                                <div className="w-full h-full rounded-full bg-slate-50 flex items-center justify-center overflow-hidden">
+                                  <img
+                                    src={salon.logo}
+                                    alt={salon.name}
+                                    className="w-full h-full object-cover"
+                                    onError={(e) => {
+                                      e.currentTarget.src = getImageUrl(null, 'logo', salon.id);
+                                    }}
+                                  />
                                 </div>
                               </div>
                               <div className="flex flex-col">

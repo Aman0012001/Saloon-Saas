@@ -36,15 +36,33 @@ if ($method === 'POST') {
     $targetPath = $uploadDir . $fileName;
 
     if (move_uploaded_file($file['tmp_name'], $targetPath)) {
-        // Construct public URL
-        // Assuming the base path is http://localhost:8000/backend/
+        global $googleDriveService;
+        $driveUrl = null;
+        $driveId = null;
+
+        // Try to upload to Google Drive if configured
+        if (!empty(GOOGLE_CLIENT_ID) && !empty(GOOGLE_REFRESH_TOKEN)) {
+            $result = $googleDriveService->uploadFile($targetPath, $fileName, $file['type']);
+            if (isset($result['success']) && $result['success']) {
+                $driveUrl = $result['url'];
+                $driveId = $result['id'];
+
+                // Optionally remove local file after successful drive upload
+                // unlink($targetPath); 
+            }
+        }
+
+        // Construct public URL (Local fallback)
         $protocol = isset($_SERVER['HTTPS']) && $_SERVER['HTTPS'] === 'on' ? 'https' : 'http';
         $host = $_SERVER['HTTP_HOST'];
-        $publicUrl = $protocol . '://' . $host . '/backend/uploads/' . $fileName;
+        $localUrl = $protocol . '://' . $host . '/backend/uploads/' . $fileName;
 
         sendResponse([
             'message' => 'File uploaded successfully',
-            'url' => $publicUrl,
+            'url' => $driveUrl ?: $localUrl, // Prefer drive URL if available
+            'localUrl' => $localUrl,
+            'driveUrl' => $driveUrl,
+            'driveId' => $driveId,
             'fileName' => $fileName
         ], 201);
     } else {

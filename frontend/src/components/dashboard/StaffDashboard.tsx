@@ -347,7 +347,6 @@ export function StaffDashboard() {
                                 { label: "Deployment Logs", icon: Clock, path: "/dashboard/staff/attendance", desc: "View work hour history" },
                                 { label: "Time-Off", icon: CalendarDays, path: "/dashboard/staff/leaves", desc: "Request absence authorization" },
                                 { label: "Mail System", icon: Mail, path: "/dashboard/staff/messages", desc: "Internal communications", alert: true },
-                                { label: "Settings", icon: MoreVertical, path: "/dashboard/settings", desc: "Terminal preferences" },
                             ].map((link, i) => (
                                 <button
                                     key={i}

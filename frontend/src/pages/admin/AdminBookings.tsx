@@ -176,7 +176,7 @@ export default function AdminBookings() {
                   placeholder="Search by ID, Customer, Salon, or Service..."
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
-                  className="pl-12 h-14 text-lg bg-slate-50 border-none rounded-2xl font-medium"
+                  className="pl-12 h-14 text-lg bg-slate-50 border-none rounded-2xl font-medium text-black"
                 />
               </div>
               <Input

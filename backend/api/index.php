@@ -71,12 +71,16 @@ try {
     require_once __DIR__ . '/../Services/RBACService.php';
     require_once __DIR__ . '/../Services/NewsletterService.php';
     require_once __DIR__ . '/../Services/MembershipService.php';
+    require_once __DIR__ . '/../Services/GoogleDriveService.php';
+
 
     $notifService = new NotificationService($db);
     $invoiceService = new InvoiceService($db, $notifService);
     $rbacService = new RBACService($db);
     $newsletterService = new NewsletterService($db);
     $membershipService = new MembershipService($db);
+    $googleDriveService = new GoogleDriveService();
+
 
     /**
      * Role-Based Access Control Helper

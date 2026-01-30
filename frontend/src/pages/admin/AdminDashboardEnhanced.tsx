@@ -55,6 +55,8 @@ import {
   Legend,
   AreaChart,
   Area,
+  ComposedChart,
+  Line,
 } from "recharts";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useToast } from "@/hooks/use-toast";
@@ -80,12 +82,23 @@ interface DashboardStats {
     monthly: Array<{ name: string; value: number }>;
     annual: Array<{ name: string; value: number }>;
   };
+  planRevenue: number;
+  serviceRevenue: number;
+  productRevenue: number;
   popularTreatments: Array<{ name: string; value: number }>;
   customerStats: {
     new: number;
     existing: number;
     total: number;
   };
+  alerts: Array<{
+    id: string;
+    title: string;
+    message: string;
+    type: string;
+    created_at: string;
+    is_read: number;
+  }>;
 }
 
 const COLORS = ["#3b82f6", "#10b981", "#f59e0b", "#ef4444", "#8b5cf6"];
@@ -106,6 +119,8 @@ export default function AdminDashboardEnhanced() {
       const stats = await api.admin.getStats();
       const salons = await api.admin.getAllSalons();
       const users = await api.admin.getAllUsers();
+      const notifications = await api.notifications.getAll({ unread_only: '0' });
+      const alerts = Array.isArray(notifications) ? notifications : [];
 
       const topCitiesMap = new Map<string, number>();
       salons.forEach((s: any) => {
@@ -138,15 +153,19 @@ export default function AdminDashboardEnhanced() {
         topCities,
         recentActivity: [],
         revenueData: {
-          monthly: [],
+          monthly: Array.isArray(stats.revenue_history) ? stats.revenue_history : [],
           annual: [{ name: "2024", value: stats.total_revenue || 0 }]
         },
+        planRevenue: stats.plan_revenue || 0,
+        serviceRevenue: stats.service_revenue || 0,
+        productRevenue: stats.product_revenue || 0,
         popularTreatments: [],
         customerStats: {
           new: usersList.length,
           existing: 0,
           total: usersList.length
-        }
+        },
+        alerts: alerts.slice(0, 5)
       });
 
     } catch (error: any) {
@@ -285,23 +304,24 @@ export default function AdminDashboardEnhanced() {
         </div>
 
         {/* Global Analytics Cards */}
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
+        <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-5 gap-6">
           {[
             { label: "Total Salons", value: dashboardStats.totalSalons, active: `${dashboardStats.activeSalons} Active`, icon: Building2, color: "text-blue-500", bg: "bg-blue-50" },
-            { label: "Total Users", value: dashboardStats.totalUsers, active: `${dashboardStats.totalOwners} Owners`, icon: Users, color: "text-emerald-500", bg: "bg-emerald-50" },
-            { label: "Daily Volume", value: dashboardStats.todayBookings, active: "Bookings Today", icon: Calendar, color: "text-amber-500", bg: "bg-amber-50" },
-            { label: "Total Revenue", value: `RM ${dashboardStats.monthlyRevenue}`, active: "Gross Earnings", icon: Banknote, color: "text-purple-500", bg: "bg-purple-50" },
+            { label: "Plan Sales", value: `RM ${dashboardStats.planRevenue}`, active: "Subscription", icon: Zap, color: "text-indigo-500", bg: "bg-indigo-50" },
+            { label: "Service Sales", value: `RM ${dashboardStats.serviceRevenue}`, active: "Bookings", icon: Activity, color: "text-emerald-500", bg: "bg-emerald-50" },
+            { label: "Product Sales", value: `RM ${dashboardStats.productRevenue}`, active: "Retail", icon: Banknote, color: "text-rose-500", bg: "bg-rose-50" },
+            { label: "Total Revenue", value: `RM ${dashboardStats.monthlyRevenue}`, active: "Gross Intake", icon: BarChart3, color: "text-purple-500", bg: "bg-purple-50" },
           ].map((stat, i) => (
-            <Card key={i} className="border-none shadow-sm bg-white rounded-3xl group hover:shadow-xl transition-all">
+            <Card key={i} className={`border-none shadow-sm bg-white rounded-3xl group hover:shadow-xl transition-all ${stat.label === 'Total Revenue' ? 'lg:col-span-1' : ''}`}>
               <CardContent className="p-6">
-                <div className="flex items-start justify-between">
+                <div className="flex flex-col items-center text-center space-y-3">
+                  <div className={`w-14 h-14 rounded-2xl ${stat.bg} ${stat.color} flex items-center justify-center group-hover:scale-110 transition-transform shadow-sm`}>
+                    <stat.icon className="w-7 h-7" />
+                  </div>
                   <div className="space-y-1">
                     <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">{stat.label}</p>
-                    <p className="text-3xl font-black text-slate-900">{stat.value}</p>
-                    <p className="text-xs font-bold text-slate-500">{stat.active}</p>
-                  </div>
-                  <div className={`w-12 h-12 rounded-xl ${stat.bg} ${stat.color} flex items-center justify-center group-hover:scale-110 transition-transform`}>
-                    <stat.icon className="w-6 h-6" />
+                    <p className="text-2xl font-black text-slate-900 leading-none">{stat.value}</p>
+                    <p className="text-[10px] font-bold text-slate-500 bg-slate-100 px-2 py-1 rounded-full">{stat.active}</p>
                   </div>
                 </div>
               </CardContent>
@@ -311,34 +331,78 @@ export default function AdminDashboardEnhanced() {
 
         {/* Dynamic Charts Section */}
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-          <Card className="lg:col-span-2 border-none shadow-sm bg-white rounded-[2.5rem] overflow-hidden">
-            <CardHeader className="flex flex-row items-center justify-between pb-2">
+          <Card className="lg:col-span-2 border-none shadow-2xl bg-slate-900 rounded-[2.5rem] overflow-hidden relative">
+            {/* Background Gradient Effect */}
+            <div className="absolute top-0 right-0 w-[500px] h-[500px] bg-blue-500/10 blur-[100px] rounded-full pointer-events-none" />
+
+            <CardHeader className="flex flex-row items-center justify-between pb-2 relative z-10 p-8">
               <div>
-                <CardTitle className="text-xl font-bold">Revenue Projections</CardTitle>
-                <CardDescription className="font-medium">Monthly earnings trend from database</CardDescription>
+                <CardTitle className="text-2xl font-black text-white">Revenue Projections</CardTitle>
+                <CardDescription className="text-slate-400 font-medium mt-1">Monthly earnings trend from database</CardDescription>
               </div>
-              <div className="flex gap-2">
-                <Badge className="bg-blue-50 text-blue-600 border-none font-bold">Local Host</Badge>
-              </div>
+              <Badge className="bg-blue-500/20 text-blue-300 border border-blue-500/20 font-bold px-4 py-1.5 rounded-xl">Local Host</Badge>
             </CardHeader>
-            <CardContent className="h-[350px] mt-6">
+            <CardContent className="h-[400px] mt-4 relative z-10 px-8 pb-8">
               <ResponsiveContainer width="100%" height="100%">
-                <AreaChart data={dashboardStats.revenueData.monthly}>
+                <ComposedChart data={dashboardStats.revenueData.monthly.length < 2
+                  ? [{ name: 'Start', value: 0 }, ...dashboardStats.revenueData.monthly]
+                  : dashboardStats.revenueData.monthly}
+                  margin={{ top: 20, right: 20, bottom: 20, left: 0 }}>
                   <defs>
-                    <linearGradient id="colorValue" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="5%" stopColor="#3b82f6" stopOpacity={0.8} />
-                      <stop offset="95%" stopColor="#3b82f6" stopOpacity={0} />
+                    <linearGradient id="barGradient" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="0%" stopColor="#3b82f6" stopOpacity={1} />
+                      <stop offset="100%" stopColor="#3b82f6" stopOpacity={0.3} />
                     </linearGradient>
                   </defs>
-                  <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{ fill: '#94a3b8', fontWeight: 700, fontSize: 12 }} dy={10} />
-                  <YAxis axisLine={false} tickLine={false} tick={{ fill: '#94a3b8', fontWeight: 700, fontSize: 12 }} dx={-10} />
-                  <Tooltip
-                    contentStyle={{ borderRadius: '20px', border: 'none', boxShadow: '0 10px 15px -3px rgba(0,0,0,0.1)' }}
-                    labelStyle={{ fontWeight: 900 }}
+                  <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#1e293b" />
+                  <XAxis
+                    dataKey="name"
+                    axisLine={false}
+                    tickLine={false}
+                    tick={{ fill: '#94a3b8', fontWeight: 600, fontSize: 12 }}
+                    dy={15}
                   />
-                  <Area type="monotone" dataKey="value" stroke="#3b82f6" strokeWidth={4} fillOpacity={1} fill="url(#colorValue)" />
-                </AreaChart>
+                  <YAxis
+                    axisLine={false}
+                    tickLine={false}
+                    tick={{ fill: '#94a3b8', fontWeight: 600, fontSize: 12 }}
+                    tickFormatter={(value) => `RM ${value}`}
+                    dx={-10}
+                  />
+                  <Tooltip
+                    contentStyle={{
+                      backgroundColor: '#0f172a',
+                      borderRadius: '16px',
+                      border: '1px solid #1e293b',
+                      boxShadow: '0 10px 15px -3px rgba(0,0,0,0.5)',
+                      padding: '12px'
+                    }}
+                    itemStyle={{ color: '#fff', fontWeight: 600 }}
+                    cursor={{ fill: 'rgba(255,255,255,0.05)' }}
+                  />
+                  {/* Bars at the bottom like the image */}
+
+                  {/* Glowing Line on top */}
+                  <Line
+                    type="monotone"
+                    dataKey="value"
+                    name="Revenue Trend"
+                    stroke="#22d3ee"
+                    strokeWidth={4}
+                    dot={{ r: 6, fill: "#0f172a", stroke: "#22d3ee", strokeWidth: 3 }}
+                    activeDot={{ r: 8, fill: "#22d3ee", stroke: "#fff", strokeWidth: 2 }}
+                  />
+                </ComposedChart>
               </ResponsiveContainer>
+
+              {/* Custom Legend */}
+              <div className="flex justify-center gap-8">
+                <div className="flex items-center gap-2">
+                  <div className="w-3 h-3 rounded-full bg-cyan-400 box-shadow-glow" />
+                  <span className="text-white font-bold text-sm">Revenue Trend</span>
+                </div>
+
+              </div>
             </CardContent>
           </Card>
 
@@ -359,61 +423,7 @@ export default function AdminDashboardEnhanced() {
           </Card>
         </div>
 
-        {/* Global Activity Feed */}
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-          <Card className="border-none shadow-sm bg-white rounded-[2rem] overflow-hidden">
-            <CardHeader>
-              <CardTitle className="text-xl font-bold">System Log</CardTitle>
-              <CardDescription className="font-medium">Real-time database events</CardDescription>
-            </CardHeader>
-            <CardContent>
-              <div className="space-y-4">
-                {dashboardStats.recentActivity.map(act => (
-                  <div key={act.id} className="flex items-center justify-between p-4 rounded-2xl bg-slate-50 border border-transparent hover:border-slate-100 transition-all">
-                    <div className="flex items-center gap-4">
-                      <div className="w-10 h-10 bg-white rounded-xl shadow-sm flex items-center justify-center text-accent">
-                        {act.type === 'booking' ? <Calendar className="w-5 h-5" /> : <Activity className="w-5 h-5" />}
-                      </div>
-                      <div>
-                        <p className="font-black text-slate-900 leading-tight">{act.description}</p>
-                        <p className="text-[10px] font-bold text-slate-400 mt-1 uppercase tracking-widest">{format(new Date(act.timestamp), "h:mm a, MMM d")}</p>
-                      </div>
-                    </div>
-                    <Badge className="bg-white text-slate-600 border-none shadow-sm px-3 font-bold">{act.status}</Badge>
-                  </div>
-                ))}
-                {dashboardStats.recentActivity.length === 0 && <p className="text-slate-400 text-center py-10">No recent logs.</p>}
-              </div>
-            </CardContent>
-          </Card>
 
-          <Card className="border-none shadow-sm bg-slate-900 rounded-[2rem] p-8 text-white relative overflow-hidden">
-            <div className="absolute bottom-0 right-0 opacity-10">
-              <Target className="w-64 h-64" />
-            </div>
-            <h3 className="text-2xl font-black mb-2">Platform Goals</h3>
-            <p className="text-slate-400 font-medium mb-8">Quarterly target reaching 50 local saloons.</p>
-            <div className="space-y-8">
-              <div className="space-y-3">
-                <div className="flex justify-between font-black text-sm uppercase tracking-widest text-slate-400">
-                  <span>Saloon Growth</span>
-                  <span>{Math.round((dashboardStats.totalSalons / 50) * 100)}%</span>
-                </div>
-                <Progress value={(dashboardStats.totalSalons / 50) * 100} className="h-4 bg-white/10" />
-              </div>
-              <div className="space-y-3">
-                <div className="flex justify-between font-black text-sm uppercase tracking-widest text-slate-400">
-                  <span>Revenue Target</span>
-                  <span>65%</span>
-                </div>
-                <Progress value={65} className="h-4 bg-white/10" />
-              </div>
-            </div>
-            <Button className="w-full mt-10 bg-accent text-white font-black h-14 rounded-2xl shadow-xl shadow-accent/20">
-              Market Analysis (Pro)
-            </Button>
-          </Card>
-        </div>
       </div>
     </AdminLayout>
   );

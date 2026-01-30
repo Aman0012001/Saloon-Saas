@@ -340,7 +340,7 @@ export const adminAPI = {
 
     async getReports(range: string = '30') {
         const data = await fetchWithAuth(`/admin/reports?range=${range}`);
-        return toArray(data, 'reports');
+        return data?.reports || {};
     },
 
     async getAllPayments() {

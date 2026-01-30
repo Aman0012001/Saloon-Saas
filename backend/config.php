@@ -36,3 +36,8 @@ date_default_timezone_set('Asia/Kolkata');
 // Error Reporting (disable in production)
 error_reporting(E_ALL);
 ini_set('display_errors', 1);
+// Google Drive Configuration
+define('GOOGLE_CLIENT_ID', '');
+define('GOOGLE_CLIENT_SECRET', '');
+define('GOOGLE_REFRESH_TOKEN', '');
+define('GOOGLE_DRIVE_FOLDER_ID', ''); // Optional: ID of the folder to upload to

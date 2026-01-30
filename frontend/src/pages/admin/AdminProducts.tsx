@@ -34,6 +34,8 @@ import {
 import { toast } from "@/hooks/use-toast";
 import api from "@/services/api";
 import { cn } from "@/lib/utils";
+import { getImageUrl } from "@/utils/imageUrl";
+import { exportToCSV, exportToExcel, exportToPDF } from "@/utils/exportUtils";
 
 interface Product {
     id: string;
@@ -134,9 +136,9 @@ export default function AdminProducts() {
                                     </Button>
                                 </DropdownMenuTrigger>
                                 <DropdownMenuContent className="bg-white">
-                                    <DropdownMenuItem>Excel</DropdownMenuItem>
-                                    <DropdownMenuItem>CSV</DropdownMenuItem>
-                                    <DropdownMenuItem>PDF</DropdownMenuItem>
+                                    <DropdownMenuItem onClick={() => exportToExcel(products, 'products_backup.csv')}>Excel</DropdownMenuItem>
+                                    <DropdownMenuItem onClick={() => exportToCSV(products, 'products_backup.csv')}>CSV</DropdownMenuItem>
+                                    <DropdownMenuItem onClick={() => exportToPDF()}>PDF</DropdownMenuItem>
                                 </DropdownMenuContent>
                             </DropdownMenu>
 
@@ -168,7 +170,7 @@ export default function AdminProducts() {
                                         placeholder="Search products..."
                                         value={searchTerm}
                                         onChange={(e) => setSearchTerm(e.target.value)}
-                                        className="pl-10 h-10 bg-white border-[#E2E8F0] rounded-lg text-sm font-medium"
+                                        className="pl-10 h-10 bg-white border-[#E2E8F0] rounded-lg text-sm font-medium text-black"
                                     />
                                 </div>
                                 <div className="flex items-center gap-3 text-sm font-medium text-[#64748B]">
@@ -222,7 +224,7 @@ export default function AdminProducts() {
                                                 <td className="px-6 py-4">
                                                     <div className="w-14 h-14 rounded-lg bg-slate-100 border border-slate-200 overflow-hidden">
                                                         {product.image_url ? (
-                                                            <img src={product.image_url} alt="" className="w-full h-full object-cover" />
+                                                            <img src={getImageUrl(product.image_url)} alt="" className="w-full h-full object-cover" />
                                                         ) : (
                                                             <div className="w-full h-full flex items-center justify-center text-slate-300">
                                                                 <Star className="w-6 h-6" />
@@ -272,8 +274,8 @@ export default function AdminProducts() {
                                                         <Button
                                                             variant="outline"
                                                             size="sm"
-                                                            onClick={() => navigate(`/admin/products/add?id=${product.id}`)} // Note: assuming future edit support on same page or separate edit page. Actually, I will just log for now or keep current btn logic if needed.
-                                                            className="bg-white border-[#E2E8F0] text-[#2563EB] hover:bg-blue-50 h-9 font-bold flex items-center gap-2 px-4 rounded-lg"
+                                                            onClick={() => navigate(`/admin/products/add?id=${product.id}`)}
+                                                            className="bg-white border-slate-200 text-slate-600 hover:bg-blue-50 hover:text-blue-600 hover:border-blue-200 h-9 font-bold flex items-center gap-2 px-4 rounded-xl transition-all shadow-sm"
                                                         >
                                                             <Edit2 className="w-3.5 h-3.5" /> Edit
                                                         </Button>
@@ -281,7 +283,7 @@ export default function AdminProducts() {
                                                             variant="outline"
                                                             size="sm"
                                                             onClick={() => handleDelete(product.id)}
-                                                            className="bg-white border-[#E2E8F0] text-[#EF4444] hover:bg-red-50 h-9 font-bold flex items-center gap-2 px-4 rounded-lg"
+                                                            className="bg-white border-slate-200 text-slate-600 hover:bg-red-50 hover:text-red-600 hover:border-red-200 h-9 font-bold flex items-center gap-2 px-4 rounded-xl transition-all shadow-sm"
                                                         >
                                                             <Trash2 className="w-3.5 h-3.5" /> Delete
                                                         </Button>

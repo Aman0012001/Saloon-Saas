@@ -39,6 +39,26 @@ class NotificationService
     }
 
     /**
+     * Send a notification to all Super Admins
+     */
+    public function notifyAdmins($title, $message, $type = 'alert', $link = null)
+    {
+        try {
+            // Find all active super admins
+            $stmt = $this->db->query("SELECT user_id FROM platform_admins WHERE is_active = 1");
+            $admins = $stmt->fetchAll(PDO::FETCH_ASSOC);
+
+            foreach ($admins as $admin) {
+                $this->notifyUser($admin['user_id'], $title, $message, $type, $link, false);
+            }
+            return true;
+        } catch (Exception $e) {
+            error_log("Admin Notification Error: " . $e->getMessage());
+            return false;
+        }
+    }
+
+    /**
      * Private helper to handle email dispatch
      */
     private function sendEmailToUser($userId, $subject, $message)

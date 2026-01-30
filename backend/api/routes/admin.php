@@ -33,10 +33,47 @@ if ($method === 'GET' && $uriParts[1] === 'stats') {
     $row = $stmt->fetch(PDO::FETCH_ASSOC);
     $stats['total_users'] = $row ? $row['count'] : 0;
 
-    // Total revenue
+    // Plan Sales (from platform_payments)
     $stmt = $db->query("SELECT SUM(amount) as total FROM platform_payments WHERE status = 'completed'");
     $row = $stmt->fetch(PDO::FETCH_ASSOC);
-    $stats['total_revenue'] = $row ? ($row['total'] ?? 0) : 0;
+    $stats['plan_revenue'] = $row ? ($row['total'] ?? 0) : 0;
+
+    // Service Sales (from bookings)
+    $stmt = $db->query("
+        SELECT SUM(COALESCE(b.price_paid, s.price, 0)) as total 
+        FROM bookings b 
+        LEFT JOIN services s ON b.service_id = s.id 
+        WHERE b.status = 'completed'
+    ");
+    $row = $stmt->fetch(PDO::FETCH_ASSOC);
+    $stats['service_revenue'] = $row ? ($row['total'] ?? 0) : 0;
+
+    // Product Sales (from customer_product_purchases)
+    $stmt = $db->query("SELECT SUM(price) as total FROM customer_product_purchases");
+    $row = $stmt->fetch(PDO::FETCH_ASSOC);
+    $stats['product_revenue'] = $row ? ($row['total'] ?? 0) : 0;
+
+    // Total Revenue (Combined)
+    $stats['total_revenue'] = $stats['plan_revenue'] + $stats['service_revenue'] + $stats['product_revenue'];
+
+    // Revenue History (Last 12 Months)
+    $stmt = $db->query("
+        SELECT DATE_FORMAT(created_at, '%b %Y') as name, SUM(amount) as value 
+        FROM platform_payments 
+        WHERE status = 'completed' AND created_at >= DATE_SUB(NOW(), INTERVAL 12 MONTH)
+        GROUP BY DATE_FORMAT(created_at, '%Y-%m') 
+        ORDER BY created_at ASC
+    ");
+    $monthlyData = $stmt->fetchAll(PDO::FETCH_ASSOC);
+
+    // If no data, provide at least the current month
+    if (empty($monthlyData)) {
+        $monthlyData = [
+            ['name' => date('M Y'), 'value' => 0]
+        ];
+    }
+
+    $stats['revenue_history'] = $monthlyData;
 
     sendResponse($stats);
 }
@@ -308,7 +345,22 @@ if ($method === 'GET' && $uriParts[1] === 'reports') {
     // 1. Core Totals
     $stmt = $db->prepare("SELECT IFNULL(SUM(amount), 0) as total FROM platform_payments WHERE status = 'completed' AND created_at >= DATE_SUB(NOW(), INTERVAL ? DAY)");
     $stmt->execute([$range]);
-    $totalRevenue = $stmt->fetch()['total'];
+    $planRevenue = $stmt->fetch()['total'];
+
+    $stmt = $db->prepare("
+        SELECT IFNULL(SUM(COALESCE(b.price_paid, s.price, 0)), 0) as total 
+        FROM bookings b 
+        LEFT JOIN services s ON b.service_id = s.id 
+        WHERE b.status = 'completed' AND b.created_at >= DATE_SUB(NOW(), INTERVAL ? DAY)
+    ");
+    $stmt->execute([$range]);
+    $serviceRevenue = $stmt->fetch()['total'];
+
+    $stmt = $db->prepare("SELECT IFNULL(SUM(price), 0) as total FROM customer_product_purchases WHERE created_at >= DATE_SUB(NOW(), INTERVAL ? DAY)");
+    $stmt->execute([$range]);
+    $productRevenue = $stmt->fetch()['total'];
+
+    $totalRevenue = $planRevenue + $serviceRevenue + $productRevenue;
 
     $stmt = $db->prepare("SELECT COUNT(*) as total FROM bookings WHERE created_at >= DATE_SUB(NOW(), INTERVAL ? DAY)");
     $stmt->execute([$range]);
@@ -351,6 +403,9 @@ if ($method === 'GET' && $uriParts[1] === 'reports') {
     sendResponse([
         'reports' => [
             'total_revenue' => $totalRevenue,
+            'plan_revenue' => $planRevenue,
+            'service_revenue' => $serviceRevenue,
+            'product_revenue' => $productRevenue,
             'total_bookings' => $totalBookings,
             'cancellation_rate' => $cancellationRate,
             'new_users' => $newUsers,
@@ -530,13 +585,25 @@ if ($method === 'POST' && $uriParts[1] === 'memberships' && isset($uriParts[2]) 
     }
 
     try {
+        // Fetch Plan Details (Price & Name)
+        $stmt = $db->prepare("SELECT name, price_monthly FROM subscription_plans WHERE id = ?");
+        $stmt->execute([$planId]);
+        $plan = $stmt->fetch(PDO::FETCH_ASSOC);
+
+        if (!$plan) {
+            sendResponse(['error' => 'Invalid Plan ID'], 400);
+        }
+
+        $price = $plan['price_monthly'];
+        $planName = $plan['name'];
+
         // Check if subscription exists
         $stmt = $db->prepare("SELECT id FROM salon_subscriptions WHERE salon_id = ?");
         $stmt->execute([$salonId]);
-        $existingId = $stmt->fetchColumn();
+        $subscriptionId = $stmt->fetchColumn();
 
-        if ($existingId) {
-            // Update
+        if ($subscriptionId) {
+            // Update existing
             $stmt = $db->prepare("
                 UPDATE salon_subscriptions SET 
                     plan_id = ?, 
@@ -545,23 +612,30 @@ if ($method === 'POST' && $uriParts[1] === 'memberships' && isset($uriParts[2]) 
                     updated_at = NOW() 
                 WHERE id = ?
             ");
-            $stmt->execute([$planId, $status, $existingId]);
+            $stmt->execute([$planId, $status, $subscriptionId]);
         } else {
-            // Create
-            $subId = Auth::generateUuid();
+            // Create new
+            $subscriptionId = Auth::generateUuid();
             $stmt = $db->prepare("
                 INSERT INTO salon_subscriptions (id, salon_id, plan_id, status, subscription_start_date, subscription_end_date)
                 VALUES (?, ?, ?, ?, NOW(), DATE_ADD(NOW(), INTERVAL 1 MONTH))
             ");
-            $stmt->execute([$subId, $salonId, $planId, $status]);
+            $stmt->execute([$subscriptionId, $salonId, $planId, $status]);
+        }
+
+        // Record Revenue (Platform Payment)
+        if ($price > 0) {
+            $paymentId = Auth::generateUuid();
+            $stmt = $db->prepare("
+                INSERT INTO platform_payments (id, salon_id, subscription_id, amount, status, payment_method, created_at, paid_at)
+                VALUES (?, ?, ?, ?, 'completed', 'admin_assignment', NOW(), NOW())
+            ");
+            $stmt->execute([$paymentId, $salonId, $subscriptionId, $price]);
         }
 
         // Notify Salon Owner
         $ownerId = $invoiceService->getSalonOwnerId($salonId);
         if ($ownerId) {
-            $stmt = $db->prepare("SELECT name FROM subscription_plans WHERE id = ?");
-            $stmt->execute([$planId]);
-            $planName = $stmt->fetchColumn();
             $notifService->notifyUser($ownerId, "Plan Updated", "Your salon plan has been updated to $planName by Admin.", 'info', '/dashboard/settings');
         }
 

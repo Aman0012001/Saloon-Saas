@@ -32,6 +32,7 @@ import {
 import { toast } from "@/hooks/use-toast";
 import api from "@/services/api";
 import { cn } from "@/lib/utils";
+import { getImageUrl } from "@/utils/imageUrl";
 
 interface Product {
     id: string;
@@ -186,9 +187,9 @@ export default function RetailShop() {
 
                                         {product.image_url ? (
                                             <img
-                                                src={product.image_url}
+                                                src={getImageUrl(product.image_url)}
                                                 alt={product.name}
-                                                className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-[1s]"
+                                                className="w-full h-full object-contain group-hover:scale-110 transition-transform duration-500 p-4"
                                             />
                                         ) : (
                                             <div className="w-full h-full flex items-center justify-center bg-slate-50/50">

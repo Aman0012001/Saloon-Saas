@@ -178,7 +178,13 @@ export default function DashboardHome() {
   };
 
   useEffect(() => {
-    if (!authLoading && !user) navigate("/login");
+    if (!authLoading) {
+      if (!user) {
+        navigate("/login");
+      } else if (user.user_type === 'customer') {
+        navigate("/");
+      }
+    }
   }, [user, authLoading, navigate]);
 
   useEffect(() => {

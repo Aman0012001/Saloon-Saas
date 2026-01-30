@@ -222,7 +222,7 @@ export default function AdminSalons() {
               placeholder="Search by Saloon Name, Location or Owner..."
               value={searchQuery}
               onChange={e => setSearchQuery(e.target.value)}
-              className="pl-14 h-16 bg-white border-none rounded-3xl shadow-sm text-lg font-medium"
+              className="pl-14 h-16 bg-white border-none rounded-3xl shadow-sm text-lg font-medium text-black"
             />
           </div>
         </div>
@@ -235,7 +235,7 @@ export default function AdminSalons() {
             ) : filteredSalons.length === 0 ? (
               <div className="py-20 text-center text-slate-400 font-bold">No saloons match your search.</div>
             ) : (
-              <div className="max-h-[450px] overflow-y-auto custom-scrollbar">
+              <div className="max-h-[360px] overflow-y-auto custom-scrollbar">
                 <Table>
                   <TableHeader className="bg-slate-50/50 sticky top-0 z-10 backdrop-blur-sm">
                     <TableRow>
@@ -281,7 +281,7 @@ export default function AdminSalons() {
                               variant="ghost"
                               size="sm"
                               onClick={() => { setSelectedSalon(salon); setShowDetailsDialog(true); }}
-                              className="rounded-xl font-bold hover:bg-slate-100"
+                              className="rounded-xl font-bold hover:bg-blue-50 hover:text-blue-600"
                             >
                               <Eye className="w-4 h-4 mr-2" /> View
                             </Button>

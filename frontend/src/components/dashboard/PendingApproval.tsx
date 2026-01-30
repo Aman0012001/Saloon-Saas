@@ -70,10 +70,6 @@ export const PendingApproval = ({ salonName }: PendingApprovalProps) => {
                 <Button variant="ghost" className="h-14 px-8 rounded-2xl font-black text-slate-400 hover:text-slate-900 transition-all tracking-tight uppercase text-xs" onClick={() => window.location.reload()}>
                     Refresh Status
                 </Button>
-                <Button className="h-14 px-8 bg-slate-900 text-white rounded-2xl font-black shadow-xl hover:bg-black transition-all flex items-center gap-2 group" onClick={() => window.location.href = "/"}>
-                    Explore Network
-                    <ArrowRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
-                </Button>
             </div>
         </div>
     );

@@ -11,7 +11,8 @@ if ($method === 'GET' && count($uriParts) === 1) {
             FROM salons s
             LEFT JOIN user_roles ur ON s.id = ur.salon_id AND ur.role = 'owner'
             LEFT JOIN profiles p ON ur.user_id = p.user_id
-            WHERE s.is_active = 1
+            WHERE s.is_active = 1 
+            AND s.subscription_status IN ('active', 'trial')
             GROUP BY s.id
             ORDER BY s.created_at DESC
         ");
@@ -97,6 +98,16 @@ if ($method === 'POST' && count($uriParts) === 1) {
         $stmt->execute([$roleId, $userData['user_id'], $salonId]);
 
         $db->commit();
+
+        // Notify Admins
+        if (isset($notifService)) {
+            $notifService->notifyAdmins(
+                "New Salon Registration",
+                "A new salon '{$data['name']}' has been registered and is pending approval.",
+                'alert',
+                '/admin/salons?status=pending'
+            );
+        }
 
         // Notify subscribers
         $newsletterService->notifySubscribers('salon', $data['name'], $data['city'] ?? '');

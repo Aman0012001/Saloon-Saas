@@ -55,24 +55,13 @@ if ($method === 'POST' && $path === '/contact-enquiries') {
         @mail($to, $mailSubject, $mailBody, $headers);
 
         // Send in-app notifications to all active Super Admins
-        try {
-            $stmt = $db->query("SELECT user_id FROM platform_admins WHERE is_active = 1");
-            $admins = $stmt->fetchAll(PDO::FETCH_ASSOC);
-
-            foreach ($admins as $admin) {
-                if (isset($notifService)) {
-                    $notifService->notifyUser(
-                        $admin['user_id'],
-                        "New Contact Message",
-                        "New message from {$name}: \"{$subject}\"",
-                        'info',
-                        '/admin/contact-enquiries',
-                        false // Do not send individual emails to every admin to avoid timeout
-                    );
-                }
-            }
-        } catch (Exception $e) {
-            error_log("Notification Error: " . $e->getMessage());
+        if (isset($notifService)) {
+            $notifService->notifyAdmins(
+                "New Contact Message",
+                "New message from {$name}: \"{$subject}\"",
+                'info',
+                '/admin/contact-enquiries'
+            );
         }
 
         sendResponse([

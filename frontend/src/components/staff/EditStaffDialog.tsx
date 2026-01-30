@@ -29,9 +29,10 @@ interface EditStaffDialogProps {
     isOpen: boolean;
     onClose: () => void;
     onSuccess: () => void;
+    canEditRole?: boolean;
 }
 
-export function EditStaffDialog({ staff, isOpen, onClose, onSuccess }: EditStaffDialogProps) {
+export function EditStaffDialog({ staff, isOpen, onClose, onSuccess, canEditRole = false }: EditStaffDialogProps) {
     const { toast } = useToast();
     const [saving, setSaving] = useState(false);
     const fileInputRef = useRef<HTMLInputElement>(null);
@@ -220,7 +221,7 @@ export function EditStaffDialog({ staff, isOpen, onClose, onSuccess }: EditStaff
                             <Select
                                 value={formData.role}
                                 onValueChange={(v: "manager" | "staff") => setFormData(prev => ({ ...prev, role: v }))}
-                                disabled
+                                disabled={!canEditRole}
                             >
                                 <SelectTrigger className="h-14 bg-slate-50 border-slate-100 rounded-xl font-bold px-5 focus:ring-2 focus:ring-[#F2A93B]/10 transition-all text-slate-700">
                                     <SelectValue />

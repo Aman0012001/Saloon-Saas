@@ -23,6 +23,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { useMobile } from "@/hooks/use-mobile";
 import api from "@/services/api";
+import { getImageUrl } from "@/utils/imageUrl";
 
 // Original website components
 import Navbar from "@/components/Navbar";
@@ -174,7 +175,7 @@ const Index = () => {
           ) : featuredSalons.map(salon => (
             <Card key={salon.id} onClick={() => navigate(`/book?salonId=${salon.id}`)} className="border-none shadow-sm bg-white rounded-[2rem] p-4 flex gap-4 hover:shadow-xl transition-all">
               <div className="w-24 h-24 bg-slate-900 rounded-3xl flex items-center justify-center overflow-hidden flex-shrink-0">
-                <img src={salon.logo_url || '/placeholder.svg'} className="w-full h-full object-cover opacity-50" />
+                <img src={getImageUrl(salon.logo_url)} className="w-full h-full object-cover opacity-50" />
               </div>
               <div className="flex-1 py-1">
                 <div className="flex justify-between items-start">

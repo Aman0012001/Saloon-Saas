@@ -48,6 +48,7 @@ import ContactUs from "./pages/ContactUs";
 // Super Admin Pages
 import AdminDashboard from "./pages/admin/AdminDashboard";
 import AdminDashboardEnhanced from "./pages/admin/AdminDashboardEnhanced";
+import AdminNotifications from "./pages/admin/AdminNotifications";
 import AdminSalons from "./pages/admin/AdminSalons";
 import AdminUsers from "./pages/admin/AdminUsers";
 import AdminUsersEnhanced from "./pages/admin/AdminUsersEnhanced";
@@ -150,6 +151,7 @@ const App = () => (
                 <Route path="/dashboard/staff/messages" element={<StaffMessagesPage />} />
                 {/* Super Admin Routes */}
                 <Route path="/admin" element={<AdminDashboardEnhanced />} />
+                <Route path="/admin/notifications" element={<AdminNotifications />} />
                 <Route path="/admin/salons" element={<AdminSalons />} />
                 <Route path="/admin/members" element={<AdminMembers />} />
                 <Route path="/admin/users" element={<AdminUsersEnhanced />} />

@@ -432,6 +432,7 @@ export default function StaffPage() {
           isOpen={isEditOpen}
           onClose={() => setIsEditOpen(false)}
           onSuccess={fetchStaff}
+          canEditRole={isOwner}
         />
       )}
     </ResponsiveDashboardLayout>

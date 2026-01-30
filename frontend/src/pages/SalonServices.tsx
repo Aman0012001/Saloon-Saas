@@ -13,6 +13,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import Navbar from "@/components/Navbar";
 import Footer from "@/components/Footer";
 import api from "@/services/api";
+import { getImageUrl } from "@/utils/imageUrl";
 
 interface Service {
     id: string;
@@ -115,9 +116,14 @@ export default function SalonServices() {
                 {/* Banner Image */}
                 <div className="relative w-full aspect-[21/9] rounded-[1.5rem] overflow-hidden shadow-sm">
                     <img
-                        src={salon.cover_image_url || "https://images.unsplash.com/photo-1560066984-138dadb4c035?w=1600&auto=format&fit=crop&q=80"}
+                        src={getImageUrl(salon.cover_image_url, 'cover', salon.id)}
                         alt={salon.name}
                         className="w-full h-full object-cover"
+                        onError={(e) => {
+                            const target = e.target as HTMLImageElement;
+                            target.onerror = null; // Prevent infinite loop
+                            target.src = getImageUrl(null, 'cover', salon.id);
+                        }}
                     />
                 </div>
 
@@ -128,9 +134,14 @@ export default function SalonServices() {
                         <div className="relative -mt-16 md:-mt-20">
                             <div className="w-24 h-24 md:w-32 md:h-32 rounded-full border-[6px] border-white overflow-hidden shadow-md bg-white">
                                 <img
-                                    src={salon.logo_url || "https://images.unsplash.com/photo-1620331311520-246422ff8347?w=200&h=200&fit=crop"}
+                                    src={getImageUrl(salon.logo_url, 'logo', salon.id)}
                                     alt={`${salon.name} logo`}
                                     className="w-full h-full object-cover"
+                                    onError={(e) => {
+                                        const target = e.target as HTMLImageElement;
+                                        target.onerror = null;
+                                        target.src = getImageUrl(null, 'logo', salon.id);
+                                    }}
                                 />
                             </div>
                         </div>

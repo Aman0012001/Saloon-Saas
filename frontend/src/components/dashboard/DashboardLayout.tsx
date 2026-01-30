@@ -140,7 +140,7 @@ export const DashboardLayout = ({ children }: DashboardLayoutProps) => {
   const location = useLocation();
   const navigate = useNavigate();
   const { user, signOut } = useAuth();
-  const { salons, currentSalon, setCurrentSalon, isOwner, isManager, isStaff } = useSalon();
+  const { salons, currentSalon, setCurrentSalon, isOwner, isManager, isStaff, refreshSalons } = useSalon();
   const [appointmentCount, setAppointmentCount] = useState(0);
   const [unreadCount, setUnreadCount] = useState(0);
 
@@ -206,7 +206,7 @@ export const DashboardLayout = ({ children }: DashboardLayoutProps) => {
     }
     // Staff can only see limited items
     if (!isOwner && !isManager) {
-      return ["Calendar", "Staff Profile "].includes(item.label);
+      return ["Dashboard", "Calendar"].includes(item.label);
     }
     // Managers can see most items except Settings
     if (isManager && !isOwner) {
@@ -215,16 +215,28 @@ export const DashboardLayout = ({ children }: DashboardLayoutProps) => {
     return true;
   });
 
+  useEffect(() => {
+    let interval: NodeJS.Timeout;
+    if (currentSalon?.approval_status === 'pending') {
+      interval = setInterval(() => {
+        refreshSalons();
+      }, 2000);
+    }
+    return () => {
+      if (interval) clearInterval(interval);
+    };
+  }, [currentSalon?.approval_status, refreshSalons]);
+
   if (currentSalon?.approval_status === 'pending' && isOwner) {
     return (
       <div className="min-h-screen bg-[#FDFCFB] flex flex-col items-center justify-center">
         <header className="fixed top-0 left-0 right-0 h-20 bg-white/80 backdrop-blur-xl border-b border-border/50 px-8 flex items-center justify-between z-50">
-          <Link to="/" className="flex items-center gap-3">
-            <div className="w-10 h-10 bg-accent rounded-xl flex items-center justify-center">
+          <div className="flex items-center gap-3 cursor-default">
+            <div className="w-10 h-10 bg-[#F2A93B] rounded-xl flex items-center justify-center shadow-lg">
               <Scissors className="w-5 h-5 text-white" />
             </div>
             <span className="font-bold text-xl text-foreground">NoamSkin</span>
-          </Link>
+          </div>
           <Button variant="ghost" onClick={handleSignOut} className="font-bold text-slate-500 hover:text-red-500 gap-2">
             <LogOut className="w-4 h-4" /> Sign Out
           </Button>

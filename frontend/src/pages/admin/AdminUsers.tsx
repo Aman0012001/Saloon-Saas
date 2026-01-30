@@ -184,7 +184,7 @@ export default function AdminUsers() {
               placeholder="Search by name, phone or email..."
               value={searchQuery}
               onChange={e => setSearchQuery(e.target.value)}
-              className="pl-12 h-14 bg-white border-none rounded-2xl shadow-sm text-lg font-medium"
+              className="pl-12 h-14 bg-white border-none rounded-2xl shadow-sm text-lg font-medium text-black"
             />
           </div>
           <Tabs value={typeFilter} onValueChange={setTypeFilter} className="bg-white p-1 rounded-2xl shadow-sm">

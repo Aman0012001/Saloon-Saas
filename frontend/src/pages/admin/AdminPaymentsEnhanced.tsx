@@ -97,29 +97,25 @@ export default function AdminPaymentsEnhanced() {
   const fetchPayments = async () => {
     try {
       setLoading(true);
-      const bookings = await api.admin.getAllBookings();
+      const data = await api.admin.getAllPayments();
 
-      const paymentData: PaymentData[] = bookings.map((b: any, i: number) => {
-        const amount = Number(b.price || 500);
-        const fee = Math.floor(amount * 0.1);
-        return {
-          id: `L-TRX-${String(i + 1).padStart(5, '0')}`,
-          amount,
-          currency: 'MYR',
-          status: b.status === 'completed' ? 'completed' : b.status === 'cancelled' ? 'failed' : 'pending',
-          payment_method: 'UPI / Local',
-          salon_name: b.salon_name || 'Saloon Member',
-          customer_name: b.user_name || 'Guest',
-          salon_email: b.salon_email || '',
-          salon_address: b.salon_address || '',
-          salon_phone: b.salon_phone || '',
-          booking_id: b.id,
-          created_at: b.created_at,
-          processed_at: b.updated_at,
-          platform_fee: fee,
-          salon_payout: amount - fee,
-        };
-      });
+      const paymentData: PaymentData[] = data.map((p: any) => ({
+        id: p.id,
+        amount: Number(p.amount),
+        currency: 'MYR',
+        status: p.status,
+        payment_method: p.payment_method || 'System',
+        salon_name: p.salon_name || 'Unknown Salon',
+        customer_name: p.salon_name || 'System Generated', // It's a B2B payment
+        salon_email: '', // Not in default payload, can be added to query if needed
+        salon_address: '',
+        salon_phone: '',
+        booking_id: '',
+        created_at: p.created_at,
+        processed_at: p.paid_at || p.created_at,
+        platform_fee: Number(p.amount), // For subscriptions, it's 100% revenue
+        salon_payout: 0,
+      }));
 
       setPayments(paymentData);
     } catch (error) {
@@ -168,8 +164,8 @@ export default function AdminPaymentsEnhanced() {
               <TrendingUp className="w-7 h-7" />
             </div>
             <div>
-              <p className="text-[10px] font-black uppercase text-slate-400 tracking-widest">Platform Fees (10%)</p>
-              <p className="text-2xl font-black text-slate-900">RM {Math.floor(totalRevenue * 0.1)}</p>
+              <p className="text-[10px] font-black uppercase text-slate-400 tracking-widest">Net Platform Revenue</p>
+              <p className="text-2xl font-black text-slate-900">RM {totalRevenue}</p>
             </div>
           </Card>
           <Card className="border-none shadow-sm bg-white rounded-3xl p-6 flex items-center gap-6">
@@ -177,7 +173,7 @@ export default function AdminPaymentsEnhanced() {
               <CheckCircle className="w-7 h-7" />
             </div>
             <div>
-              <p className="text-[10px] font-black uppercase text-slate-400 tracking-widest">Successful Payouts</p>
+              <p className="text-[10px] font-black uppercase text-slate-400 tracking-widest">Settled Transactions</p>
               <p className="text-2xl font-black text-slate-900">{payments.filter(p => p.status === 'completed').length}</p>
             </div>
           </Card>
@@ -199,11 +195,11 @@ export default function AdminPaymentsEnhanced() {
               placeholder="Audit transactions by Saloon or Client..."
               value={searchTerm}
               onChange={e => setSearchTerm(e.target.value)}
-              className="pl-14 h-16 bg-white border-none shadow-sm rounded-2xl font-medium"
+              className="pl-14 h-16 bg-white border-none shadow-sm rounded-2xl font-medium text-black"
             />
           </div>
           <Select value={statusFilter} onValueChange={setStatusFilter}>
-            <SelectTrigger className="w-48 h-16 bg-white border-none rounded-2xl shadow-sm font-bold">
+            <SelectTrigger className="w-48 h-16 bg-white border-none rounded-2xl shadow-sm font-bold text-black">
               <SelectValue placeholder="All Status" />
             </SelectTrigger>
             <SelectContent>
