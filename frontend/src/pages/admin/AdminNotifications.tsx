@@ -9,6 +9,7 @@ import { api } from "@/services/api";
 import { format } from "date-fns";
 import { AdminLayout } from "@/components/admin/AdminLayout";
 import { useNavigate } from "react-router-dom";
+import { useToast } from "@/hooks/use-toast";
 
 interface Notification {
     id: string;
@@ -25,6 +26,7 @@ export default function AdminNotifications() {
     const [loading, setLoading] = useState(true);
     const [searchQuery, setSearchQuery] = useState("");
     const navigate = useNavigate();
+    const { toast } = useToast();
 
     const fetchData = async () => {
         setLoading(true);
@@ -49,6 +51,19 @@ export default function AdminNotifications() {
             setNotifications(prev => prev.map(n => n.id === id ? { ...n, is_read: 1 } : n));
         } catch (error) {
             console.error("Failed to mark as read:", error);
+        }
+    };
+
+    const deleteNotification = async (id: string) => {
+        try {
+            await api.notifications.delete(id);
+            setNotifications(prev => prev.filter(n => n.id !== id));
+            toast({
+                title: "Dismissed",
+                description: "Notification permanently removed.",
+            });
+        } catch (error) {
+            console.error("Failed to delete notification:", error);
         }
     };
 
@@ -154,12 +169,17 @@ export default function AdminNotifications() {
                                                                 <h4 className="font-black text-lg text-white tracking-tight">{n.title}</h4>
                                                                 {!n.is_read && <Badge className="bg-accent text-[8px] font-black uppercase px-2 py-0.5 rounded-full">New</Badge>}
                                                             </div>
-                                                            <span className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">{format(new Date(n.created_at), 'MMM d, HH:mm')}</span>
+                                                            <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">{format(new Date(n.created_at), 'MMM d, HH:mm')}</span>
                                                         </div>
                                                         <p className="text-slate-400 font-medium leading-relaxed">{n.message}</p>
                                                     </div>
                                                     <div className="opacity-0 group-hover:opacity-100 transition-opacity">
-                                                        <Button size="icon" variant="ghost" className="rounded-xl hover:bg-white/10 text-slate-400">
+                                                        <Button
+                                                            size="icon"
+                                                            variant="ghost"
+                                                            className="rounded-xl hover:bg-white/10 text-slate-400"
+                                                            onClick={(e) => { e.stopPropagation(); deleteNotification(n.id); }}
+                                                        >
                                                             <Trash2 className="w-4 h-4" />
                                                         </Button>
                                                     </div>

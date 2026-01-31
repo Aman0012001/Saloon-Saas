@@ -236,6 +236,30 @@ if ($method === 'DELETE' && $uriParts[1] === 'salons' && isset($uriParts[2])) {
 
     $db->beginTransaction();
     try {
+        // 0. Delete Cloudinary Images (Best effort before DB deletion)
+        global $cloudinaryService;
+
+        // Get Salon images
+        $stmt = $db->prepare("SELECT logo_public_id, cover_image_public_id FROM salons WHERE id = ?");
+        $stmt->execute([$salonId]);
+        $salonFiles = $stmt->fetch();
+
+        if ($salonFiles) {
+            if (!empty($salonFiles['logo_public_id']))
+                $cloudinaryService->deleteFile($salonFiles['logo_public_id']);
+            if (!empty($salonFiles['cover_image_public_id']))
+                $cloudinaryService->deleteFile($salonFiles['cover_image_public_id']);
+        }
+
+        // Get all service images
+        $stmt = $db->prepare("SELECT image_public_id FROM services WHERE salon_id = ?");
+        $stmt->execute([$salonId]);
+        $serviceFiles = $stmt->fetchAll();
+        foreach ($serviceFiles as $sf) {
+            if (!empty($sf['image_public_id']))
+                $cloudinaryService->deleteFile($sf['image_public_id']);
+        }
+
         // 1. Delete services
         $stmt = $db->prepare("DELETE FROM services WHERE salon_id = ?");
         $stmt->execute([$salonId]);
@@ -267,7 +291,7 @@ if ($method === 'DELETE' && $uriParts[1] === 'salons' && isset($uriParts[2])) {
 // GET /api/admin/users - Get all users
 if ($method === 'GET' && $uriParts[1] === 'users') {
     $stmt = $db->prepare("
-        SELECT u.id, u.email, u.email_verified, u.created_at,
+        SELECT u.id, u.email, u.email_verified, u.coin_balance, u.created_at,
                p.full_name, p.phone, p.user_type
         FROM users u
         LEFT JOIN profiles p ON u.id = p.user_id
@@ -538,7 +562,76 @@ if ($method === 'PUT' && $uriParts[1] === 'subscriptions' && isset($uriParts[2])
     }
 }
 
-// PUT /api/admin/contact-enquiries/:id/status - Update status
+// GET /api/admin/subscriptions/addons - Get all add-ons including inactive
+if ($method === 'GET' && $uriParts[1] === 'subscriptions' && isset($uriParts[2]) && $uriParts[2] === 'addons') {
+    try {
+        $stmt = $db->query("
+            SELECT id, name, slug, description, price_monthly, icon, is_active, created_at 
+            FROM subscription_addons 
+            ORDER BY price_monthly ASC
+        ");
+        $addons = $stmt->fetchAll(PDO::FETCH_ASSOC);
+        sendResponse(['addons' => $addons]);
+    } catch (PDOException $e) {
+        sendResponse(['error' => 'Failed to fetch add-ons: ' . $e->getMessage()], 500);
+    }
+}
+
+// POST /api/admin/subscriptions/addons - Create new add-on
+if ($method === 'POST' && $uriParts[1] === 'subscriptions' && isset($uriParts[2]) && $uriParts[2] === 'addons') {
+    $data = getRequestBody();
+    $id = Auth::generateUuid();
+    $slug = strtolower(str_replace(' ', '-', $data['name'])) . '-' . rand(1000, 9999);
+
+    try {
+        $stmt = $db->prepare("
+            INSERT INTO subscription_addons (id, name, slug, description, price_monthly, icon, is_active, created_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, NOW())
+        ");
+        $stmt->execute([
+            $id,
+            $data['name'],
+            $slug,
+            $data['description'] ?? '',
+            $data['price_monthly'] ?? 0,
+            $data['icon'] ?? 'Puzzle',
+            isset($data['is_active']) ? $data['is_active'] : 1
+        ]);
+        sendResponse(['message' => 'Add-on created', 'id' => $id]);
+    } catch (PDOException $e) {
+        sendResponse(['error' => 'Failed to create add-on: ' . $e->getMessage()], 500);
+    }
+}
+
+// PUT /api/admin/subscriptions/addons/:id - Update add-on
+if ($method === 'PUT' && $uriParts[1] === 'subscriptions' && isset($uriParts[2]) && $uriParts[2] === 'addons' && isset($uriParts[3])) {
+    $id = $uriParts[3];
+    $data = getRequestBody();
+
+    try {
+        $stmt = $db->prepare("
+            UPDATE subscription_addons SET 
+                name = ?, 
+                description = ?, 
+                price_monthly = ?, 
+                icon = ?, 
+                is_active = ?,
+                updated_at = NOW()
+            WHERE id = ?
+        ");
+        $stmt->execute([
+            $data['name'],
+            $data['description'] ?? '',
+            $data['price_monthly'] ?? 0,
+            $data['icon'] ?? 'Puzzle',
+            isset($data['is_active']) ? ($data['is_active'] ? 1 : 0) : 1,
+            $id
+        ]);
+        sendResponse(['message' => 'Add-on updated']);
+    } catch (PDOException $e) {
+        sendResponse(['error' => 'Failed to update add-on: ' . $e->getMessage()], 500);
+    }
+}
 if ($method === 'PUT' && $uriParts[1] === 'contact-enquiries' && isset($uriParts[3]) && $uriParts[3] === 'status') {
     $id = $uriParts[2];
     $input = getRequestBody();
@@ -643,6 +736,132 @@ if ($method === 'POST' && $uriParts[1] === 'memberships' && isset($uriParts[2]) 
     } catch (PDOException $e) {
         sendResponse(['error' => 'Failed to assign membership: ' . $e->getMessage()], 500);
     }
+}
+
+// GET /api/admin/salons/addons - Get all assigned addons
+if ($method === 'GET' && $uriParts[1] === 'salons' && isset($uriParts[2]) && $uriParts[2] === 'addons') {
+    try {
+        $stmt = $db->query("
+            SELECT sa.*, a.name as addon_name, a.price_monthly, a.icon 
+            FROM salon_addons sa
+            JOIN subscription_addons a ON sa.addon_id = a.id
+        ");
+        $salonAddons = $stmt->fetchAll(PDO::FETCH_ASSOC);
+        sendResponse(['salonAddons' => $salonAddons]);
+    } catch (PDOException $e) {
+        sendResponse(['error' => 'Failed to fetch salon addons: ' . $e->getMessage()], 500);
+    }
+}
+
+// POST /api/admin/salons/addons/assign - Assign or revoke addon
+if ($method === 'POST' && $uriParts[1] === 'salons' && isset($uriParts[2]) && $uriParts[2] === 'addons' && isset($uriParts[3]) && $uriParts[3] === 'assign') {
+    $data = getRequestBody();
+    $salonId = $data['salon_id'] ?? null;
+    $addonId = $data['addon_id'] ?? null;
+    $action = $data['action'] ?? 'assign'; // assign or revoke
+
+    if (!$salonId || !$addonId) {
+        sendResponse(['error' => 'Salon ID and Addon ID are required'], 400);
+    }
+
+    try {
+        if ($action === 'revoke') {
+            $stmt = $db->prepare("DELETE FROM salon_addons WHERE salon_id = ? AND addon_id = ?");
+            $stmt->execute([$salonId, $addonId]);
+            sendResponse(['message' => 'Addon revoked successfully']);
+        } else {
+            $id = Auth::generateUuid();
+            $stmt = $db->prepare("INSERT IGNORE INTO salon_addons (id, salon_id, addon_id, status) VALUES (?, ?, ?, 'active')");
+            $stmt->execute([$id, $salonId, $addonId]);
+            sendResponse(['message' => 'Addon assigned successfully', 'id' => $id]);
+        }
+    } catch (PDOException $e) {
+        sendResponse(['error' => 'Action failed: ' . $e->getMessage()], 500);
+    }
+}
+
+// GET /api/admin/reviews - Get all ecosystem reviews
+if ($method === 'GET' && $uriParts[1] === 'reviews') {
+    $stmt = $db->query("
+        SELECT r.*, p.full_name as user_name, p.avatar_url as user_avatar, 
+               s.name as salon_name, srv.name as service_name
+        FROM booking_reviews r
+        LEFT JOIN profiles p ON r.user_id = p.user_id
+        LEFT JOIN salons s ON r.salon_id = s.id
+        LEFT JOIN services srv ON (
+             SELECT service_id FROM bookings WHERE id = r.booking_id
+        ) = srv.id
+        ORDER BY r.created_at DESC
+    ");
+    $reviews = $stmt->fetchAll(PDO::FETCH_ASSOC);
+
+    // Fallback if services join didn't work via booking_id logic above
+    // or if we need a direct join. The logic above assumes r.booking_id exists.
+    // If your reviews table schema has service_id directly, use that instead.
+
+    sendResponse(['reviews' => $reviews]);
+}
+
+// GET /api/admin/orders - Get all orders
+if ($method === 'GET' && $uriParts[1] === 'orders') {
+    $stmt = $db->query("
+        SELECT o.*, u.email as user_email, p.full_name as user_name 
+        FROM platform_orders o
+        LEFT JOIN users u ON BINARY o.user_id = BINARY u.id
+        LEFT JOIN profiles p ON BINARY o.user_id = BINARY p.user_id
+        ORDER BY o.created_at DESC
+    ");
+    $orders = $stmt->fetchAll(PDO::FETCH_ASSOC);
+
+    // Decode JSON fields & Normalize names
+    foreach ($orders as &$order) {
+        $order['items'] = json_decode($order['items'] ?? '[]');
+        $order['shipping_address'] = json_decode($order['shipping_address'] ?? 'null');
+        $order['customer_name'] = $order['guest_name'] ?: ($order['user_name'] ?? 'Unknown');
+        $order['customer_email'] = $order['guest_email'] ?: ($order['user_email'] ?? 'N/A');
+    }
+
+    sendResponse(['orders' => $orders]);
+}
+
+// PUT /api/admin/orders/:id/status - Update order status
+if ($method === 'PUT' && $uriParts[1] === 'orders' && isset($uriParts[3]) && $uriParts[3] === 'status') {
+    $orderId = $uriParts[2]; // /api/admin/orders/:id/status
+    $data = getRequestBody();
+    $newStatus = $data['status'] ?? null;
+
+    // Status validation
+    if (!$newStatus || !in_array($newStatus, ['placed', 'dispatched', 'delivered', 'cancelled'])) {
+        sendResponse(['error' => 'Invalid status. Must be one of: placed, dispatched, delivered, cancelled'], 400);
+    }
+
+    try {
+        $stmt = $db->prepare("UPDATE platform_orders SET status = ?, updated_at = NOW() WHERE id = ?");
+        $stmt->execute([$newStatus, $orderId]);
+
+        // Optional: Send Notification to User if they are registered
+        $stmt = $db->prepare("SELECT user_id, guest_email FROM platform_orders WHERE id = ?");
+        $stmt->execute([$orderId]);
+        $order = $stmt->fetch();
+
+        if ($order && $order['user_id'] && $order['user_id'] !== 'guest') {
+            // You can use NotifService here if you want
+        }
+
+        sendResponse(['message' => 'Order status updated successfully']);
+    } catch (PDOException $e) {
+        sendResponse(['error' => 'Failed to update status: ' . $e->getMessage()], 500);
+    }
+}
+
+
+
+// DELETE /api/admin/reviews/:id - Delete a review
+if ($method === 'DELETE' && $uriParts[1] === 'reviews' && isset($uriParts[2])) {
+    $reviewId = $uriParts[2];
+    $stmt = $db->prepare("DELETE FROM booking_reviews WHERE id = ?");
+    $stmt->execute([$reviewId]);
+    sendResponse(['message' => 'Review purged successfully']);
 }
 
 sendResponse(['error' => 'Admin route not found'], 404);

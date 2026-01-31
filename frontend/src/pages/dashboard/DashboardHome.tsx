@@ -233,7 +233,7 @@ export default function DashboardHome() {
             </p>
           </div>
           {!isStaff && (
-            <Button onClick={() => navigate("/dashboard/create-salon")} className="bg-slate-900 text-white rounded-2xl h-14 px-10 font-bold shadow-xl transition-all transform hover:scale-105">
+            <Button onClick={() => navigate("/salon/create-salon")} className="bg-[#F2A93B] text-white rounded-2xl h-14 px-10 font-bold shadow-xl transition-all transform hover:scale-105">
               Create Your Salon
             </Button>
           )}
@@ -322,7 +322,7 @@ export default function DashboardHome() {
               <RefreshCw className={`w-4 h-4 text-slate-500 ${refreshing ? 'animate-spin' : ''}`} />
             </Button>
             <Button
-              onClick={() => navigate("/dashboard/appointments")}
+              onClick={() => navigate("/salon/appointments")}
               className="h-12 px-6 bg-[#F2A93B] hover:bg-[#E29A2B] text-white rounded-xl font-bold shadow-lg transition-all flex items-center gap-2"
             >
               <Plus className="w-4 h-4" />
@@ -342,7 +342,7 @@ export default function DashboardHome() {
             >
               <Card className={cn(
                 "border-none shadow-[0_15px_40px_-15px_rgba(0,0,0,0.04)] rounded-[2rem] overflow-hidden transition-all hover:shadow-[0_25px_60px_-15px_rgba(0,0,0,0.08)]",
-                stat.color === 'bg-[#F2A93B]' ? 'bg-[#F2A93B] text-white' : stat.color === 'bg-slate-900' ? 'bg-slate-900 text-white' : 'bg-white'
+                stat.color === 'bg-[#F2A93B]' || stat.color === 'bg-slate-900' ? 'bg-[#F2A93B] text-white' : 'bg-white'
               )}>
                 <CardContent className="p-7 space-y-4">
                   <div className="flex items-center justify-between">
@@ -385,7 +385,7 @@ export default function DashboardHome() {
                   {pendingBookings.length} Awaiting
                 </Badge>
               </div>
-              <Button variant="ghost" onClick={() => navigate("/dashboard/appointments")} className="text-[10px] font-bold uppercase tracking-widest text-slate-400 hover:text-slate-900 hover:bg-transparent">
+              <Button variant="ghost" onClick={() => navigate("/salon/appointments")} className="text-[10px] font-bold uppercase tracking-widest text-slate-400 hover:text-slate-900 hover:bg-transparent">
                 View Register <ChevronRight className="w-3 h-3 ml-1" />
               </Button>
             </div>
@@ -473,10 +473,10 @@ export default function DashboardHome() {
 
             <div className="grid grid-cols-1 gap-4">
               {[
-                { label: "Our Services", icon: Scissors, path: "/dashboard/services", desc: "Manage treatment catalog", color: "text-orange-500", bg: "bg-orange-50" },
-                { label: "Team Management", icon: Users2, path: "/dashboard/staff", desc: "Staff & specialist profiles", color: "text-blue-500", bg: "bg-blue-50" },
-                { label: "Customer List", icon: Users, path: "/dashboard/customers", desc: "View customer history", color: "text-purple-500", bg: "bg-purple-50" },
-                { label: "Analytics", icon: BarChart3, path: "/dashboard/reports", desc: "Performance reports", color: "text-emerald-500", bg: "bg-emerald-50" },
+                { label: "Our Services", icon: Scissors, path: "/salon/services", desc: "Manage treatment catalog", color: "text-orange-500", bg: "bg-orange-50" },
+                { label: "Team Management", icon: Users2, path: "/salon/staff", desc: "Staff & specialist profiles", color: "text-blue-500", bg: "bg-blue-50" },
+                { label: "Customer List", icon: Users, path: "/salon/customers", desc: "View customer history", color: "text-purple-500", bg: "bg-purple-50" },
+                { label: "Analytics", icon: BarChart3, path: "/salon/reports", desc: "Performance reports", color: "text-emerald-500", bg: "bg-emerald-50" },
               ].map(item => (
                 <button
                   key={item.label}

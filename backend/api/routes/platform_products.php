@@ -55,8 +55,8 @@ if ($method === 'POST' && count($uriParts) === 1) {
 
     $id = Auth::generateUuid();
     $stmt = $db->prepare("
-        INSERT INTO platform_products (id, name, description, price, discount, stock_quantity, image_url, image_url_2, image_url_3, image_url_4, category, brand, target_audience, features)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        INSERT INTO platform_products (id, name, description, price, discount, stock_quantity, image_url, image_public_id, image_url_2, image_2_public_id, image_url_3, image_3_public_id, image_url_4, image_4_public_id, category, brand, target_audience, features)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     ");
 
     $stmt->execute([
@@ -67,9 +67,13 @@ if ($method === 'POST' && count($uriParts) === 1) {
         $data['discount'] ?? 0,
         $data['stock_quantity'] ?? 0,
         $data['image_url'] ?? null,
+        $data['image_public_id'] ?? null,
         $data['image_url_2'] ?? null,
+        $data['image_2_public_id'] ?? null,
         $data['image_url_3'] ?? null,
+        $data['image_3_public_id'] ?? null,
         $data['image_url_4'] ?? null,
+        $data['image_4_public_id'] ?? null,
         $data['category'] ?? 'General',
         $data['brand'] ?? null,
         $data['target_audience'] ?? 'both',
@@ -93,9 +97,13 @@ if ($method === 'PUT' && count($uriParts) === 2) {
             discount = COALESCE(?, discount),
             stock_quantity = COALESCE(?, stock_quantity),
             image_url = COALESCE(?, image_url),
+            image_public_id = COALESCE(?, image_public_id),
             image_url_2 = COALESCE(?, image_url_2),
+            image_2_public_id = COALESCE(?, image_2_public_id),
             image_url_3 = COALESCE(?, image_url_3),
+            image_3_public_id = COALESCE(?, image_3_public_id),
             image_url_4 = COALESCE(?, image_url_4),
+            image_4_public_id = COALESCE(?, image_4_public_id),
             category = COALESCE(?, category),
             brand = COALESCE(?, brand),
             target_audience = COALESCE(?, target_audience),
@@ -111,9 +119,13 @@ if ($method === 'PUT' && count($uriParts) === 2) {
         $data['discount'] ?? null,
         $data['stock_quantity'] ?? null,
         $data['image_url'] ?? null,
+        $data['image_public_id'] ?? null,
         $data['image_url_2'] ?? null,
+        $data['image_2_public_id'] ?? null,
         $data['image_url_3'] ?? null,
+        $data['image_3_public_id'] ?? null,
         $data['image_url_4'] ?? null,
+        $data['image_4_public_id'] ?? null,
         $data['category'] ?? null,
         $data['brand'] ?? null,
         $data['target_audience'] ?? null,

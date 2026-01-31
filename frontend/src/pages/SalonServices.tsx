@@ -45,6 +45,8 @@ interface Salon {
     email: string;
     logo_url: string;
     cover_image_url: string;
+    rating?: number | string;
+    review_count?: number;
 }
 
 export default function SalonServices() {
@@ -154,10 +156,21 @@ export default function SalonServices() {
                                 {salon.name.split(' ').slice(1).join(' ')}
                             </h1>
                             <p className="text-sm font-medium text-slate-500">{salon.address}, {salon.city}.</p>
-                            <div className="flex items-center gap-0.5 mt-1">
-                                {[1, 2, 3, 4, 5].map((star) => (
-                                    <Star key={star} className="w-4 h-4 fill-amber-400 text-amber-400" />
-                                ))}
+                            <div className="flex items-center gap-2 mt-1">
+                                <div className="flex items-center gap-0.5">
+                                    {[1, 2, 3, 4, 5].map((star) => (
+                                        <Star
+                                            key={star}
+                                            className={`w-4 h-4 ${star <= Math.floor(Number(salon.rating || 0)) ? "fill-amber-400 text-amber-400" : "text-slate-200"}`}
+                                        />
+                                    ))}
+                                </div>
+                                <span className="text-sm font-black text-slate-900 ml-1">
+                                    {(Number(salon.rating || 0)).toFixed(1)}
+                                </span>
+                                <span className="text-xs font-medium text-slate-400">
+                                    ({salon.review_count || 0} reviews)
+                                </span>
                             </div>
                         </div>
                     </div>
@@ -282,7 +295,6 @@ export default function SalonServices() {
                     </div>
                 )}
             </main>
-
             <Footer />
         </div>
     );

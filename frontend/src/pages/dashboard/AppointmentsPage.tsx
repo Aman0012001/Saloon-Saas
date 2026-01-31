@@ -24,6 +24,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { CalendarView } from "@/components/dashboard/CalendarView";
+import { TreatmentRecordModal } from "@/components/dashboard/TreatmentRecordModal";
 import { sendAppointmentConfirmation } from "@/utils/whatsapp";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Label } from "@/components/ui/label";
@@ -164,6 +165,7 @@ export default function AppointmentsPage() {
   const [followupDate, setFollowupDate] = useState("");
   const [followupTime, setFollowupTime] = useState("09:00");
   const [selectedBookingForFollowup, setSelectedBookingForFollowup] = useState<any>(null);
+  const [selectedRecordBooking, setSelectedRecordBooking] = useState<any>(null);
 
   const handleScheduleFollowup = (booking: any) => {
     setSelectedBookingForFollowup(booking);
@@ -651,7 +653,7 @@ export default function AppointmentsPage() {
               variant={statusFilter === "all" ? "default" : "outline"}
               size="sm"
               onClick={() => setStatusFilter("all")}
-              className={`flex-shrink-0 font-bold ${statusFilter === "all" ? "bg-slate-900 text-white" : ""}`}
+              className={`flex-shrink-0 font-bold ${statusFilter === "all" ? "bg-[#F2A93B] text-white" : ""}`}
             >
               All
             </Button>
@@ -922,7 +924,7 @@ export default function AppointmentsPage() {
                                 </DropdownMenuItem>
                               )}
                               {booking.status === "completed" && (
-                                <DropdownMenuItem onClick={() => navigate(`/dashboard/customers/${booking.user_id}?tab=history&bookingId=${booking.id}`)} className="rounded-xl py-3 font-bold text-blue-600 focus:bg-blue-50">
+                                <DropdownMenuItem onClick={() => setSelectedRecordBooking(booking)} className="rounded-xl py-3 font-bold text-blue-600 focus:bg-blue-50">
                                   <FileText className="w-4 h-4 mr-3" />
                                   Edit Treatment Record
                                 </DropdownMenuItem>
@@ -935,7 +937,7 @@ export default function AppointmentsPage() {
                                 </DropdownMenuItem>
                               )}
 
-                              <DropdownMenuItem onClick={() => navigate(`/dashboard/customers/${booking.user_id}`)} className="rounded-xl py-3 font-bold">
+                              <DropdownMenuItem onClick={() => navigate(`/salon/customers/${booking.user_id}`)} className="rounded-xl py-3 font-bold">
                                 <User className="w-4 h-4 mr-3" />
                                 View Customer Profile
                               </DropdownMenuItem>
@@ -1053,6 +1055,14 @@ export default function AppointmentsPage() {
           </DialogContent>
         </Dialog>
       </div>
+      <TreatmentRecordModal
+        booking={selectedRecordBooking}
+        open={!!selectedRecordBooking}
+        onOpenChange={(open) => {
+          if (!open) setSelectedRecordBooking(null);
+        }}
+      />
+
     </ResponsiveDashboardLayout>
   );
 }

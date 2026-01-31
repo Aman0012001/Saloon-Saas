@@ -194,7 +194,7 @@ export default function StaffMessagesPage() {
                                     <Button
                                         onClick={handleSendMessage}
                                         disabled={sending || !composeData.content.trim()}
-                                        className="w-full h-14 bg-slate-900 hover:bg-black text-white rounded-2xl font-black text-xs uppercase tracking-widest transition-all"
+                                        className="w-full h-14 bg-[#F2A93B] hover:bg-[#E29A2B] text-white rounded-2xl font-black text-xs uppercase tracking-widest transition-all"
                                     >
                                         {sending ? <Loader2 className="w-5 h-5 animate-spin" /> : "TRANSMIT SIGNAL"}
                                     </Button>
@@ -255,7 +255,7 @@ export default function StaffMessagesPage() {
                                         }}
                                         className={cn(
                                             "border-none shadow-sm rounded-[2rem] cursor-pointer transition-all hover:shadow-xl",
-                                            activeMessage?.id === msg.id ? "bg-slate-900 text-white" : "bg-white",
+                                            activeMessage?.id === msg.id ? "bg-[#F2A93B] text-white" : "bg-white",
                                             activeTab === 'inbox' && !msg.is_read && activeMessage?.id !== msg.id && "ring-2 ring-[#F2A93B]/20"
                                         )}
                                     >
@@ -301,7 +301,7 @@ export default function StaffMessagesPage() {
                                     {/* Message Header */}
                                     <div className="flex items-start justify-between pb-10 border-b border-slate-50">
                                         <div className="flex items-center gap-6">
-                                            <div className="w-16 h-16 rounded-[1.5rem] bg-slate-900 text-white flex items-center justify-center text-xl font-black shadow-2xl">
+                                            <div className="w-16 h-16 rounded-[1.5rem] bg-[#F2A93B] text-white flex items-center justify-center text-xl font-black shadow-2xl">
                                                 {(activeTab === 'inbox' ? activeMessage.sender_name : activeMessage.recipient_type)[0].toUpperCase()}
                                             </div>
                                             <div>
@@ -350,7 +350,7 @@ export default function StaffMessagesPage() {
                                                     });
                                                     setIsComposeOpen(true);
                                                 }}
-                                                className="h-14 px-10 bg-slate-900 hover:bg-black text-white font-black text-[10px] uppercase tracking-[0.2em] rounded-2xl shadow-xl transition-all flex items-center gap-4"
+                                                className="h-14 px-10 bg-[#F2A93B] hover:bg-[#E29A2B] text-white font-black text-[10px] uppercase tracking-[0.2em] rounded-2xl shadow-xl transition-all flex items-center gap-4"
                                             >
                                                 <Send className="w-4 h-4" /> Reply Signal
                                             </Button>

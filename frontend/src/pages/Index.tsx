@@ -24,6 +24,8 @@ import { Badge } from "@/components/ui/badge";
 import { useMobile } from "@/hooks/use-mobile";
 import api from "@/services/api";
 import { getImageUrl } from "@/utils/imageUrl";
+import { useAuth } from "@/hooks/useAuth";
+import { useToast } from "@/hooks/use-toast";
 
 // Original website components
 import Navbar from "@/components/Navbar";
@@ -36,18 +38,26 @@ import PricingSection from "@/components/PricingSection";
 import TestimonialsSection from "@/components/TestimonialsSection";
 import SalonOwnerCTA from "@/components/SalonOwnerCTA";
 import TrialBenefits from "@/components/TrialBenefits";
-import Footer from "@/components/Footer";
 
 const Index = () => {
   const navigate = useNavigate();
   const isMobile = useMobile();
-  const [currentTime, setCurrentTime] = useState(new Date());
   const [featuredSalons, setFeaturedSalons] = useState<any[]>([]);
+  const { user } = useAuth();
+  const { toast } = useToast();
 
-  useEffect(() => {
-    const timer = setInterval(() => setCurrentTime(new Date()), 1000);
-    return () => clearInterval(timer);
-  }, []);
+  const handleBooking = (salonId: string) => {
+    if (!user) {
+      toast({
+        title: "Registration Required",
+        description: "To reserve your spot in our local registry, please sign up or log in first.",
+        variant: "default",
+      });
+      navigate("/signup");
+      return;
+    }
+    navigate(`/book?salonId=${salonId}`);
+  };
 
   useEffect(() => {
     const fetchFeatured = async () => {
@@ -63,10 +73,10 @@ const Index = () => {
         if (salonsArray.length > 0) {
           const featured = salonsArray.slice(0, 3).map((s: any) => ({
             ...s,
-            rating: 4.8,
-            reviews: 120,
+            rating: Number(s.rating || 0).toFixed(1),
+            reviews: s.review_count || 0,
             distance: "0.8 km",
-            price: "RM 499+"
+            price: "RM 29+"
           }));
           console.log("Featured salons:", featured);
           setFeaturedSalons(featured);
@@ -106,9 +116,6 @@ const Index = () => {
           <PricingSection />
         </div>
         <TestimonialsSection />
-        <div id="contact">
-          <Footer />
-        </div>
       </div>
     );
   }
@@ -173,9 +180,21 @@ const Index = () => {
           {featuredSalons.length === 0 ? (
             <div className="h-40 bg-slate-50 rounded-[2rem] border-2 border-dashed border-slate-100 flex items-center justify-center text-slate-400 font-bold">Syncing local records...</div>
           ) : featuredSalons.map(salon => (
-            <Card key={salon.id} onClick={() => navigate(`/book?salonId=${salon.id}`)} className="border-none shadow-sm bg-white rounded-[2rem] p-4 flex gap-4 hover:shadow-xl transition-all">
-              <div className="w-24 h-24 bg-slate-900 rounded-3xl flex items-center justify-center overflow-hidden flex-shrink-0">
-                <img src={getImageUrl(salon.logo_url)} className="w-full h-full object-cover opacity-50" />
+            <Card key={salon.id} onClick={() => handleBooking(salon.id)} className="border-none shadow-sm bg-white rounded-[2rem] p-4 flex gap-4 hover:shadow-xl transition-all">
+              <div className="w-24 h-24 bg-slate-100 rounded-3xl flex items-center justify-center overflow-hidden flex-shrink-0 relative">
+                <img
+                  src={getImageUrl(salon.cover_image_url, 'cover', salon.id)}
+                  className="w-full h-full object-cover"
+                  alt={salon.name}
+                />
+                <div className="absolute top-1 right-1">
+                  <div className="w-8 h-8 rounded-xl border-2 border-white bg-white overflow-hidden shadow-md">
+                    <img
+                      src={getImageUrl(salon.logo_url, 'logo', salon.id)}
+                      className="w-full h-full object-cover"
+                    />
+                  </div>
+                </div>
               </div>
               <div className="flex-1 py-1">
                 <div className="flex justify-between items-start">

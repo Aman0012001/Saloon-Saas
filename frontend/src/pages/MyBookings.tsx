@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
-import { useNavigate, Link } from "react-router-dom";
+import { useNavigate, Link, useSearchParams } from "react-router-dom";
 import { format } from "date-fns";
-import { CalendarDays, Clock, ArrowLeft, Loader2, Plus, MapPin, Phone, Scissors, Store, MessageSquare, Star, FileText } from "lucide-react";
+import { CalendarDays, Clock, ArrowLeft, Loader2, Plus, MapPin, Phone, Scissors, Store, MessageSquare, Star, FileText, Package } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -38,6 +38,12 @@ const MyBookings = () => {
   const navigate = useNavigate();
   const { toast } = useToast();
 
+  const [searchParams] = useSearchParams();
+  const [orders, setOrders] = useState<any[]>([]);
+  const [activeTab, setActiveTab] = useState<'bookings' | 'orders'>(
+    (searchParams.get('tab') as 'bookings' | 'orders') || 'bookings'
+  );
+
   const [reviewDialog, setReviewDialog] = useState<{ isOpen: boolean; booking: Booking | null; isEditing?: boolean }>({
     isOpen: false,
     booking: null,
@@ -68,7 +74,6 @@ const MyBookings = () => {
     const name = (serviceName || '').trim().toLowerCase();
     const combined = `${cat} ${name}`;
 
-    // 1. Spa Special Handling (Specific keywords in name)
     if (combined.includes('spa')) {
       const spaImages: Record<string, string> = {
         'hot stone': 'https://images.unsplash.com/photo-1544161515-4af6b1d46af0?w=800&auto=format&fit=crop',
@@ -85,7 +90,6 @@ const MyBookings = () => {
       return 'https://images.unsplash.com/photo-1544161515-4af6b1d46af0?w=800&auto=format&fit=crop';
     }
 
-    // 2. Keyword based mapping for best match
     const keywordMap: Array<{ keywords: string[], image: string }> = [
       {
         keywords: ['hair', 'cut', 'style', 'color', 'highlight', 'balayage', 'barber'],
@@ -119,7 +123,6 @@ const MyBookings = () => {
       }
     }
 
-    // 3. Absolute Fallback
     return 'https://images.unsplash.com/photo-1521590832896-76c0f2956662?w=800&auto=format&fit=crop';
   };
 
@@ -133,17 +136,33 @@ const MyBookings = () => {
     } catch (error) {
       console.error("Error fetching local bookings:", error);
     } finally {
-      setLoading(false);
+      if (activeTab === 'bookings') setLoading(false);
     }
   };
+
+  const fetchOrders = async () => {
+    if (!user) return;
+    try {
+      const data = await api.orders.getMyOrders();
+      setOrders(data || []);
+    } catch (error) {
+      console.error("Failed to fetch orders", error);
+    } finally {
+      if (activeTab === 'orders') setLoading(false);
+    }
+  }
 
   useEffect(() => {
     if (!authLoading && !user) {
       navigate("/login");
       return;
     }
-    if (user) fetchBookings();
-  }, [user, authLoading]);
+    if (user) {
+      setLoading(true);
+      if (activeTab === 'bookings') fetchBookings();
+      else fetchOrders();
+    }
+  }, [user, authLoading, activeTab]);
 
   const cancelBooking = async (bookingId: string) => {
     try {
@@ -189,6 +208,16 @@ const MyBookings = () => {
     }
   };
 
+  const getOrderStatusBadge = (status: string) => {
+    switch (status) {
+      case 'placed': return <Badge className="bg-yellow-100 text-yellow-800 border-none">Placed</Badge>;
+      case 'dispatched': return <Badge className="bg-blue-100 text-blue-800 border-none">Dispatched</Badge>;
+      case 'delivered': return <Badge className="bg-emerald-100 text-emerald-800 border-none">Delivered</Badge>;
+      case 'cancelled': return <Badge className="bg-red-100 text-red-800 border-none">Cancelled</Badge>;
+      default: return <Badge variant="secondary">{status}</Badge>;
+    }
+  };
+
   if (authLoading || loading) {
     return (
       <div className="min-h-screen bg-slate-50 flex items-center justify-center">
@@ -204,9 +233,25 @@ const MyBookings = () => {
         <div className="w-full mx-auto space-y-8">
           <div className="flex flex-col md:flex-row md:items-center justify-between gap-6">
             <div>
-              <h1 className="text-4xl font-black text-slate-900 tracking-tight">Your Sessions</h1>
-              <p className="text-slate-400 font-medium font-bold uppercase tracking-widest text-[10px] mt-1">Local Booking History</p>
+              <h1 className="text-4xl font-black text-slate-900 tracking-tight">Activity History</h1>
+              <p className="text-slate-400 font-medium font-bold uppercase tracking-widest text-[10px] mt-1">Local History</p>
             </div>
+
+            <div className="flex gap-2 bg-slate-100 p-1.5 rounded-2xl">
+              <button
+                onClick={() => setActiveTab('bookings')}
+                className={`px-6 py-2.5 rounded-xl text-sm font-bold transition-all ${activeTab === 'bookings' ? 'bg-white shadow-sm text-slate-900' : 'text-slate-400 hover:text-slate-600'}`}
+              >
+                Bookings
+              </button>
+              <button
+                onClick={() => setActiveTab('orders')}
+                className={`px-6 py-2.5 rounded-xl text-sm font-bold transition-all ${activeTab === 'orders' ? 'bg-white shadow-sm text-slate-900' : 'text-slate-400 hover:text-slate-600'}`}
+              >
+                Orders
+              </button>
+            </div>
+
             <Link to="/salons">
               <Button className="bg-accent text-white font-black rounded-2xl h-14 px-8 shadow-xl shadow-accent/20">
                 <Plus className="w-5 h-5 mr-3" /> Book Experience
@@ -214,141 +259,199 @@ const MyBookings = () => {
             </Link>
           </div>
 
-          {bookings.length === 0 ? (
-            <Card className="border-none shadow-sm bg-white rounded-[3rem] py-20 text-center space-y-4">
-              <div className="w-20 h-20 bg-slate-50 rounded-3xl flex items-center justify-center mx-auto text-slate-300">
-                <CalendarDays className="w-10 h-10" />
-              </div>
-              <div>
-                <h3 className="text-xl font-bold text-slate-900">No appointments found</h3>
-                <p className="text-slate-400 font-medium">Your local booking archive is empty.</p>
-              </div>
-            </Card>
-          ) : (
-            <div className="space-y-4">
-              {bookings.map(booking => (
-                <Card key={booking.id} className="border-none shadow-sm bg-white rounded-[2.5rem] overflow-hidden group hover:shadow-xl transition-all">
-                  <CardContent className="p-0">
-                    <div className="p-6 md:p-8 flex flex-col lg:flex-row lg:items-center justify-between gap-8">
-                      {/* 1. Service & Salon Info */}
-                      <div className="flex items-start gap-5 flex-grow min-w-0">
-                        <div className="w-16 h-16 md:w-20 md:h-20 bg-slate-100 rounded-3xl flex-shrink-0 relative overflow-hidden group-hover:scale-105 transition-transform duration-500">
-                          <img
-                            src={getServiceImage(booking.category, booking.service_name)}
-                            alt={booking.service_name}
-                            className="w-full h-full object-cover"
-                          />
-                          <div className="absolute top-2 right-2">
-                            {getStatusBadge(booking.status)}
-                          </div>
-                        </div>
-
-                        <div className="min-w-0 space-y-1">
-                          <div className="flex items-center gap-2">
-                            <Store className="w-3.5 h-3.5 text-accent" />
-                            <p className="text-[11px] font-black uppercase text-accent tracking-widest truncate">{booking.salon_name}</p>
-                          </div>
-                          <h3 className="text-xl md:text-2xl font-black text-slate-900 truncate tracking-tight">{booking.service_name}</h3>
-                          <div className="flex items-center gap-2 text-slate-400 mt-1.5">
-                            <MapPin className="w-4 h-4 flex-shrink-0" />
-                            <p className="text-sm font-medium truncate">{booking.salon_address}{booking.salon_city ? `, ${booking.salon_city}` : ''}</p>
-                          </div>
-                        </div>
-                      </div>
-
-                      {/* 2. Date & Time Pill */}
-                      <div className="flex-shrink-0 bg-slate-50 border border-slate-100/50 rounded-3xl px-8 py-4 flex items-center gap-8 justify-center lg:justify-start">
-                        <div className="text-center">
-                          <p className="text-[10px] font-black uppercase text-slate-400 tracking-widest mb-1">Session Date</p>
-                          <p className="text-lg font-black text-slate-800">{format(new Date(booking.booking_date), "MMM dd")}</p>
-                        </div>
-                        <div className="w-px h-8 bg-slate-200" />
-                        <div className="text-center">
-                          <p className="text-[10px] font-black uppercase text-slate-400 tracking-widest mb-1">Start Time</p>
-                          <p className="text-lg font-black text-slate-800">{booking.booking_time.slice(0, 5)}</p>
-                        </div>
-                      </div>
-
-                      {/* 3. Price & Actions */}
-                      <div className="flex items-center justify-between lg:justify-end gap-6 flex-shrink-0 pt-4 lg:pt-0 border-t lg:border-t-0 border-slate-100">
-                        <div>
-                          <p className="text-3xl font-black text-slate-900 tracking-tight">RM {booking.price}</p>
-                          <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest text-right">{booking.duration_minutes} MINS</p>
-                        </div>
-
-                        <div className="flex items-center gap-3">
-                          {booking.status === 'completed' && (
-                            <div className="flex flex-col gap-2">
-                              {!reviewedBookings.has(booking.id) && (
-                                <Button
-                                  onClick={() => {
-                                    setReviewDialog({ isOpen: true, booking, isEditing: false });
-                                    setRating(5);
-                                    setComment("");
-                                  }}
-                                  className="bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-2xl h-11 px-6 shadow-lg shadow-blue-600/20"
-                                >
-                                  <MessageSquare className="w-4 h-4 mr-2" /> Leave Feedback
-                                </Button>
-                              )}
-                              <Button
-                                asChild
-                                variant="outline"
-                                className="h-11 rounded-2xl font-bold border-slate-200 text-slate-600"
-                              >
-                                <Link to="/my-sessions">
-                                  <FileText className="w-4 h-4 mr-2" /> View Clinical Details
-                                </Link>
-                              </Button>
+          {activeTab === 'bookings' ? (
+            bookings.length === 0 ? (
+              <Card className="border-none shadow-sm bg-white rounded-[3rem] py-20 text-center space-y-4">
+                <div className="w-20 h-20 bg-slate-50 rounded-3xl flex items-center justify-center mx-auto text-slate-300">
+                  <CalendarDays className="w-10 h-10" />
+                </div>
+                <div>
+                  <h3 className="text-xl font-bold text-slate-900">No appointments found</h3>
+                  <p className="text-slate-400 font-medium">Your local booking archive is empty.</p>
+                </div>
+              </Card>
+            ) : (
+              <div className="space-y-4">
+                {bookings.map(booking => (
+                  <Card key={booking.id} className="border-none shadow-sm bg-white rounded-[2.5rem] overflow-hidden group hover:shadow-xl transition-all">
+                    <CardContent className="p-0">
+                      <div className="p-6 md:p-8 flex flex-col lg:flex-row lg:items-center justify-between gap-8">
+                        {/* 1. Service & Salon Info */}
+                        <div className="flex items-start gap-5 flex-grow min-w-0">
+                          <div className="w-16 h-16 md:w-20 md:h-20 bg-slate-100 rounded-3xl flex-shrink-0 relative overflow-hidden group-hover:scale-105 transition-transform duration-500">
+                            <img
+                              src={getServiceImage(booking.category, booking.service_name)}
+                              alt={booking.service_name}
+                              className="w-full h-full object-cover"
+                            />
+                            <div className="absolute top-2 right-2">
+                              {getStatusBadge(booking.status)}
                             </div>
-                          )}
+                          </div>
 
-                          {reviewedBookings.has(booking.id) && (
-                            <Button
-                              variant="secondary"
-                              onClick={async () => {
-                                try {
-                                  const res = await api.bookings.getReview(booking.id);
-                                  if (res?.review) {
-                                    setRating(res.review.rating);
-                                    setComment(res.review.comment);
-                                    setReviewDialog({ isOpen: true, booking, isEditing: true });
+                          <div className="min-w-0 space-y-1">
+                            <div className="flex items-center gap-2">
+                              <Store className="w-3.5 h-3.5 text-accent" />
+                              <p className="text-[11px] font-black uppercase text-accent tracking-widest truncate">{booking.salon_name}</p>
+                            </div>
+                            <h3 className="text-xl md:text-2xl font-black text-slate-900 truncate tracking-tight">{booking.service_name}</h3>
+                            <div className="flex items-center gap-2 text-slate-400 mt-1.5">
+                              <MapPin className="w-4 h-4 flex-shrink-0" />
+                              <p className="text-sm font-medium truncate">{booking.salon_address}{booking.salon_city ? `, ${booking.salon_city}` : ''}</p>
+                            </div>
+                          </div>
+                        </div>
+
+                        {/* 2. Date & Time Pill */}
+                        <div className="flex-shrink-0 bg-slate-50 border border-slate-100/50 rounded-3xl px-8 py-4 flex items-center gap-8 justify-center lg:justify-start">
+                          <div className="text-center">
+                            <p className="text-[10px] font-black uppercase text-slate-400 tracking-widest mb-1">Session Date</p>
+                            <p className="text-lg font-black text-slate-800">{format(new Date(booking.booking_date), "MMM dd")}</p>
+                          </div>
+                          <div className="w-px h-8 bg-slate-200" />
+                          <div className="text-center">
+                            <p className="text-[10px] font-black uppercase text-slate-400 tracking-widest mb-1">Start Time</p>
+                            <p className="text-lg font-black text-slate-800">{booking.booking_time.slice(0, 5)}</p>
+                          </div>
+                        </div>
+
+                        {/* 3. Price & Actions */}
+                        <div className="flex items-center justify-between lg:justify-end gap-6 flex-shrink-0 pt-4 lg:pt-0 border-t lg:border-t-0 border-slate-100">
+                          <div>
+                            <p className="text-3xl font-black text-slate-900 tracking-tight">RM {booking.price}</p>
+                            <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest text-right">{booking.duration_minutes} MINS</p>
+                          </div>
+
+                          <div className="flex items-center gap-3">
+                            {booking.status === 'completed' && (
+                              <div className="flex flex-col gap-2">
+                                {!reviewedBookings.has(booking.id) && (
+                                  <Button
+                                    onClick={() => {
+                                      setReviewDialog({ isOpen: true, booking, isEditing: false });
+                                      setRating(5);
+                                      setComment("");
+                                    }}
+                                    className="bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-2xl h-11 px-6 shadow-lg shadow-blue-600/20"
+                                  >
+                                    <MessageSquare className="w-4 h-4 mr-2" /> Leave Feedback
+                                  </Button>
+                                )}
+                                <Button
+                                  asChild
+                                  variant="outline"
+                                  className="h-11 rounded-2xl font-bold border-slate-200 text-slate-600"
+                                >
+                                  <Link to={`/my-bookings/${booking.id}/treatment`}>
+                                    <FileText className="w-4 h-4 mr-2" /> View Clinical Details
+                                  </Link>
+                                </Button>
+                              </div>
+                            )}
+
+                            {reviewedBookings.has(booking.id) && (
+                              <Button
+                                variant="secondary"
+                                onClick={async () => {
+                                  try {
+                                    const res = await api.bookings.getReview(booking.id);
+                                    if (res?.review) {
+                                      setRating(res.review.rating);
+                                      setComment(res.review.comment);
+                                      setReviewDialog({ isOpen: true, booking, isEditing: true });
+                                    }
+                                  } catch (e) {
+                                    console.error("Failed to fetch review", e);
                                   }
-                                } catch (e) {
-                                  console.error("Failed to fetch review", e);
-                                }
-                              }}
-                              className="bg-slate-100 hover:bg-slate-200 text-slate-600 font-bold h-12 px-5 rounded-2xl"
-                            >
-                              <Star className="w-4 h-4 mr-2 text-amber-500 fill-amber-500" /> My Review
-                            </Button>
-                          )}
+                                }}
+                                className="bg-slate-100 hover:bg-slate-200 text-slate-600 font-bold h-12 px-5 rounded-2xl"
+                              >
+                                <Star className="w-4 h-4 mr-2 text-amber-500 fill-amber-500" /> My Review
+                              </Button>
+                            )}
 
-                          {(booking.status === 'pending' || booking.status === 'confirmed') && (
-                            <Button
-                              variant="outline"
-                              onClick={() => cancelBooking(booking.id)}
-                              className="h-12 border-2 border-red-50 text-red-500 hover:bg-red-50 hover:text-red-600 hover:border-red-100 rounded-2xl font-bold px-6 transition-colors"
-                            >
-                              Cancel
-                            </Button>
-                          )}
+                            {(booking.status === 'pending' || booking.status === 'confirmed') && (
+                              <Button
+                                variant="outline"
+                                onClick={() => cancelBooking(booking.id)}
+                                className="h-12 border-2 border-red-50 text-red-500 hover:bg-red-50 hover:text-red-600 hover:border-red-100 rounded-2xl font-bold px-6 transition-colors"
+                              >
+                                Cancel
+                              </Button>
+                            )}
+                          </div>
                         </div>
                       </div>
-                    </div>
-                    {booking.notes && (
-                      <div className="bg-slate-50 px-8 py-4 border-t border-slate-100 italic text-xs text-slate-500 font-medium">
-                        Note for Stylist: {booking.notes}
+                      {booking.notes && (
+                        <div className="bg-slate-50 px-8 py-4 border-t border-slate-100 italic text-xs text-slate-500 font-medium">
+                          Note for Stylist: {booking.notes}
+                        </div>
+                      )}
+                    </CardContent>
+                  </Card>
+                ))}
+              </div>
+            )
+          ) : (
+            orders.length === 0 ? (
+              <Card className="border-none shadow-sm bg-white rounded-[3rem] py-20 text-center space-y-4">
+                <Package className="w-20 h-20 bg-slate-50 rounded-3xl p-5 mx-auto text-slate-300" />
+                <div>
+                  <h3 className="text-xl font-bold text-slate-900">No orders found</h3>
+                  <p className="text-slate-400 font-medium">You haven't placed any orders yet.</p>
+                </div>
+                <Link to="/shop">
+                  <Button variant="outline" className="mt-4 rounded-xl">Go Shopping</Button>
+                </Link>
+              </Card>
+            ) : (
+              <div className="space-y-4">
+                {orders.map(order => (
+                  <Card key={order.id} className="border-none shadow-sm bg-white rounded-[2.5rem] overflow-hidden group hover:shadow-xl transition-all">
+                    <CardContent className="p-0">
+                      <div className="p-8 flex flex-col lg:flex-row lg:items-center justify-between gap-8">
+                        <div className="flex items-start gap-4">
+                          <div className="w-16 h-16 bg-blue-50 rounded-2xl flex items-center justify-center text-blue-500">
+                            <Package className="w-8 h-8" />
+                          </div>
+                          <div>
+                            <h3 className="text-xl font-bold text-[#1A1A1A]">Order #{order.id.slice(0, 8)}</h3>
+                            <p className="text-slate-400 text-sm">{new Date(order.created_at).toLocaleDateString()}</p>
+                            <div className="mt-2">
+                              {getOrderStatusBadge(order.status)}
+                            </div>
+                          </div>
+                        </div>
+
+                        <div className="flex-1 lg:max-w-md">
+                          <div className="space-y-1">
+                            {Array.isArray(order.items) && order.items.map((item: any, idx: number) => (
+                              <div key={idx} className="flex justify-between text-sm">
+                                <span className="text-slate-600">{item.name} x{item.quantity}</span>
+                                <span className="font-bold">RM {(item.price * item.quantity).toFixed(2)}</span>
+                              </div>
+                            ))}
+                          </div>
+                          <div className="mt-4 pt-4 border-t border-slate-100 flex justify-between font-bold text-lg">
+                            <span>Total</span>
+                            <span>RM {parseFloat(order.total_amount).toFixed(2)}</span>
+                          </div>
+                        </div>
+
+                        <div>
+                          {/* Use specific icons later */}
+                        </div>
                       </div>
-                    )}
-                  </CardContent>
-                </Card>
-              ))}
-            </div>
+                    </CardContent>
+                  </Card>
+                ))}
+              </div>
+            )
           )}
         </div>
       </div>
 
+      {/* Review Dialog ... */}
       <Dialog open={reviewDialog.isOpen} onOpenChange={(open) => !open && setReviewDialog({ isOpen: false, booking: null })}>
         <DialogContent className="rounded-[3rem] border-none shadow-2xl p-10 max-w-lg">
           <DialogHeader>

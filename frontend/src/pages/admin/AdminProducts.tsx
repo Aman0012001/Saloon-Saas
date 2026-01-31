@@ -148,7 +148,7 @@ export default function AdminProducts() {
                         </div>
 
                         <Button
-                            onClick={() => navigate("/admin/products/add")}
+                            onClick={() => navigate("/super-admin/products/add")}
                             className="bg-[#2563EB] hover:bg-[#1D4ED8] text-white px-8 h-11 font-bold rounded-lg shadow-sm flex items-center gap-2"
                         >
                             Add New Product
@@ -274,7 +274,7 @@ export default function AdminProducts() {
                                                         <Button
                                                             variant="outline"
                                                             size="sm"
-                                                            onClick={() => navigate(`/admin/products/add?id=${product.id}`)}
+                                                            onClick={() => navigate(`/super-admin/products/add?id=${product.id}`)}
                                                             className="bg-white border-slate-200 text-slate-600 hover:bg-blue-50 hover:text-blue-600 hover:border-blue-200 h-9 font-bold flex items-center gap-2 px-4 rounded-xl transition-all shadow-sm"
                                                         >
                                                             <Edit2 className="w-3.5 h-3.5" /> Edit

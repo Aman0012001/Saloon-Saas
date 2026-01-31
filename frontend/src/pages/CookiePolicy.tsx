@@ -74,7 +74,6 @@ const CookiePolicy = () => {
                     </section>
                 </div>
             </main>
-
             <Footer />
         </div>
     );

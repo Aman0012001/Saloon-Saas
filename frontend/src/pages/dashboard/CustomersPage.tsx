@@ -531,7 +531,7 @@ export default function CustomersPage() {
                   return (
                     <div
                       key={customer.user_id}
-                      onClick={() => navigate(`/dashboard/customers/${customer.user_id}`)}
+                      onClick={() => navigate(`/salon/customers/${customer.user_id}`)}
                       className={`group flex items-center ${isMobile ? 'gap-3 p-3' : 'gap-4 p-4'} rounded-lg bg-gradient-to-r from-secondary/10 to-secondary/5 hover:from-secondary/20 hover:to-secondary/10 transition-all duration-200 border border-border/20 hover:border-border/40 cursor-pointer`}
                     >
                       <Avatar className={`${isMobile ? 'w-10 h-10' : 'w-12 h-12'} ring-2 ring-accent/20`}>
@@ -628,14 +628,14 @@ export default function CustomersPage() {
                           </DropdownMenuItem>
                           <DropdownMenuItem
                             className="hover:bg-secondary/50"
-                            onClick={() => navigate(`/dashboard/customers/${customer.user_id}`)}
+                            onClick={() => navigate(`/salon/customers/${customer.user_id}`)}
                           >
                             <Users className="w-4 h-4 mr-2" />
                             View Customer Details
                           </DropdownMenuItem>
                           <DropdownMenuItem
                             className="hover:bg-secondary/50"
-                            onClick={() => navigate(`/dashboard/customers/${customer.user_id}`)}
+                            onClick={() => navigate(`/salon/customers/${customer.user_id}`)}
                           >
                             <ChevronRight className="w-4 h-4 mr-2" />
                             View History

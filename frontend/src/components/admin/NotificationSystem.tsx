@@ -35,7 +35,7 @@ export function NotificationSystem() {
 
       const mapped = data.map((n: any) => ({
         id: n.id,
-        type: n.type === 'booking' ? 'success' : n.type === 'system' ? 'info' : 'warning',
+        type: (n.type === 'booking' ? 'success' : n.type === 'system' ? 'info' : 'warning') as 'info' | 'warning' | 'success' | 'pending',
         title: n.title,
         message: n.message,
         timestamp: n.created_at,
@@ -63,6 +63,15 @@ export function NotificationSystem() {
       setNotifications(prev => prev.map(n => n.id === id ? { ...n, read: true } : n));
     } catch (error) {
       console.error('Failed to mark admin notification as read:', error);
+    }
+  };
+
+  const deleteNotification = async (id: string) => {
+    try {
+      await api.notifications.delete(id);
+      setNotifications(prev => prev.filter(n => n.id !== id));
+    } catch (error) {
+      console.error('Failed to delete notification:', error);
     }
   };
 
@@ -118,12 +127,12 @@ export function NotificationSystem() {
                       <div className="flex-1 min-w-0">
                         <div className="flex items-center justify-between">
                           <h4 className="font-black text-white text-sm truncate">{n.title}</h4>
-                          <button onClick={(e) => { e.stopPropagation(); markAsRead(n.id); }} className="text-slate-600 hover:text-slate-400">
+                          <button onClick={(e) => { e.stopPropagation(); deleteNotification(n.id); }} className="text-slate-600 hover:text-slate-400">
                             <X className="w-3.5 h-3.5" />
                           </button>
                         </div>
                         <p className="text-xs font-medium text-slate-400 mt-1 leading-relaxed">{n.message}</p>
-                        <p className="text-[9px] font-bold text-slate-600 uppercase tracking-widest mt-3">
+                        <p className="text-[9px] font-bold text-slate-400 uppercase tracking-widest mt-3">
                           {format(new Date(n.timestamp), 'MMM dd, HH:mm')}
                         </p>
                       </div>

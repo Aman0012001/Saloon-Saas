@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { useSearchParams } from "react-router-dom";
 import {
   Settings,
   Save,
@@ -7,6 +8,7 @@ import {
   Bell,
   Shield,
   FileText,
+  Coins,
 } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -25,13 +27,20 @@ interface PlatformSettings {
   support_email: string;
   currency: string;
   auto_approve_salons: boolean;
+  coin_price: number;
+  coin_earning_rate: number;
+  coin_min_redemption: number;
+  coin_max_discount_percent: number;
+  coin_signup_bonus: number;
 }
 
 export default function AdminSettings() {
   const { toast } = useToast();
+  const [searchParams] = useSearchParams();
+  const tabParam = searchParams.get("tab");
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
-  const [activeTab, setActiveTab] = useState("general");
+  const [activeTab, setActiveTab] = useState(tabParam || "general");
 
   const [settings, setSettings] = useState<PlatformSettings>({
     platform_name: "GlamBook Local",
@@ -40,6 +49,11 @@ export default function AdminSettings() {
     support_email: "support@local.host",
     currency: "MYR",
     auto_approve_salons: false,
+    coin_price: 1.00,
+    coin_earning_rate: 10,
+    coin_min_redemption: 10,
+    coin_max_discount_percent: 50,
+    coin_signup_bonus: 0,
   });
 
   const fetchSettings = async () => {
@@ -55,7 +69,12 @@ export default function AdminSettings() {
           trial_days: Number(data.trial_days || settings.trial_days),
           support_email: data.support_email || settings.support_email,
           currency: data.currency || settings.currency,
-          auto_approve_salons: !!data.auto_approve_salons,
+          auto_approve_salons: data.auto_approve_salons === true || data.auto_approve_salons === "1",
+          coin_price: Number(data.coin_price || settings.coin_price),
+          coin_earning_rate: Number(data.coin_earning_rate || settings.coin_earning_rate),
+          coin_min_redemption: Number(data.coin_min_redemption || settings.coin_min_redemption),
+          coin_max_discount_percent: Number(data.coin_max_discount_percent || settings.coin_max_discount_percent),
+          coin_signup_bonus: Number(data.coin_signup_bonus || settings.coin_signup_bonus),
         });
       }
     } catch (error) {
@@ -68,6 +87,12 @@ export default function AdminSettings() {
   useEffect(() => {
     fetchSettings();
   }, []);
+
+  useEffect(() => {
+    if (tabParam) {
+      setActiveTab(tabParam);
+    }
+  }, [tabParam]);
 
   const handleSave = async () => {
     setSaving(true);
@@ -98,17 +123,18 @@ export default function AdminSettings() {
               </div>
             </div>
             <Button onClick={handleSave} disabled={saving} className="bg-accent text-white font-black rounded-xl h-14 px-8 shadow-lg shadow-accent/20">
-              {saving ? "PERSISTING..." : "COMMIT CHANGES"}
+              {saving ? "SAVING..." : "SAVE CHANGES"}
             </Button>
           </div>
         </div>
 
         <Tabs value={activeTab} onValueChange={setActiveTab}>
-          <TabsList className="bg-white p-1.5 rounded-[2rem] border border-slate-100 shadow-sm w-full lg:w-fit grid grid-cols-4 h-16 mb-8">
-            <TabsTrigger value="general" className="rounded-[1.5rem] px-8 font-bold data-[state=active]:bg-slate-900 data-[state=active]:text-white">General</TabsTrigger>
-            <TabsTrigger value="billing" className="rounded-[1.5rem] px-8 font-bold data-[state=active]:bg-slate-900 data-[state=active]:text-white">Billing</TabsTrigger>
-            <TabsTrigger value="notifications" className="rounded-[1.5rem] px-8 font-bold data-[state=active]:bg-slate-900 data-[state=active]:text-white">Alerts</TabsTrigger>
-            <TabsTrigger value="legal" className="rounded-[1.5rem] px-8 font-bold data-[state=active]:bg-slate-900 data-[state=active]:text-white">Legal</TabsTrigger>
+          <TabsList className="bg-white p-1.5 rounded-[2rem] border border-slate-100 shadow-sm w-full grid grid-cols-5 h-16 mb-8">
+            <TabsTrigger value="general" className="rounded-[1.5rem] px-2 font-bold data-[state=active]:bg-slate-900 data-[state=active]:text-white">General</TabsTrigger>
+            <TabsTrigger value="billing" className="rounded-[1.5rem] px-2 font-bold data-[state=active]:bg-slate-900 data-[state=active]:text-white">Billing</TabsTrigger>
+            <TabsTrigger value="economy" className="rounded-[1.5rem] px-2 font-bold data-[state=active]:bg-slate-900 data-[state=active]:text-white">Loyalty</TabsTrigger>
+            <TabsTrigger value="notifications" className="rounded-[1.5rem] px-2 font-bold data-[state=active]:bg-slate-900 data-[state=active]:text-white">Alerts</TabsTrigger>
+            <TabsTrigger value="legal" className="rounded-[1.5rem] px-2 font-bold data-[state=active]:bg-slate-900 data-[state=active]:text-white">Legal</TabsTrigger>
           </TabsList>
 
           <TabsContent value="general" className="space-y-6 animate-in fade-in duration-500">
@@ -196,6 +222,81 @@ export default function AdminSettings() {
                     onChange={(e) => setSettings({ ...settings, currency: e.target.value })}
                     className="h-16 bg-slate-50 border-none rounded-2xl font-black px-8"
                   />
+                </div>
+              </div>
+            </Card>
+          </TabsContent>
+
+          <TabsContent value="economy" className="space-y-6 animate-in fade-in duration-500">
+            <Card className="border-none shadow-sm bg-white rounded-[2.5rem] p-10">
+              <div className="flex items-center gap-4 mb-10">
+                <div className="w-12 h-12 bg-amber-100 rounded-2xl flex items-center justify-center">
+                  <Coins className="w-6 h-6 text-amber-600" />
+                </div>
+                <h3 className="text-2xl font-black text-slate-900">Loyalty Economy</h3>
+              </div>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-10">
+                <div className="space-y-4">
+                  <Label className="text-[10px] font-black uppercase text-slate-400 tracking-widest ml-1">Point Valuation ({settings.currency})</Label>
+                  <div className="relative">
+                    <div className="absolute left-6 top-1/2 -translate-y-1/2 font-bold text-slate-400">1 Point =</div>
+                    <Input
+                      type="number"
+                      step="0.01"
+                      value={settings.coin_price}
+                      onChange={(e) => setSettings({ ...settings, coin_price: Number(e.target.value) })}
+                      className="h-16 bg-slate-50 border-none rounded-2xl font-black pl-24 pr-8 text-2xl"
+                    />
+                  </div>
+                  <p className="text-xs font-bold text-slate-400 mt-2 uppercase">Value of one platform point in {settings.currency}.</p>
+                </div>
+                <div className="space-y-4">
+                  <Label className="text-[10px] font-black uppercase text-slate-400 tracking-widest ml-1">Earning Rule</Label>
+                  <div className="relative">
+                    <div className="absolute left-6 top-1/2 -translate-y-1/2 font-bold text-slate-400">1 Point per</div>
+                    <Input
+                      type="number"
+                      value={settings.coin_earning_rate}
+                      onChange={(e) => setSettings({ ...settings, coin_earning_rate: Number(e.target.value) })}
+                      className="h-16 bg-slate-50 border-none rounded-2xl font-black pl-32 pr-12 text-2xl"
+                    />
+                    <div className="absolute right-6 top-1/2 -translate-y-1/2 font-bold text-slate-400">{settings.currency}</div>
+                  </div>
+                  <p className="text-xs font-bold text-slate-400 mt-2 uppercase">Amount of spending required to earn 1 point.</p>
+                </div>
+                <div className="space-y-4">
+                  <Label className="text-[10px] font-black uppercase text-slate-400 tracking-widest ml-1">Minimum Redemption</Label>
+                  <Input
+                    type="number"
+                    value={settings.coin_min_redemption}
+                    onChange={(e) => setSettings({ ...settings, coin_min_redemption: Number(e.target.value) })}
+                    className="h-16 bg-slate-50 border-none rounded-2xl font-black px-8 text-2xl"
+                  />
+                  <p className="text-xs font-bold text-slate-400 mt-2 uppercase">Minimum points required in balance to use for a booking.</p>
+                </div>
+                <div className="space-y-4">
+                  <Label className="text-[10px] font-black uppercase text-slate-400 tracking-widest ml-1">Maximum Discount (%)</Label>
+                  <div className="relative">
+                    <Input
+                      type="number"
+                      max="100"
+                      value={settings.coin_max_discount_percent}
+                      onChange={(e) => setSettings({ ...settings, coin_max_discount_percent: Number(e.target.value) })}
+                      className="h-16 bg-slate-50 border-none rounded-2xl font-black px-8 text-2xl"
+                    />
+                    <div className="absolute right-6 top-1/2 -translate-y-1/2 font-bold text-slate-400">%</div>
+                  </div>
+                  <p className="text-xs font-bold text-slate-400 mt-2 uppercase">Max percentage of total price that can be paid with points.</p>
+                </div>
+                <div className="space-y-4">
+                  <Label className="text-[10px] font-black uppercase text-slate-400 tracking-widest ml-1">New Account Bonus</Label>
+                  <Input
+                    type="number"
+                    value={settings.coin_signup_bonus}
+                    onChange={(e) => setSettings({ ...settings, coin_signup_bonus: Number(e.target.value) })}
+                    className="h-16 bg-slate-50 border-none rounded-2xl font-black px-8 text-2xl"
+                  />
+                  <p className="text-xs font-bold text-slate-400 mt-2 uppercase">Initial point balance for new users.</p>
                 </div>
               </div>
             </Card>

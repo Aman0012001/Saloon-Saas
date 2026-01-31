@@ -72,6 +72,7 @@ try {
     require_once __DIR__ . '/../Services/NewsletterService.php';
     require_once __DIR__ . '/../Services/MembershipService.php';
     require_once __DIR__ . '/../Services/GoogleDriveService.php';
+    require_once __DIR__ . '/../Services/CloudinaryService.php';
 
 
     $notifService = new NotificationService($db);
@@ -80,6 +81,7 @@ try {
     $newsletterService = new NewsletterService($db);
     $membershipService = new MembershipService($db);
     $googleDriveService = new GoogleDriveService();
+    $cloudinaryService = new CloudinaryService();
 
 
     /**
@@ -238,6 +240,9 @@ try {
         case 'auth':
             require_once __DIR__ . '/routes/auth.php';
             break;
+        case 'search':
+            require_once __DIR__ . '/routes/search.php';
+            break;
         case 'salons':
             require_once __DIR__ . '/routes/salons.php';
             break;
@@ -293,6 +298,9 @@ try {
         case 'product_purchases':
             require_once __DIR__ . '/routes/product_purchases.php';
             break;
+        case 'orders':
+            require_once __DIR__ . '/routes/orders.php';
+            break;
         case 'newsletter':
             require_once __DIR__ . '/routes/newsletter.php';
             break;
@@ -301,6 +309,9 @@ try {
             break;
         case 'loyalty':
             require_once __DIR__ . '/routes/loyalty.php';
+            break;
+        case 'coins':
+            require_once __DIR__ . '/routes/coins.php';
             break;
         default:
             sendResponse([

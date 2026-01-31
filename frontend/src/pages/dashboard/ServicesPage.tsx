@@ -49,6 +49,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
+import { cn } from "@/lib/utils";
 import { DashboardLayout } from "@/components/dashboard/DashboardLayout";
 import { ResponsiveDashboardLayout } from "@/components/dashboard/ResponsiveDashboardLayout";
 import { useSalon } from "@/hooks/useSalon";
@@ -64,6 +65,7 @@ interface Service {
   duration_minutes: number;
   category: string | null;
   image_url: string | null;
+  image_public_id: string | null;
   is_active: boolean;
 }
 
@@ -83,6 +85,8 @@ export default function ServicesPage() {
   const [editingService, setEditingService] = useState<Service | null>(null);
   const [uploadingImage, setUploadingImage] = useState(false);
   const [uploadingLogo, setUploadingLogo] = useState(false);
+  const [isDraggingImage, setIsDraggingImage] = useState(false);
+  const [isDraggingLogo, setIsDraggingLogo] = useState(false);
   const [viewMode, setViewMode] = useState<"grid" | "list">("grid");
   const [customCategory, setCustomCategory] = useState("");
   const [formData, setFormData] = useState({
@@ -92,6 +96,7 @@ export default function ServicesPage() {
     duration_minutes: "30",
     category: "",
     image_url: "",
+    image_public_id: "",
     is_active: true,
   });
 
@@ -135,6 +140,7 @@ export default function ServicesPage() {
       duration_minutes: "30",
       category: "",
       image_url: "",
+      image_public_id: "",
       is_active: true,
     });
     setEditingService(null);
@@ -148,13 +154,40 @@ export default function ServicesPage() {
     setUploadingImage(true);
     try {
       const response = await api.uploads.upload(file);
-      setFormData({ ...formData, image_url: response.url });
+      setFormData({ ...formData, image_url: response.url, image_public_id: response.public_id });
       toast({ title: "Success", description: "Service image uploaded" });
     } catch (error: any) {
       console.error("Upload error:", error);
       toast({ title: "Upload Failed", description: error.message, variant: "destructive" });
     } finally {
       setUploadingImage(false);
+    }
+  };
+
+  const handleDrag = (e: React.DragEvent, type: 'image' | 'logo', isEntering: boolean) => {
+    e.preventDefault();
+    e.stopPropagation();
+    if (type === 'image') setIsDraggingImage(isEntering);
+    else setIsDraggingLogo(isEntering);
+  };
+
+  const handleDrop = async (e: React.DragEvent, type: 'image' | 'logo') => {
+    e.preventDefault();
+    e.stopPropagation();
+    if (type === 'image') setIsDraggingImage(false);
+    else setIsDraggingLogo(false);
+
+    const file = e.dataTransfer.files?.[0];
+    if (file && file.type.startsWith('image/')) {
+      if (type === 'image') {
+        const fakeEvent = { target: { files: [file] } } as any;
+        handleImageUpload(fakeEvent);
+      } else {
+        const fakeEvent = { target: { files: [file] } } as any;
+        handleSalonLogoUpload(fakeEvent);
+      }
+    } else if (file) {
+      toast({ title: "Invalid File", description: "Please drop an image file", variant: "destructive" });
     }
   };
 
@@ -165,7 +198,10 @@ export default function ServicesPage() {
     setUploadingLogo(true);
     try {
       const response = await api.uploads.upload(file);
-      await api.salons.update(currentSalon.id, { logo_url: response.url });
+      await api.salons.update(currentSalon.id, {
+        logo_url: response.url,
+        logo_public_id: response.public_id
+      });
       toast({ title: "Branding Updated", description: "Salon logo updated successfully" });
       // Optionally refresh the salon data here if useSalon doesn't auto-update
     } catch (error: any) {
@@ -186,6 +222,7 @@ export default function ServicesPage() {
       duration_minutes: service.duration_minutes.toString(),
       category: service.category ? (isPredefined ? service.category : "Other") : "",
       image_url: service.image_url || "",
+      image_public_id: service.image_public_id || "",
       is_active: service.is_active,
     });
     if (service.category && !isPredefined) {
@@ -208,6 +245,7 @@ export default function ServicesPage() {
         duration_minutes: parseInt(formData.duration_minutes),
         category: formData.category === "Other" ? customCategory : (formData.category || null),
         image_url: formData.image_url || null,
+        image_public_id: formData.image_public_id || null,
         is_active: formData.is_active,
         salon_id: currentSalon.id,
       };
@@ -474,7 +512,15 @@ export default function ServicesPage() {
                     <div className="space-y-3">
                       <Label className="text-xs font-black uppercase tracking-widest text-muted-foreground ml-1">Service Image</Label>
 
-                      <div className="group relative aspect-video rounded-2xl overflow-hidden border-2 border-dashed border-slate-200 hover:border-accent/40 bg-slate-50/50 transition-all">
+                      <div
+                        className={cn(
+                          "group relative aspect-video rounded-2xl overflow-hidden border-2 border-dashed border-slate-200 hover:border-accent/40 bg-slate-50/50 transition-all",
+                          isDraggingImage && "scale-[1.02] border-accent bg-accent/5 ring-4 ring-accent/10"
+                        )}
+                        onDragOver={(e) => handleDrag(e, 'image', true)}
+                        onDragLeave={(e) => handleDrag(e, 'image', false)}
+                        onDrop={(e) => handleDrop(e, 'image')}
+                      >
                         {formData.image_url ? (
                           <>
                             <img src={formData.image_url} className="w-full h-full object-cover" alt="Preview" />
@@ -491,9 +537,16 @@ export default function ServicesPage() {
                             </div>
                             <div className="text-center">
                               <p className="text-sm font-bold text-slate-600">Select Treatment Photo</p>
-                              <p className="text-[10px] text-slate-400 font-medium">PNG, JPG or WebP (Max 5MB)</p>
+                              <p className="text-[10px] text-slate-400 font-medium">PNG, JPG, WebP or AVIF (Max 5MB)</p>
+                              <p className="text-[10px] font-black uppercase tracking-widest text-slate-400 mt-1">or drag and drop</p>
                             </div>
                           </Label>
+                        )}
+
+                        {isDraggingImage && (
+                          <div className="absolute inset-0 bg-accent/10 backdrop-blur-[1px] flex items-center justify-center border-2 border-dashed border-accent rounded-2xl">
+                            <Upload className="w-10 h-10 text-accent animate-bounce" />
+                          </div>
                         )}
 
                         {uploadingImage && (
@@ -519,7 +572,15 @@ export default function ServicesPage() {
                     <div className="space-y-4">
                       <Label className="text-xs font-black uppercase tracking-widest text-muted-foreground ml-1">Salon Logo Branding</Label>
                       <div className="flex items-center gap-6 p-4 rounded-2xl bg-slate-50 border border-slate-100">
-                        <div className="relative w-20 h-20 flex-shrink-0">
+                        <div
+                          className={cn(
+                            "relative w-20 h-20 flex-shrink-0 transition-all",
+                            isDraggingLogo && "scale-110 ring-4 ring-accent/10"
+                          )}
+                          onDragOver={(e) => handleDrag(e, 'logo', true)}
+                          onDragLeave={(e) => handleDrag(e, 'logo', false)}
+                          onDrop={(e) => handleDrop(e, 'logo')}
+                        >
                           <div className="w-full h-full rounded-full overflow-hidden border-2 border-white shadow-md bg-white">
                             {currentSalon?.logo_url ? (
                               <img src={currentSalon.logo_url} className="w-full h-full object-cover" alt="Salon Logo" />
@@ -535,6 +596,11 @@ export default function ServicesPage() {
                           {uploadingLogo && (
                             <div className="absolute inset-0 bg-white/60 backdrop-blur-[2px] rounded-full flex items-center justify-center">
                               <div className="w-5 h-5 border-2 border-accent border-t-transparent rounded-full animate-spin" />
+                            </div>
+                          )}
+                          {isDraggingLogo && (
+                            <div className="absolute inset-0 bg-accent/20 backdrop-blur-[1px] rounded-full flex items-center justify-center border-2 border-dashed border-accent">
+                              <Upload className="w-5 h-5 text-accent animate-bounce" />
                             </div>
                           )}
                         </div>

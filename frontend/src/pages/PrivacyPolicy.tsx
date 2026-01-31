@@ -79,7 +79,6 @@ const PrivacyPolicy = () => {
                     </section>
                 </div>
             </main>
-
             <Footer />
         </div>
     );

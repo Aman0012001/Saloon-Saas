@@ -27,7 +27,18 @@ if ($method === 'GET' && count($uriParts) === 1) {
         ");
         $stmt->execute([$_GET['salon_id']]);
     } else {
-        sendResponse(['reviews' => []]);
+        // If no filter provided, return all 5-star reviews for the landing page
+        $stmt = $db->prepare("
+            SELECT r.*, p.full_name as user_name, p.avatar_url as user_avatar, s.name as service_name
+            FROM booking_reviews r
+            JOIN profiles p ON r.user_id = p.user_id
+            JOIN bookings b ON r.booking_id = b.id
+            JOIN services s ON b.service_id = s.id
+            WHERE r.rating >= 5
+            ORDER BY r.created_at DESC
+            LIMIT 10
+        ");
+        $stmt->execute();
     }
 
     $reviews = $stmt->fetchAll();
@@ -46,19 +57,19 @@ if ($method === 'POST' && count($uriParts) === 1) {
 
     try {
         $stmt = $db->prepare("
-            INSERT INTO reviews (id, user_id, salon_id, service_id, rating, comment)
+            INSERT INTO booking_reviews (id, user_id, salon_id, booking_id, rating, comment)
             VALUES (?, ?, ?, ?, ?, ?)
         ");
         $stmt->execute([
             $reviewId,
             $userData['user_id'],
             $data['salon_id'],
-            $data['service_id'],
+            $data['booking_id'],
             $data['rating'],
             $data['comment'] ?? null
         ]);
 
-        $stmt = $db->prepare("SELECT * FROM reviews WHERE id = ?");
+        $stmt = $db->prepare("SELECT * FROM booking_reviews WHERE id = ?");
         $stmt->execute([$reviewId]);
         $review = $stmt->fetch();
 

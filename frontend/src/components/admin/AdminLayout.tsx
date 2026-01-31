@@ -18,6 +18,10 @@ import {
   Package,
   Plus,
   Zap,
+  Coins,
+  Star,
+  FileText,
+  ShoppingCart,
 } from "lucide-react";
 import { useAuth } from "@/hooks/useAuth";
 import { useSuperAdmin } from "@/hooks/useSuperAdmin";
@@ -41,17 +45,46 @@ interface AdminLayoutProps {
   children: React.ReactNode;
 }
 
-const navItems = [
-  { icon: LayoutDashboard, label: "Dashboard", path: "/admin" },
-  { icon: Building2, label: "Salons", path: "/admin/salons" },
-  { icon: Users, label: "Manage Members", path: "/admin/members" },
-  { icon: Zap, label: "Membership Plans", path: "/admin/plans" },
-  { icon: MessageSquare, label: "Contact Enquiries", path: "/admin/contact-enquiries" },
-  { icon: Plus, label: "Add Product", path: "/admin/products/add" },
-  { icon: Package, label: "Products", path: "/admin/products" },
-  { icon: CreditCard, label: "Payments", path: "/admin/payments" },
-  { icon: BarChart3, label: "Reports", path: "/admin/reports" },
-  { icon: Megaphone, label: "Marketing", path: "/admin/marketing" },
+const navigation = [
+  {
+    title: "Overview",
+    items: [
+      { icon: LayoutDashboard, label: "Dashboard", path: "/super-admin/dashboard" },
+      { icon: Building2, label: "Salons", path: "/super-admin/salons" },
+      { icon: MessageSquare, label: "Contact Enquiries", path: "/super-admin/contact-enquiries" },
+    ]
+  },
+  {
+    title: "Inventory & Growth",
+    items: [
+      { icon: Zap, label: "Membership Plans", path: "/super-admin/plans" },
+      { icon: Shield, label: "Plan Assignments", path: "/super-admin/members" },
+      { icon: Plus, label: "Add Product", path: "/super-admin/products/add" },
+      { icon: Package, label: "Products", path: "/super-admin/products" },
+    ]
+  },
+  {
+    title: "Economy & Billing",
+    items: [
+      { icon: Coins, label: "Point System", path: "/super-admin/settings?tab=economy" },
+      { icon: CreditCard, label: "Payments", path: "/super-admin/payments" },
+      { icon: ShoppingCart, label: "Orders", path: "/super-admin/orders" },
+    ]
+  },
+  {
+    title: "Intelligence",
+    items: [
+      { icon: BarChart3, label: "Analytics", path: "/super-admin/analytics" },
+      // { icon: Megaphone, label: "Marketing", path: "/super-admin/marketing" },
+    ]
+  },
+  {
+    title: "Platform",
+    items: [
+      { icon: Bell, label: "Notifications", path: "/super-admin/notifications" },
+      { icon: Settings, label: "Platform Settings", path: "/super-admin/settings" },
+    ]
+  }
 ];
 
 export function AdminLayout({ children }: AdminLayoutProps) {
@@ -90,8 +123,11 @@ export function AdminLayout({ children }: AdminLayoutProps) {
     return null;
   }
 
-  const NavLink = ({ item }: { item: typeof navItems[0] }) => {
-    const isActive = location.pathname === item.path;
+  const NavLink = ({ item }: { item: typeof navigation[0]['items'][0] }) => {
+    const fullPath = location.pathname + location.search;
+    const isActive = item.path.includes('?')
+      ? fullPath === item.path
+      : location.pathname === item.path;
 
     return (
       <Link
@@ -115,10 +151,26 @@ export function AdminLayout({ children }: AdminLayoutProps) {
     );
   };
 
+  const handleWheel = (e: React.WheelEvent<HTMLDivElement>) => {
+    const target = e.currentTarget;
+    const scrollTop = target.scrollTop;
+    const scrollHeight = target.scrollHeight;
+    const clientHeight = target.clientHeight;
+
+    // Prevent scroll chaining when at boundaries
+    if (e.deltaY < 0 && scrollTop === 0) {
+      // Scrolling up at the top
+      e.preventDefault();
+    } else if (e.deltaY > 0 && scrollTop + clientHeight >= scrollHeight) {
+      // Scrolling down at the bottom
+      e.preventDefault();
+    }
+  };
+
   const SidebarContent = () => (
     <div className="flex flex-col h-full bg-gradient-to-b from-gray-900 via-gray-800 to-black">
       <div className="p-6 border-b border-gray-700">
-        <Link to="/admin" className="flex items-center gap-3">
+        <Link to="/super-admin/dashboard" className="flex items-center gap-3">
           <div className="h-12 w-12 rounded-2xl bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center shadow-lg">
             <Shield className="w-7 h-7 text-white" />
           </div>
@@ -129,13 +181,25 @@ export function AdminLayout({ children }: AdminLayoutProps) {
         </Link>
       </div>
 
-      <ScrollArea className="flex-1 px-4 py-6">
-        <nav className="space-y-2">
-          {navItems.map((item) => (
-            <NavLink key={item.path} item={item} />
+      <div
+        className="flex-1 min-h-0 p-4 overflow-y-auto scrollbar-hide overscroll-contain"
+        onWheel={handleWheel}
+      >
+        <nav className="space-y-4 pb-4">
+          {navigation.map((group) => (
+            <div key={group.title} className="space-y-3">
+              <h3 className="px-4 text-[10px] font-black uppercase tracking-[0.2em] text-gray-500/80">
+                {group.title}
+              </h3>
+              <div className="space-y-1">
+                {group.items.map((item) => (
+                  <NavLink key={item.path} item={item} />
+                ))}
+              </div>
+            </div>
           ))}
         </nav>
-      </ScrollArea>
+      </div>
 
       <div className="p-4 border-t border-gray-700 bg-gray-800/50 space-y-3">
         {(stats?.pendingSalons || 0) > 0 && (
@@ -157,7 +221,7 @@ export function AdminLayout({ children }: AdminLayoutProps) {
     <div className="min-h-screen bg-gray-900 text-white">
       {/* Desktop Sidebar */}
       <aside className="hidden lg:fixed lg:inset-y-0 lg:z-50 lg:flex lg:w-72 lg:flex-col">
-        <div className="flex flex-col flex-1 shadow-2xl">
+        <div className="flex flex-col h-screen shadow-2xl">
           <SidebarContent />
         </div>
       </aside>

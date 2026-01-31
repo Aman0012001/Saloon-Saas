@@ -17,7 +17,7 @@ const Login = () => {
   const [loading, setLoading] = useState(false);
   const navigate = useNavigate();
   const { toast } = useToast();
-  const { login } = useAuth();
+  const { login, signOut } = useAuth();
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -46,15 +46,25 @@ const Login = () => {
         description: "Accessing local management console...",
       });
 
-      // Redirect based on user type and salon role
+      // Strict Redirect Logic based on User Type and Roles
       if (userType === 'admin') {
-        navigate("/admin");
-      } else if (userType === 'salon_owner' || salonRole === 'owner' || salonRole === 'staff' || salonRole === 'manager') {
-        navigate("/dashboard");
+        navigate("/super-admin/dashboard");
+      } else if (userType === 'salon_owner' || (salonRole && ['owner', 'manager'].includes(salonRole))) {
+        // Distinguish between Owner and Staff if needed, but per request:
+        // SALON_OWNER -> /salon/dashboard
+        // STAFF -> /staff/dashboard (if they are just staff)
+
+        if (salonRole === 'staff') {
+          navigate("/staff/dashboard");
+        } else {
+          navigate("/salon/dashboard");
+        }
       } else if (userType === 'customer') {
-        navigate("/client-hub");
+        navigate("/user/dashboard");
       } else {
-        navigate("/");
+        // Failsafe: invalid role -> logout and redirect
+        await signOut();
+        navigate("/login");
       }
     } catch (error: any) {
       console.error("Login error:", error);

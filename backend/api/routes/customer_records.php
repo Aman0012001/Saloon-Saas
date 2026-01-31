@@ -120,9 +120,9 @@ if ($method === 'POST' && count($uriParts) === 2 && $uriParts[1] === 'treatments
             id, booking_id, user_id, salon_id, treatment_details, products_used, 
             skin_reaction, improvement_notes, recommended_next_treatment, 
             post_treatment_instructions, follow_up_reminder_date, marketing_notes,
-            before_photo_url, after_photo_url
+            before_photo_url, before_photo_public_id, after_photo_url, after_photo_public_id
         )
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         ON DUPLICATE KEY UPDATE 
             treatment_details = VALUES(treatment_details),
             products_used = VALUES(products_used),
@@ -133,7 +133,9 @@ if ($method === 'POST' && count($uriParts) === 2 && $uriParts[1] === 'treatments
             follow_up_reminder_date = VALUES(follow_up_reminder_date),
             marketing_notes = VALUES(marketing_notes),
             before_photo_url = VALUES(before_photo_url),
-            after_photo_url = VALUES(after_photo_url)
+            before_photo_public_id = VALUES(before_photo_public_id),
+            after_photo_url = VALUES(after_photo_url),
+            after_photo_public_id = VALUES(after_photo_public_id)
     ");
 
     $stmt->execute([
@@ -150,7 +152,9 @@ if ($method === 'POST' && count($uriParts) === 2 && $uriParts[1] === 'treatments
         $data['follow_up_reminder_date'] ?? null,
         $data['marketing_notes'] ?? null,
         $data['before_photo_url'] ?? null,
-        $data['after_photo_url'] ?? null
+        $data['before_photo_public_id'] ?? null,
+        $data['after_photo_url'] ?? null,
+        $data['after_photo_public_id'] ?? null
     ]);
 
     sendResponse(['success' => true]);

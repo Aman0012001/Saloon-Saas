@@ -48,93 +48,6 @@ interface DashboardLayoutProps {
   children: ReactNode;
 }
 
-const navItems = [
-  {
-    icon: LayoutDashboard,
-    label: "Dashboard",
-    path: "/dashboard",
-    description: "Overview & analytics"
-  },
-  {
-    icon: Calendar,
-    label: "Calendar",
-    path: "/dashboard/appointments",
-    description: "Manage schedule"
-  },
-  {
-    icon: Users,
-    label: "Customers",
-    path: "/dashboard/customers",
-    description: "Client management"
-  },
-  {
-    icon: UserCog,
-    label: "Staff Profile",
-    path: "/dashboard/staff",
-    description: "Team & roles"
-  },
-  {
-    icon: Scissors,
-    label: "Services",
-    path: "/dashboard/services",
-    description: "Service catalog"
-  },
-  {
-    icon: Receipt,
-    label: "Billing",
-    path: "/dashboard/billing",
-    description: "Payments & invoices"
-  },
-  {
-    icon: Package,
-    label: "Inventory",
-    path: "/dashboard/inventory",
-    description: "Stock management"
-  },
-  {
-    icon: BarChart3,
-    label: "Reports",
-    path: "/dashboard/reports",
-    description: "Analytics & insights"
-  },
-  {
-    icon: Gift,
-    label: "Offers",
-    path: "/dashboard/offers",
-    description: "Promotions & deals"
-  },
-  {
-    icon: ShoppingBag,
-    label: "Supply Store",
-    path: "/dashboard/store",
-    description: "Professional supplies"
-  },
-  {
-    icon: BookOpen,
-    label: "Knowledge Base",
-    path: "/dashboard/knowledge-base",
-    description: "Skin Care Tips & FAQs"
-  },
-  {
-    icon: User,
-    label: "Staff Profile ",
-    path: "/dashboard/profile",
-    description: "Profile information"
-  },
-  {
-    icon: Settings,
-    label: "Settings",
-    path: "/dashboard/settings",
-    description: "Business configuration"
-  },
-  {
-    icon: Mail,
-    label: "Messages",
-    path: "/dashboard/staff/messages",
-    description: "Internal communications"
-  },
-];
-
 export const DashboardLayout = ({ children }: DashboardLayoutProps) => {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const location = useLocation();
@@ -143,6 +56,109 @@ export const DashboardLayout = ({ children }: DashboardLayoutProps) => {
   const { salons, currentSalon, setCurrentSalon, isOwner, isManager, isStaff, refreshSalons } = useSalon();
   const [appointmentCount, setAppointmentCount] = useState(0);
   const [unreadCount, setUnreadCount] = useState(0);
+
+  const isUserStaff = isStaff && !isOwner && !isManager;
+  const basePath = isUserStaff ? "/staff" : "/salon";
+
+  const navItems = [
+    {
+      icon: LayoutDashboard,
+      label: "Dashboard",
+      path: `${basePath}/dashboard`,
+      description: "Overview & analytics"
+    },
+    {
+      icon: Calendar,
+      label: "Calendar",
+      path: `${basePath}/appointments`,
+      description: "Manage schedule"
+    },
+    {
+      icon: Users,
+      label: "Customers",
+      path: `${basePath}/customers`,
+      description: "Client management"
+    },
+    {
+      icon: UserCog,
+      label: "Staff & Team",
+      path: `${basePath}/staff`,
+      description: "Team & roles"
+    },
+    {
+      icon: Scissors,
+      label: "Services",
+      path: `${basePath}/services`,
+      description: "Service catalog"
+    },
+    {
+      icon: Receipt,
+      label: "Billing",
+      path: `${basePath}/billing`,
+      description: "Payments & invoices"
+    },
+    {
+      icon: Package,
+      label: "Inventory",
+      path: `${basePath}/inventory`,
+      description: "Stock management"
+    },
+    {
+      icon: BarChart3,
+      label: "Reports",
+      path: `${basePath}/reports`,
+      description: "Analytics & insights"
+    },
+    {
+      icon: Gift,
+      label: "Offers",
+      path: `${basePath}/offers`,
+      description: "Promotions & deals"
+    },
+    {
+      icon: Settings,
+      label: "Settings",
+      path: `${basePath}/settings`,
+      description: "Business configuration"
+    }
+  ];
+
+  if (isUserStaff) {
+    // Override navItems for pure staff
+    navItems.length = 0;
+    navItems.push(
+      {
+        icon: LayoutDashboard,
+        label: "My Dashboard",
+        path: "/staff/dashboard",
+        description: "Personal overview"
+      },
+      {
+        icon: Calendar,
+        label: "My Schedule",
+        path: "/staff/dashboard", // Assuming appointments for staff is at dashboard for now
+        description: "View appointments"
+      },
+      {
+        icon: User,
+        label: "My Attendance",
+        path: "/staff/attendance",
+        description: "Check-in/out"
+      },
+      {
+        icon: BookOpen,
+        label: "Leaves",
+        path: "/staff/leaves",
+        description: "Manage time off"
+      },
+      {
+        icon: Mail,
+        label: "Messages",
+        path: "/staff/messages",
+        description: "Internal communications"
+      }
+    );
+  }
 
   const handleSignOut = async () => {
     await signOut();
@@ -267,7 +283,7 @@ export const DashboardLayout = ({ children }: DashboardLayoutProps) => {
           {/* Logo & Salon Selector */}
           <div className="p-6 border-b border-border/50">
             <div className="flex items-center justify-between mb-6">
-              <Link to="/dashboard" className="flex items-center gap-3">
+              <Link to={basePath + "/dashboard"} className="flex items-center gap-3">
                 <div className="w-10 h-10 bg-gradient-to-br from-accent to-accent/80 rounded-xl flex items-center justify-center shadow-lg">
                   <Scissors className="w-5 h-5 text-white" />
                 </div>
@@ -508,7 +524,7 @@ export const DashboardLayout = ({ children }: DashboardLayoutProps) => {
           {/* Right: Actions */}
           <div className="flex-1 flex items-center justify-end gap-4">
             <div className="hidden md:flex items-center gap-2">
-              <Button
+              {/* <Button
                 variant="outline"
                 size="sm"
                 className="h-10 px-4 rounded-xl border-border/50 bg-white/50 hover:bg-white hover:border-accent/30 hover:shadow-lg transition-all"
@@ -516,7 +532,7 @@ export const DashboardLayout = ({ children }: DashboardLayoutProps) => {
               >
                 <Plus className="w-4 h-4 mr-2 text-accent" />
                 <span className="font-bold text-xs uppercase tracking-wider text-foreground">Quick Add</span>
-              </Button>
+              </Button> */}
             </div>
 
             <Separator orientation="vertical" className="h-6 bg-border/50 hidden md:block" />

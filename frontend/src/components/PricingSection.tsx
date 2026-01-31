@@ -66,54 +66,56 @@ const PricingSection = () => {
             <Loader2 className="w-8 h-8 animate-spin text-accent" />
           </div>
         ) : (
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
-            {plans.map((plan) => {
-              const isPopular = plan.name.toLowerCase().includes('platinum') || plan.name.toLowerCase().includes('pro') || plan.name.toLowerCase().includes('gold');
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-8 max-w-6xl mx-auto">
+            {plans
+              .filter(plan => plan.price_monthly > 0)
+              .map((plan) => {
+                const isPopular = plan.name.toLowerCase().includes('platinum') || plan.name.toLowerCase().includes('pro') || plan.name.toLowerCase().includes('gold');
 
-              return (
-                <div
-                  key={plan.id}
-                  className={`relative rounded-2xl p-6 flex flex-col h-full ${isPopular
+                return (
+                  <div
+                    key={plan.id}
+                    className={`relative rounded-2xl p-6 flex flex-col h-full ${isPopular
                       ? "bg-primary text-primary-foreground shadow-lg scale-[1.02]"
                       : "bg-card shadow-card border border-border"
-                    }`}
-                >
-                  <div className={`inline-block px-3 py-1 rounded-full text-xs font-medium mb-4 w-fit ${isPopular ? "bg-gold text-primary" : "bg-secondary text-foreground"
-                    }`}>
-                    {plan.name}
+                      }`}
+                  >
+                    <div className={`inline-block px-3 py-1 rounded-full text-xs font-medium mb-4 w-fit ${isPopular ? "bg-gold text-primary" : "bg-secondary text-foreground"
+                      }`}>
+                      {plan.name}
+                    </div>
+
+                    <p className={`text-sm mb-6 line-clamp-2 ${isPopular ? "text-primary-foreground/80" : "text-muted-foreground"}`}>
+                      {plan.description}
+                    </p>
+
+                    <div className="mb-6">
+                      <span className="text-3xl font-bold">RM {plan.price_monthly}</span>
+                      <span className={`text-sm ${isPopular ? "text-primary-foreground/70" : "text-muted-foreground"}`}>
+                        / Month
+                      </span>
+                    </div>
+
+                    <Link to="/signup">
+                      <Button
+                        variant={isPopular ? "secondary" : "default"}
+                        className="w-full rounded-full mb-6"
+                      >
+                        Get Started Now
+                      </Button>
+                    </Link>
+
+                    <ul className="space-y-3 mt-auto">
+                      {plan.features.map((feature, index) => (
+                        <li key={index} className="flex items-center gap-2 text-sm">
+                          <Check className={`w-4 h-4 flex-shrink-0 ${isPopular ? "text-gold" : "text-sage"}`} />
+                          <span>{feature}</span>
+                        </li>
+                      ))}
+                    </ul>
                   </div>
-
-                  <p className={`text-sm mb-6 line-clamp-2 ${isPopular ? "text-primary-foreground/80" : "text-muted-foreground"}`}>
-                    {plan.description}
-                  </p>
-
-                  <div className="mb-6">
-                    <span className="text-3xl font-bold">RM {plan.price_monthly}</span>
-                    <span className={`text-sm ${isPopular ? "text-primary-foreground/70" : "text-muted-foreground"}`}>
-                      / Month
-                    </span>
-                  </div>
-
-                  <Link to="/signup">
-                    <Button
-                      variant={isPopular ? "secondary" : "default"}
-                      className="w-full rounded-full mb-6"
-                    >
-                      Get Started Now
-                    </Button>
-                  </Link>
-
-                  <ul className="space-y-3 mt-auto">
-                    {plan.features.map((feature, index) => (
-                      <li key={index} className="flex items-center gap-2 text-sm">
-                        <Check className={`w-4 h-4 flex-shrink-0 ${isPopular ? "text-gold" : "text-sage"}`} />
-                        <span>{feature}</span>
-                      </li>
-                    ))}
-                  </ul>
-                </div>
-              );
-            })}
+                );
+              })}
           </div>
         )}
       </div>

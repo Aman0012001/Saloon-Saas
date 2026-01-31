@@ -138,7 +138,7 @@ const ContactUs = () => {
         <div className="absolute bottom-0 left-0 w-48 h-48 bg-purple-500/5 rounded-full blur-3xl translate-y-1/2 -translate-x-1/2" />
 
         <div className="container mx-auto text-center relative z-10">
-          <Badge className="mb-6 bg-accent/10 text-accent border-accent/20 px-4 py-1.5 text-sm">
+          <Badge className="mt-8 mb-6 bg-accent/10 text-accent border-accent/20 px-4 py-1.5 text-sm">
             Get In Touch
           </Badge>
           <h1 className="text-4xl md:text-6xl font-bold mb-6 bg-clip-text text-transparent bg-gradient-to-r from-gray-900 to-gray-600 dark:from-white dark:to-gray-300">

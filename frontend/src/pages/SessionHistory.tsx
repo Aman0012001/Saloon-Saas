@@ -242,7 +242,6 @@ export default function SessionHistory() {
                     </div>
                 </div>
             </main>
-
             <Footer />
         </div>
     );

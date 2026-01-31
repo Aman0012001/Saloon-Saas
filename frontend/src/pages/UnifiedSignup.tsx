@@ -181,13 +181,13 @@ const UnifiedSignup = () => {
                         <CardContent className="space-y-6 px-0">
                             {/* Salon Owner Badge */}
                             {signupType === "salon_owner" && (
-                                <div className="flex items-center gap-4 p-6 bg-slate-900 rounded-[2rem]">
-                                    <div className="w-12 h-12 bg-accent rounded-2xl flex items-center justify-center shadow-lg shadow-accent/20">
-                                        <Store className="w-6 h-6 text-white" />
+                                <div className="flex items-center gap-4 p-6 bg-[#F2A93B] rounded-[2rem]">
+                                    <div className="w-12 h-12 bg-white rounded-2xl flex items-center justify-center shadow-lg shadow-black/5">
+                                        <Store className="w-6 h-6 text-[#F2A93B]" />
                                     </div>
                                     <div>
                                         <p className="font-black text-white text-sm uppercase tracking-tighter">Business Console Mode</p>
-                                        <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mt-0.5">Exclusive Salon Owner access</p>
+                                        <p className="text-[10px] font-bold text-white/60 uppercase tracking-widest mt-0.5">Exclusive Salon Owner access</p>
                                     </div>
                                 </div>
                             )}
@@ -323,7 +323,7 @@ const UnifiedSignup = () => {
                         <CardFooter className="flex flex-col gap-6 px-0 pt-8 mt-4">
                             <Button
                                 type="submit"
-                                className="w-full h-16 bg-slate-900 hover:bg-black text-white rounded-[2rem] font-black text-lg shadow-2xl shadow-slate-900/10 transition-all transform hover:scale-[1.01]"
+                                className={`w-full h-16 rounded-[2rem] font-black text-lg transition-all transform hover:scale-[1.01] ${signupType === 'salon_owner' ? 'bg-[#F2A93B] hover:bg-[#E29A2B] text-white shadow-lg shadow-[#F2A93B]/20' : 'bg-slate-900 hover:bg-black text-white shadow-2xl shadow-slate-900/10'}`}
                                 disabled={loading}
                             >
                                 {loading ? (

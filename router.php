@@ -11,18 +11,8 @@ if ($uri !== '/' && (file_exists($file) || is_dir($file))) {
     return false;
 }
 
-// Route requests for uploads to the new root uploads folder
-if (strpos($uri, '/backend/uploads/') === 0) {
-    $relativePath = str_replace('/backend/uploads/', '', $uri);
-    $filePath = __DIR__ . '/backend/uploads/' . $relativePath;
-
-    if (file_exists($filePath) && is_file($filePath)) {
-        $mime = mime_content_type($filePath);
-        header("Content-Type: $mime");
-        readfile($filePath);
-        return;
-    }
-}
+// Requests for uploads are now handled by Cloudinary URLs directly on the frontend.
+// Local serving is disabled to transition fully to cloud storage.
 
 // Otherwise, route everything to the API index.php if it starts with /backend/api
 if (strpos($uri, '/backend/api') === 0) {

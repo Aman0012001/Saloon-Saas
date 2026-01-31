@@ -23,6 +23,7 @@ import { ResponsiveDashboardLayout } from "@/components/dashboard/ResponsiveDash
 import { useSalon } from "@/hooks/useSalon";
 import { useAuth } from "@/hooks/useAuth";
 import api from "@/services/api";
+import { cn } from "@/lib/utils";
 import { useToast } from "@/hooks/use-toast";
 import {
   Select,
@@ -43,6 +44,8 @@ export default function SettingsPage() {
   const [saving, setSaving] = useState(false);
   const [uploadingLogo, setUploadingLogo] = useState(false);
   const [uploadingCover, setUploadingCover] = useState(false);
+  const [isDraggingLogo, setIsDraggingLogo] = useState(false);
+  const [isDraggingCover, setIsDraggingCover] = useState(false);
   const [formData, setFormData] = useState({
     name: "",
     description: "",
@@ -54,7 +57,9 @@ export default function SettingsPage() {
     email: "",
     gst_number: "",
     logo_url: "",
+    logo_public_id: "",
     cover_image_url: "",
+    cover_image_public_id: "",
     upi_id: "",
     bank_details: "",
   });
@@ -67,9 +72,9 @@ export default function SettingsPage() {
     try {
       const response = await api.uploads.upload(file);
       if (type === 'logo') {
-        setFormData({ ...formData, logo_url: response.url });
+        setFormData({ ...formData, logo_url: response.url, logo_public_id: response.public_id });
       } else {
-        setFormData({ ...formData, cover_image_url: response.url });
+        setFormData({ ...formData, cover_image_url: response.url, cover_image_public_id: response.public_id });
       }
       toast({ title: "Success", description: "Image uploaded successfully" });
     } catch (error: any) {
@@ -78,6 +83,27 @@ export default function SettingsPage() {
     } finally {
       if (type === 'logo') setUploadingLogo(false);
       else setUploadingCover(false);
+    }
+  };
+
+  const handleDrag = (e: React.DragEvent, type: 'logo' | 'cover', isEntering: boolean) => {
+    e.preventDefault();
+    e.stopPropagation();
+    if (type === 'logo') setIsDraggingLogo(isEntering);
+    else setIsDraggingCover(isEntering);
+  };
+
+  const handleDrop = async (e: React.DragEvent, type: 'logo' | 'cover') => {
+    e.preventDefault();
+    e.stopPropagation();
+    if (type === 'logo') setIsDraggingLogo(false);
+    else setIsDraggingCover(false);
+
+    const file = e.dataTransfer.files?.[0];
+    if (file && file.type.startsWith('image/')) {
+      handleFileUpload(file, type);
+    } else if (file) {
+      toast({ title: "Invalid File", description: "Please drop an image file", variant: "destructive" });
     }
   };
 
@@ -127,7 +153,9 @@ export default function SettingsPage() {
         email: currentSalon.email || "",
         gst_number: currentSalon.gst_number || "",
         logo_url: currentSalon.logo_url || "",
+        logo_public_id: currentSalon.logo_public_id || "",
         cover_image_url: currentSalon.cover_image_url || "",
+        cover_image_public_id: currentSalon.cover_image_public_id || "",
         upi_id: currentSalon.upi_id || "",
         bank_details: currentSalon.bank_details || "",
       });
@@ -176,7 +204,9 @@ export default function SettingsPage() {
         email: formData.email || null,
         gst_number: formData.gst_number || null,
         logo_url: formData.logo_url || null,
+        logo_public_id: formData.logo_public_id || null,
         cover_image_url: formData.cover_image_url || null,
+        cover_image_public_id: formData.cover_image_public_id || null,
         upi_id: formData.upi_id || null,
         bank_details: formData.bank_details || null,
       });
@@ -396,7 +426,15 @@ export default function SettingsPage() {
                     <Label className="text-xs font-black uppercase tracking-widest text-muted-foreground ml-1">Salon Logo</Label>
 
                     <div className="relative group w-32 h-32">
-                      <div className="w-full h-full rounded-full border-4 border-white shadow-xl overflow-hidden bg-slate-50 relative">
+                      <div
+                        className={cn(
+                          "w-full h-full rounded-full border-4 border-white shadow-xl overflow-hidden bg-slate-50 relative transition-all",
+                          isDraggingLogo && "scale-110 ring-4 ring-accent/20 border-accent"
+                        )}
+                        onDragOver={(e) => handleDrag(e, 'logo', true)}
+                        onDragLeave={(e) => handleDrag(e, 'logo', false)}
+                        onDrop={(e) => handleDrop(e, 'logo')}
+                      >
                         {formData.logo_url ? (
                           <img src={formData.logo_url} className="w-full h-full object-cover" alt="Logo" />
                         ) : (
@@ -410,6 +448,12 @@ export default function SettingsPage() {
                             <div className="w-6 h-6 border-2 border-accent border-t-transparent rounded-full animate-spin" />
                           </div>
                         )}
+
+                        {isDraggingLogo && (
+                          <div className="absolute inset-0 bg-accent/10 backdrop-blur-[2px] flex items-center justify-center border-2 border-dashed border-accent rounded-full">
+                            <Upload className="w-8 h-8 text-accent animate-bounce" />
+                          </div>
+                        )}
                       </div>
 
                       <Label htmlFor="logo-upload" className="absolute -bottom-1 -right-1 w-10 h-10 bg-accent text-white rounded-full flex items-center justify-center cursor-pointer shadow-lg hover:scale-110 transition-transform">
@@ -418,7 +462,7 @@ export default function SettingsPage() {
                       <input
                         id="logo-upload"
                         type="file"
-                        accept="image/*"
+                        accept="image/*,.avif"
                         className="hidden"
                         onChange={(e) => e.target.files?.[0] && handleFileUpload(e.target.files[0], 'logo')}
                         disabled={uploadingLogo}
@@ -429,7 +473,15 @@ export default function SettingsPage() {
                   <div className="space-y-4">
                     <Label className="text-xs font-black uppercase tracking-widest text-muted-foreground ml-1">Cover Banner</Label>
 
-                    <div className="relative group aspect-video rounded-3xl overflow-hidden border-2 border-dashed border-slate-200 hover:border-accent/40 bg-slate-50 transition-all">
+                    <div
+                      className={cn(
+                        "relative group aspect-video rounded-3xl overflow-hidden border-2 border-dashed border-slate-200 hover:border-accent/40 bg-slate-50 transition-all",
+                        isDraggingCover && "scale-[1.02] border-accent bg-accent/5 ring-4 ring-accent/10"
+                      )}
+                      onDragOver={(e) => handleDrag(e, 'cover', true)}
+                      onDragLeave={(e) => handleDrag(e, 'cover', false)}
+                      onDrop={(e) => handleDrop(e, 'cover')}
+                    >
                       {formData.cover_image_url ? (
                         <>
                           <img src={formData.cover_image_url} className="w-full h-full object-cover" alt="Cover" />
@@ -445,7 +497,15 @@ export default function SettingsPage() {
                             <ImageIcon className="w-6 h-6" />
                           </div>
                           <p className="text-sm font-bold text-slate-600">Select Booth Banner</p>
+                          <p className="text-[10px] font-black uppercase tracking-widest text-slate-400 mt-1">or drag and drop</p>
                         </Label>
+                      )}
+
+                      {isDraggingCover && (
+                        <div className="absolute inset-0 bg-accent/20 backdrop-blur-[2px] flex flex-col items-center justify-center gap-2 border-4 border-dashed border-accent m-2 rounded-[2rem]">
+                          <Upload className="w-12 h-12 text-accent animate-bounce" />
+                          <p className="font-black text-accent uppercase tracking-[0.2em]">Release to Deploy</p>
+                        </div>
                       )}
 
                       {uploadingCover && (
@@ -458,7 +518,7 @@ export default function SettingsPage() {
                       <input
                         id="cover-upload"
                         type="file"
-                        accept="image/*"
+                        accept="image/*,.avif"
                         className="hidden"
                         onChange={(e) => e.target.files?.[0] && handleFileUpload(e.target.files[0], 'cover')}
                         disabled={uploadingCover}

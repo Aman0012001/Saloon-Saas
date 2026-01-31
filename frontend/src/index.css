@@ -1,17 +1,19 @@
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=DM+Serif+Display&family=Outfit:wght@300;400;500;600;700;800;900&display=swap');
 
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
 
+@import './responsive.css';
+
 /* Salon Management Design System */
 
 @layer base {
   :root {
-    --background: 0 0% 100%;
+    --background: 36 21% 93%;
     --foreground: 0 0% 10%;
 
-    --card: 0 0% 100%;
+    --card: 36 21% 93%;
     --card-foreground: 0 0% 10%;
 
     --popover: 0 0% 100%;
@@ -155,16 +157,32 @@
   .animate-slide-in-right {
     animation: slide-in-right 0.5s ease-out forwards;
   }
+
+  @keyframes bounce-slow {
+
+    0%,
+    100% {
+      transform: translateY(0);
+    }
+
+    50% {
+      transform: translateY(-20px);
+    }
+  }
+
+  .animate-bounce-slow {
+    animation: bounce-slow 4s ease-in-out infinite;
+  }
 }
 
 /* Salon Management Design System */
 
 @layer base {
   :root {
-    --background: 0 0% 100%;
+    --background: 36 21% 93%;
     --foreground: 0 0% 10%;
 
-    --card: 0 0% 100%;
+    --card: 36 21% 93%;
     --card-foreground: 0 0% 10%;
 
     --popover: 0 0% 100%;

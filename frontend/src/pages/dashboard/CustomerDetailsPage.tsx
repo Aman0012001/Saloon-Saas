@@ -414,7 +414,7 @@ export default function CustomerDetailsPage() {
                         <User className="w-8 h-8 text-slate-400" />
                     </div>
                     <h2 className="text-xl font-bold text-slate-700">Dossier Missing</h2>
-                    <Button onClick={() => navigate("/dashboard/customers")} variant="outline">
+                    <Button onClick={() => navigate("/salon/customers")} variant="outline">
                         <ArrowLeft className="w-4 h-4 mr-2" /> Return
                     </Button>
                 </div>
@@ -438,12 +438,12 @@ export default function CustomerDetailsPage() {
                             <Button
                                 variant="ghost"
                                 size="icon"
-                                onClick={() => navigate("/dashboard/customers")}
+                                onClick={() => navigate("/salon/customers")}
                                 className="text-white hover:bg-white/10"
                             >
                                 <ArrowLeft className="w-5 h-5" />
                             </Button>
-                            <h1 className="text-2xl font-bold tracking-wider uppercase">Customer Record</h1>
+                            <h1 className="text-2xl font-bold tracking-wider uppercase">Customer Profile</h1>
                         </div>
                         <div className="hidden md:block h-px flex-1 bg-white/20 mx-8"></div>
                     </div>

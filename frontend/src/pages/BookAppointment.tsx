@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { format } from "date-fns";
-import { CalendarIcon, Clock, ArrowLeft, Loader2, MapPin, Phone, Star, CheckCircle, MessageSquare } from "lucide-react";
+import { CalendarIcon, Clock, ArrowLeft, Loader2, MapPin, Phone, Star, CheckCircle, MessageSquare, Coins } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Calendar } from "@/components/ui/calendar";
@@ -13,6 +13,7 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
 import { motion } from "framer-motion";
+import { Switch } from "@/components/ui/switch";
 import api from "@/services/api";
 import { useAuth } from "@/hooks/useAuth";
 import { useToast } from "@/hooks/use-toast";
@@ -73,6 +74,14 @@ const BookAppointment = () => {
   const [availableStaff, setAvailableStaff] = useState<any[]>([]);
   const [selectedStaffId, setSelectedStaffId] = useState<string | null>(null);
   const [loadingStaff, setLoadingStaff] = useState(false);
+  const [userCoins, setUserCoins] = useState(0);
+  const [coinPrice, setCoinPrice] = useState(1);
+  const [coinSettings, setCoinSettings] = useState({
+    min_redemption: 0,
+    max_discount_percent: 100,
+    earning_rate: 10
+  });
+  const [useCoins, setUseCoins] = useState(false);
 
   const { user } = useAuth();
   const navigate = useNavigate();
@@ -86,6 +95,17 @@ const BookAppointment = () => {
     }
     fetchSalonAndServices();
   }, [salonId]);
+
+  useEffect(() => {
+    if (!loading && !user) {
+      toast({
+        title: "Login Required",
+        description: "To reserve your bespoke experience, please join our community first.",
+        variant: "default"
+      });
+      navigate(`/signup?salonId=${salonId}${searchParams.get("serviceId") ? `&serviceId=${searchParams.get("serviceId")}` : ""}`);
+    }
+  }, [user, loading, salonId, navigate]);
 
   useEffect(() => {
     const fetchBookedSlots = async () => {
@@ -170,16 +190,52 @@ const BookAppointment = () => {
     }
   };
 
+  useEffect(() => {
+    const fetchCoins = async () => {
+      if (!user) return;
+      try {
+        const data = await api.coins.getBalance();
+        setUserCoins(Number(data.balance || 0));
+        setCoinPrice(Number(data.price || 1));
+        if (data.settings) {
+          setCoinSettings(data.settings);
+        }
+      } catch (err) {
+        console.error("Error fetching coins:", err);
+      }
+    };
+    fetchCoins();
+  }, [user]);
+
   const handleBooking = async () => {
-    if (!user) {
-      toast({ title: "Login Required", description: "Identify yourself to secure this slot.", variant: "default" });
-      navigate(`/signup?salonId=${salonId}`);
-      return;
-    }
+    // Redundant check removed as it's handled by useEffect at page entry
 
     if (selectedServices.length === 0 || !selectedDate || !selectedTime || !salonId) {
       toast({ title: "Missing Details", description: "Every detail matters for a perfect visit.", variant: "destructive" });
       return;
+    }
+
+    if (useCoins) {
+      if (userCoins < coinSettings.min_redemption) {
+        toast({
+          title: "Redemption Restricted",
+          description: `You need at least ${coinSettings.min_redemption} coins to redeem for a booking.`,
+          variant: "destructive"
+        });
+        return;
+      }
+      const subtotal = selectedServices.reduce((sum, s) => sum + Number(s.price), 0);
+      const afterCoupon = subtotal - getDiscount();
+      const maxCoinDiscount = (afterCoupon * coinSettings.max_discount_percent) / 100;
+      const actualCoinValue = Math.min(userCoins * coinPrice, maxCoinDiscount);
+      if (actualCoinValue <= 0) {
+        toast({
+          title: "Coin Redemption Not Applicable",
+          description: "Coins cannot be used for this booking due to minimum redemption or maximum discount limits.",
+          variant: "destructive"
+        });
+        return;
+      }
     }
 
     setBooking(true);
@@ -205,6 +261,7 @@ const BookAppointment = () => {
           booking_time: selectedTime,
           notes: notes.trim() || null,
           status: "pending",
+          use_coins: useCoins
         });
       }
 
@@ -301,6 +358,19 @@ const BookAppointment = () => {
       return appliedCoupon.discount;
     }
     return (subtotal * appliedCoupon.discount) / 100;
+  };
+
+  const getCoinValue = () => {
+    if (!useCoins) return 0;
+    const subtotal = selectedServices.reduce((sum, s) => sum + Number(s.price), 0);
+    const afterCoupon = subtotal - getDiscount();
+    const possibleValue = userCoins * coinPrice;
+    const maxDiscountFromTotal = (afterCoupon * coinSettings.max_discount_percent) / 100;
+    return Math.min(possibleValue, maxDiscountFromTotal);
+  };
+
+  const calculateFinalTotal = () => {
+    return calculateTotal() - getCoinValue();
   };
 
   if (loading) {
@@ -640,9 +710,38 @@ const BookAppointment = () => {
                     </div>
                   )}
 
+                  {/* Coin Payment Section */}
+                  {userCoins > 0 && (
+                    <div className="pt-4 border-t border-white/10 space-y-4">
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-2">
+                          <div className="w-8 h-8 bg-amber-100/10 rounded-lg flex items-center justify-center">
+                            <Coins className="w-4 h-4 text-amber-500" />
+                          </div>
+                          <div>
+                            <p className="text-sm font-black text-white">Use Coins</p>
+                            <p className="text-[10px] font-bold text-slate-500 uppercase">Balance: {userCoins.toFixed(2)} (Value: RM {(userCoins * coinPrice).toFixed(2)})</p>
+                          </div>
+                        </div>
+                        <Switch id="use-coins" checked={useCoins} onCheckedChange={setUseCoins} disabled={userCoins < coinSettings.min_redemption} />
+                      </div>
+                      {userCoins > 0 && userCoins < coinSettings.min_redemption && (
+                        <p className="text-[10px] text-amber-600 font-bold mt-1 uppercase tracking-tighter">
+                          Need {coinSettings.min_redemption} coins to redeem (Current: {userCoins.toFixed(1)})
+                        </p>
+                      )}
+                      {useCoins && (
+                        <div className="bg-amber-500/10 border border-amber-500/20 rounded-xl p-3 flex justify-between items-center animate-in fade-in slide-in-from-top-2">
+                          <p className="text-xs font-bold text-amber-200 uppercase tracking-tighter">Coins redemption applied</p>
+                          <p className="font-black text-amber-400">-RM {getCoinValue().toFixed(2)}</p>
+                        </div>
+                      )}
+                    </div>
+                  )}
+
                   <div className="flex justify-between items-center pt-4 border-t-2 border-accent/20">
                     <h3 className="text-xl font-black">Total Amount</h3>
-                    <p className="text-3xl font-black text-accent">RM {calculateTotal().toFixed(2)}</p>
+                    <p className="text-3xl font-black text-accent">RM {calculateFinalTotal().toFixed(2)}</p>
                   </div>
                 </div>
 

@@ -183,7 +183,7 @@ export default function AdminPayments() {
             <Card key={i} className="border-none shadow-sm bg-white rounded-3xl p-6 group hover:shadow-lg transition-all">
               <div className="flex justify-between items-start">
                 <div>
-                  <p className="text-[10px] font-black uppercase text-slate-400 tracking-widest leading-none">{stat.label}</p>
+                  <p className="text-white font-black uppercase tracking-widest leading-none">{stat.label}</p>
                   <p className="text-3xl font-black text-slate-900 mt-3">{stat.value}</p>
                 </div>
                 <div className={`w-12 h-12 rounded-xl ${stat.bg} ${stat.color} flex items-center justify-center group-hover:scale-110 transition-transform`}>

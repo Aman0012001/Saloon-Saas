@@ -54,7 +54,7 @@ export const SuperAdminProvider = ({ children }: { children: ReactNode }) => {
 
     try {
       // Local PHP backend check
-      if (user.user_type === 'admin') {
+      if (user.user_type === 'admin' || user.user_type === 'super_admin') {
         setIsSuperAdmin(true);
       } else {
         setIsSuperAdmin(false);

@@ -191,7 +191,7 @@ export function StaffDashboard() {
                             disabled={clockLoading}
                             className={cn(
                                 "h-12 w-12 rounded-xl flex items-center justify-center transition-all active:scale-95 shadow-lg",
-                                isClockedIn ? "bg-white text-emerald-500 hover:bg-slate-50" : "bg-slate-900 text-white hover:bg-slate-800"
+                                isClockedIn ? "bg-white text-emerald-500 hover:bg-slate-50" : "bg-[#F2A93B] text-white hover:bg-[#E29A2B]"
                             )}
                         >
                             {clockLoading ? (
@@ -264,7 +264,7 @@ export function StaffDashboard() {
                                 <Card key={i} className="rounded-[2rem] border-none shadow-sm bg-white overflow-hidden group hover:shadow-2xl transition-all">
                                     <CardContent className="p-6 flex flex-wrap items-center justify-between gap-6">
                                         <div className="flex items-center gap-5">
-                                            <div className="flex flex-col items-center justify-center w-20 h-20 bg-slate-900 text-white rounded-[1.5rem] shadow-xl shadow-slate-900/10">
+                                            <div className="flex flex-col items-center justify-center w-20 h-20 bg-[#F2A93B] text-white rounded-[1.5rem] shadow-xl shadow-[#F2A93B]/10">
                                                 <span className="text-[10px] font-black uppercase tracking-tighter opacity-60">
                                                     {format(parseISO(b.booking_date), "MMM")}
                                                 </span>
@@ -319,7 +319,7 @@ export function StaffDashboard() {
                                             {b.status === 'confirmed' && (
                                                 <Button
                                                     onClick={() => updateBookingStatus(b.id, 'completed')}
-                                                    className="bg-slate-900 hover:bg-slate-800 text-white font-black text-[10px] uppercase tracking-widest h-12 px-8 rounded-2xl"
+                                                    className="bg-[#F2A93B] hover:bg-[#E29A2B] text-white font-black text-[10px] uppercase tracking-widest h-12 px-8 rounded-2xl"
                                                 >
                                                     Mark Complete
                                                 </Button>
@@ -343,10 +343,10 @@ export function StaffDashboard() {
                         <h3 className="text-xl font-black text-slate-900 uppercase tracking-tight px-2">Operational Hub</h3>
                         <div className="grid grid-cols-1 gap-4">
                             {[
-                                { label: "My Profile", icon: User, path: `/dashboard/staff/${staffInfo?.id}`, desc: "View performance stats" },
-                                { label: "Deployment Logs", icon: Clock, path: "/dashboard/staff/attendance", desc: "View work hour history" },
-                                { label: "Time-Off", icon: CalendarDays, path: "/dashboard/staff/leaves", desc: "Request absence authorization" },
-                                { label: "Mail System", icon: Mail, path: "/dashboard/staff/messages", desc: "Internal communications", alert: true },
+                                { label: "My Profile", icon: User, path: `/staff/profile/${staffInfo?.id}`, desc: "View performance stats" },
+                                { label: "Deployment Logs", icon: Clock, path: "/staff/attendance", desc: "View work hour history" },
+                                { label: "Time-Off", icon: CalendarDays, path: "/staff/leaves", desc: "Request absence authorization" },
+                                { label: "Mail System", icon: Mail, path: "/staff/messages", desc: "Internal communications", alert: true },
                             ].map((link, i) => (
                                 <button
                                     key={i}
@@ -369,7 +369,7 @@ export function StaffDashboard() {
                         </div>
                     </div>
 
-                    <Card className="rounded-[2.5rem] bg-slate-900 text-white overflow-hidden relative border-none shadow-2xl p-8">
+                    <Card className="rounded-[2.5rem] bg-[#F2A93B] text-white overflow-hidden relative border-none shadow-2xl p-8">
                         <div className="absolute top-0 right-0 w-32 h-32 bg-[#F2A93B]/20 blur-3xl rounded-full translate-x-1/2 -translate-y-1/2" />
                         <div className="relative z-10 space-y-6">
                             <div className="flex items-center justify-between">
@@ -437,7 +437,7 @@ export function StaffDashboard() {
                         <Button
                             onClick={handleSaveRecord}
                             disabled={savingRecord}
-                            className="h-14 flex-1 bg-slate-900 hover:bg-slate-800 text-white font-black text-[10px] uppercase tracking-widest rounded-2xl shadow-xl"
+                            className="h-14 flex-1 bg-[#F2A93B] hover:bg-[#E29A2B] text-white font-black text-[10px] uppercase tracking-widest rounded-2xl shadow-xl"
                         >
                             {savingRecord ? <Loader2 className="w-4 h-4 animate-spin" /> : "Finalize Log"}
                         </Button>

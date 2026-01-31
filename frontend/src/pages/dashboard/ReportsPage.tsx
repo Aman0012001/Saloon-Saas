@@ -227,7 +227,7 @@ export default function ReportsPage() {
     <ResponsiveDashboardLayout showBackButton={true}>
       <div className="space-y-8">
         {/* Header Section */}
-        <div className="bg-slate-900 rounded-[2.5rem] p-10 text-white shadow-2xl relative overflow-hidden">
+        <div className="bg-[#F2A93B] rounded-[2.5rem] p-10 text-white shadow-2xl relative overflow-hidden">
           <div className="absolute top-0 right-0 w-80 h-80 bg-accent/20 blur-[120px] rounded-full" />
           <div className="relative z-10 flex flex-col md:flex-row items-center justify-between gap-6">
             <div className="flex items-center gap-5">
@@ -236,7 +236,7 @@ export default function ReportsPage() {
               </div>
               <div>
                 <h1 className="text-4xl font-black tracking-tight">Intelligence Hub</h1>
-                <p className="text-slate-400 font-bold uppercase tracking-widest text-[10px]">Data-Driven Salon Optimization</p>
+                <p className="text-white font-bold uppercase tracking-widest text-[10px]">Data-Driven Salon Optimization</p>
               </div>
             </div>
             <div className="flex gap-4">
@@ -278,20 +278,20 @@ export default function ReportsPage() {
           <TabsContent value="overview" className="space-y-8">
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
               {/* Revenue Area Chart */}
-              <Card className="lg:col-span-2 border-none shadow-[0_32px_64px_-12px_rgba(0,0,0,0.6)] bg-[#0f172a] rounded-[2.5rem] overflow-hidden relative border border-white/5">
+              <Card className="lg:col-span-2 border-none shadow-[0_32px_64px_-12px_rgba(0,0,0,0.1)] bg-[#F2A93B] rounded-[2.5rem] overflow-hidden relative border border-white/10">
                 <CardHeader className="flex flex-col md:flex-row items-start md:items-center justify-between pb-6 relative z-10 px-10 pt-10 gap-6">
                   <div className="space-y-1.5">
                     <CardTitle className="text-[1.5rem] font-black text-white tracking-tighter">Revenue Trajectory</CardTitle>
-                    <CardDescription className="text-slate-400 font-bold uppercase tracking-widest text-[11px] opacity-60">Historical Performance Flow</CardDescription>
+                    <CardDescription className="text-white/60 font-bold uppercase tracking-widest text-[11px]">Historical Performance Flow</CardDescription>
                   </div>
-                  <div className="flex items-center gap-1.5 bg-slate-800/40 p-1.5 rounded-2xl border border-white/10 backdrop-blur-md">
+                  <div className="flex items-center gap-1.5 bg-white/10 p-1.5 rounded-2xl border border-white/10 backdrop-blur-md">
                     {['Monthly', 'Quarterly', 'Yearly'].map((range) => (
                       <button
                         key={range}
                         onClick={() => setTimeRange(range)}
                         className={`px-5 py-2 text-[11px] font-black uppercase transition-all tracking-wider rounded-xl ${timeRange === range
-                          ? "text-white bg-blue-600 shadow-[0_0_20px_rgba(37,99,235,0.4)] tracking-widest"
-                          : "text-slate-500 hover:text-white"
+                          ? "text-[#F2A93B] bg-white shadow-lg tracking-widest"
+                          : "text-white/60 hover:text-white"
                           }`}
                       >
                         {range}
@@ -319,8 +319,8 @@ export default function ReportsPage() {
                     >
                       <defs>
                         <linearGradient id="electricBlueGradient" x1="0" y1="0" x2="0" y2="1">
-                          <stop offset="5%" stopColor="#3b82f6" stopOpacity={0.4} />
-                          <stop offset="95%" stopColor="#3b82f6" stopOpacity={0} />
+                          <stop offset="5%" stopColor="#fff" stopOpacity={0.4} />
+                          <stop offset="95%" stopColor="#fff" stopOpacity={0} />
                         </linearGradient>
                         <filter id="glow" x="-20%" y="-20%" width="140%" height="140%">
                           <feGaussianBlur stdDeviation="5" result="blur" />
@@ -330,14 +330,14 @@ export default function ReportsPage() {
                       <CartesianGrid
                         strokeDasharray="4 4"
                         vertical={false}
-                        stroke="#334155"
-                        strokeOpacity={0.4}
+                        stroke="#fff"
+                        strokeOpacity={0.15}
                       />
                       <XAxis
                         dataKey="month"
                         axisLine={false}
                         tickLine={false}
-                        tick={{ fill: '#64748b', fontSize: 13, fontWeight: 600 }}
+                        tick={{ fill: 'rgba(255,255,255,0.6)', fontSize: 13, fontWeight: 600 }}
                         dy={20}
                         interval={timeRange === 'Monthly' ? 1 : 0}
                         tickFormatter={(val) => {
@@ -351,7 +351,7 @@ export default function ReportsPage() {
                       <YAxis
                         axisLine={false}
                         tickLine={false}
-                        tick={{ fill: '#64748b', fontSize: 13, fontWeight: 600 }}
+                        tick={{ fill: 'rgba(255,255,255,0.6)', fontSize: 13, fontWeight: 600 }}
                         dx={-15}
                         ticks={dynamicTicks}
                         domain={[0, yAxisMax]}
@@ -371,21 +371,21 @@ export default function ReportsPage() {
                       <Area
                         type="monotone"
                         dataKey="revenue"
-                        stroke="#0ea5e9"
+                        stroke="#fff"
                         strokeWidth={4}
                         fill="url(#electricBlueGradient)"
                         filter="url(#glow)"
                         activeDot={{
                           r: 9,
-                          fill: "#fff",
-                          stroke: "#0ea5e9",
+                          fill: "#F2A93B",
+                          stroke: "#fff",
                           strokeWidth: 4,
-                          className: "shadow-[0_0_25px_rgba(14,165,233,0.9)]"
+                          className: "shadow-[0_0_25px_rgba(255,255,255,0.9)]"
                         }}
                         dot={{
                           r: 6,
-                          fill: "#fff",
-                          stroke: "#0ea5e9",
+                          fill: "#F2A93B",
+                          stroke: "#fff",
                           strokeWidth: 3,
                           strokeOpacity: 0.9
                         }}

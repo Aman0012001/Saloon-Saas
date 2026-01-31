@@ -285,6 +285,13 @@ export const bookingsAPI = {
     }
 };
 
+// Search API
+export const searchAPI = {
+    async query(q: string) {
+        return await fetchWithAuth(`/search?q=${encodeURIComponent(q)}`);
+    }
+};
+
 // Admin API
 export const adminAPI = {
     async getStats() {
@@ -378,6 +385,25 @@ export const adminAPI = {
         });
     },
 
+    async getSubscriptionAddons() {
+        const data = await fetchWithAuth('/admin/subscriptions/addons');
+        return data?.addons || data || [];
+    },
+
+    async createSubscriptionAddon(addonData: any) {
+        return await fetchWithAuth('/admin/subscriptions/addons', {
+            method: 'POST',
+            body: JSON.stringify(addonData),
+        });
+    },
+
+    async updateSubscriptionAddon(id: string, addonData: any) {
+        return await fetchWithAuth(`/admin/subscriptions/addons/${id}`, {
+            method: 'PUT',
+            body: JSON.stringify(addonData),
+        });
+    },
+
     async getContactEnquiries() {
         const data = await fetchWithAuth('/admin/contact-enquiries');
         return toArray(data, 'enquiries');
@@ -407,6 +433,41 @@ export const adminAPI = {
             body: JSON.stringify(data),
         });
     },
+
+    async getSalonAddons() {
+        const data = await fetchWithAuth('/admin/salons/addons');
+        return data?.salonAddons || [];
+    },
+
+    async assignSalonAddon(data: { salon_id: string; addon_id: string; action: 'assign' | 'revoke' }) {
+        return await fetchWithAuth('/admin/salons/addons/assign', {
+            method: 'POST',
+            body: JSON.stringify(data),
+        });
+    },
+
+    async updateOrderStatus(id: string, status: string) {
+        return await fetchWithAuth(`/admin/orders/${id}/status`, {
+            method: 'PUT',
+            body: JSON.stringify({ status }),
+        });
+    },
+
+    async getOrders() {
+        const data = await fetchWithAuth('/admin/orders');
+        return toArray(data, 'orders');
+    },
+
+    async getAllReviews() {
+        const data = await fetchWithAuth('/admin/reviews');
+        return toArray(data, 'reviews');
+    },
+
+    async deleteReview(id: string) {
+        return await fetchWithAuth(`/admin/reviews/${id}`, {
+            method: 'DELETE',
+        });
+    },
 };
 
 // User Roles API
@@ -432,6 +493,11 @@ export const subscriptionsAPI = {
     async getMySalonSubscriptions(salonId: string) {
         const data = await fetchWithAuth(`/subscriptions/my?salon_id=${salonId}`);
         return data?.subscriptions || data || [];
+    },
+
+    async getAddons() {
+        const data = await fetchWithAuth('/subscriptions/addons');
+        return data?.addons || data || [];
     },
 };
 
@@ -561,6 +627,12 @@ export const notificationsAPI = {
             method: 'PUT',
         });
     },
+
+    async delete(id: string) {
+        return await fetchWithAuth(`/notifications/${id}`, {
+            method: 'DELETE',
+        });
+    },
 };
 
 // Uploads API
@@ -572,6 +644,21 @@ export const uploadAPI = {
     },
 };
 
+// Orders API
+export const ordersAPI = {
+    async create(orderData: any) {
+        return await fetchWithAuth('/orders', {
+            method: 'POST',
+            body: JSON.stringify(orderData),
+        });
+    },
+
+    async getMyOrders() {
+        const data = await fetchWithAuth('/orders/my');
+        return toArray(data, 'orders');
+    }
+};
+
 // Export all APIs
 export const api = {
     auth: authAPI,
@@ -581,11 +668,14 @@ export const api = {
     staff: staffProfilesAPI,
     userRoles: userRolesAPI,
     admin: adminAPI,
+    orders: ordersAPI,
     subscriptions: subscriptionsAPI,
     profiles: profilesAPI,
     notifications: notificationsAPI,
     uploads: uploadAPI,
+    search: searchAPI,
     reviews: {
+        getAll: () => fetchWithAuth('/reviews'),
         getByService: (serviceId: string) => fetchWithAuth(`/reviews?service_id=${serviceId}`),
         getBySalon: (salonId: string) => fetchWithAuth(`/reviews?salon_id=${salonId}`),
         create: (data: any) => fetchWithAuth('/reviews', {
@@ -704,6 +794,25 @@ export const api = {
         }),
         delete: (id: string) => fetchWithAuth(`/messages/${id}`, {
             method: 'DELETE',
+        }),
+    },
+    newsletter: {
+        subscribe: (email: string) => fetchWithAuth('/newsletter/subscribe', {
+            method: 'POST',
+            body: JSON.stringify({ email }),
+        }),
+    },
+    coins: {
+        getBalance: () => fetchWithAuth('/coins?action=get-balance'),
+        getTransactions: () => fetchWithAuth('/coins?action=get-transactions'),
+        adminGetPrice: () => fetchWithAuth('/coins?action=admin-get-price'),
+        adminSetPrice: (price: number) => fetchWithAuth('/coins?action=admin-set-price', {
+            method: 'POST',
+            body: JSON.stringify({ price }),
+        }),
+        adminAdjust: (userId: string, amount: number, type: string, description: string) => fetchWithAuth('/coins?action=admin-adjust', {
+            method: 'POST',
+            body: JSON.stringify({ user_id: userId, amount, type, description }),
         }),
     },
     contactEnquiries: {

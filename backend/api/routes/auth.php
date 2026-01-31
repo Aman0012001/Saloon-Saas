@@ -42,6 +42,22 @@ if ($uriParts[1] === 'signup') {
         $stmt = $db->prepare("INSERT INTO profiles (id, user_id, full_name, phone, user_type) VALUES (?, ?, ?, ?, ?)");
         $stmt->execute([$profileId, $userId, $fullName, $phone, $userType]);
 
+        // --- Coin System: Signup Bonus ---
+        require_once __DIR__ . '/../../Services/CoinService.php';
+        $coinService = new CoinService($db);
+        $stmtBonus = $db->prepare("SELECT setting_value FROM platform_settings WHERE setting_key = 'coin_signup_bonus'");
+        $stmtBonus->execute();
+        $signupBonus = (float) ($stmtBonus->fetchColumn() ?: 0);
+
+        if ($signupBonus > 0) {
+            $coinService->adjustBalance(
+                $userId,
+                $signupBonus,
+                'earned',
+                'Clinical Account Initialization Reward'
+            );
+        }
+
         // If salon owner, create salon and link
         if ($userType === 'salon_owner' && !empty($salonName)) {
             $salonId = Auth::generateUuid();

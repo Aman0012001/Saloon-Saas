@@ -14,6 +14,19 @@ if ($method === 'GET' && $uriParts[1] === 'plans') {
     sendResponse(['plans' => $plans]);
 }
 
+// GET /api/subscriptions/addons - Get all subscription add-ons
+if ($method === 'GET' && $uriParts[1] === 'addons') {
+    $stmt = $db->prepare("
+        SELECT * FROM subscription_addons
+        WHERE is_active = 1
+        ORDER BY price_monthly ASC
+    ");
+    $stmt->execute();
+    $addons = $stmt->fetchAll();
+
+    sendResponse(['addons' => $addons]);
+}
+
 // GET /api/subscriptions/my - Get user's salon subscriptions
 if ($method === 'GET' && $uriParts[1] === 'my') {
     $userData = Auth::getUserFromToken();

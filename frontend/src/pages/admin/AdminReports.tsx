@@ -29,6 +29,7 @@ import {
 import { AdminLayout } from "@/components/admin/AdminLayout";
 import api from "@/services/api";
 import { format } from "date-fns";
+import { formatCompactNumber } from "@/lib/utils";
 import { exportToCSV, exportToExcel, exportToPDF } from "@/utils/exportUtils";
 import { Badge } from "@/components/ui/badge";
 import {
@@ -94,7 +95,7 @@ export default function AdminReports() {
               </div>
               <div>
                 <h1 className="text-4xl font-black tracking-tight">Intelligence Nexus</h1>
-                <p className="text-slate-400 font-bold uppercase tracking-widest text-[10px]">Aggregated Local Performance Data</p>
+                <p className="text-white font-bold uppercase tracking-widest text-[10px]">Aggregated Local Performance Data</p>
               </div>
             </div>
             <div className="flex gap-4">
@@ -111,7 +112,7 @@ export default function AdminReports() {
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
                   <Button className="bg-accent text-white font-black rounded-xl h-12 px-8 shadow-lg shadow-accent/20">
-                    <Download className="w-4 h-4 mr-2" /> DATA EXPORT
+                    <Download className="w-4 h-4 mr-2" /> REPORTS & EXPORT
                   </Button>
                 </DropdownMenuTrigger>
                 <DropdownMenuContent className="bg-white">
@@ -139,7 +140,7 @@ export default function AdminReports() {
                 <div>
                   <p className="text-[10px] font-black uppercase text-slate-400 tracking-widest leading-none">{stat.label}</p>
                   <p className="text-xl font-black text-slate-900 mt-2">
-                    {stat.label.includes("Intake") || stat.label.includes("Sales") ? `RM ${stat.value}` : stat.value}
+                    {stat.label.includes("Intake") || stat.label.includes("Sales") ? `RM ${formatCompactNumber(stat.value)}` : formatCompactNumber(stat.value)}
                   </p>
                 </div>
               </div>
@@ -183,7 +184,7 @@ export default function AdminReports() {
                     axisLine={false}
                     tickLine={false}
                     tick={{ fill: '#94a3b8', fontWeight: 600, fontSize: 12 }}
-                    tickFormatter={(value) => `RM ${value}`}
+                    tickFormatter={(value) => `RM ${formatCompactNumber(value)}`}
                     dx={-10}
                   />
                   <Tooltip

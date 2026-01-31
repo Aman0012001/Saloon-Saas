@@ -20,7 +20,9 @@ import {
     Bell,
     LogOut,
     Sparkles,
-    ShieldCheck
+    ShieldCheck,
+    Coins,
+    Package
 } from "lucide-react";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import api from "@/services/api";
@@ -36,6 +38,7 @@ export default function ClientHub() {
         totalBookings: 0,
         upcomingBookings: 0,
         completedBookings: 0,
+        coinBalance: 0
     });
     const [upcomingBookings, setUpcomingBookings] = useState<any[]>([]);
     const [loading, setLoading] = useState(true);
@@ -64,9 +67,18 @@ export default function ClientHub() {
                 totalBookings: bookings.length,
                 upcomingBookings: upcoming.length,
                 completedBookings: completed.length,
+                coinBalance: 0 // Will be updated below
             });
 
             setUpcomingBookings(upcoming.slice(0, 2));
+
+            // Fetch coin balance
+            try {
+                const coinData = await api.coins.getBalance();
+                setStats(prev => ({ ...prev, coinBalance: Number(coinData.balance || 0) }));
+            } catch (e) {
+                console.error("Error fetching coins:", e);
+            }
 
             // Fetch health profile (if exists)
             // Note: Since health profiles are salon-linked, we might just show a "Manage Health Profiles" or 
@@ -114,7 +126,7 @@ export default function ClientHub() {
                     {[
                         { label: "Total Visits", value: stats.totalBookings, icon: History, color: "bg-blue-50 text-blue-600" },
                         { label: "Upcoming", value: stats.upcomingBookings, icon: Calendar, color: "bg-orange-50 text-orange-600" },
-                        { label: "Points", value: stats.completedBookings * 10, icon: Star, color: "bg-yellow-50 text-yellow-600" }
+                        { label: "Platform Coins", value: stats.coinBalance.toFixed(2), icon: Coins, color: "bg-amber-50 text-amber-600" }
                     ].map((stat, i) => (
                         <motion.div
                             key={stat.label}
@@ -201,8 +213,9 @@ export default function ClientHub() {
                         <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
                             {[
                                 { title: "Find Salons", desc: "Explore elite grooming spots", icon: Search, link: "/salons", color: "bg-accent text-white" },
-                                { title: "Your Sessions", desc: "View detailed treatment records", icon: History, link: "/my-sessions", color: "bg-indigo-600 text-white" },
-                                { title: "My Profile", desc: "Update your personal style info", icon: User, link: "/profile", color: "bg-slate-900 text-white" }
+                                { title: "Your Sessions", desc: "View detailed treatment records", icon: History, link: "/user/sessions", color: "bg-indigo-600 text-white" },
+                                { title: "Track Orders", desc: "Check status of your purchases", icon: Package, link: "/my-bookings?tab=orders", color: "bg-emerald-600 text-white" },
+                                { title: "My Profile", desc: "Update your personal style info", icon: User, link: "/user/profile", color: "bg-slate-900 text-white" }
                             ].map((action, i) => (
                                 <motion.div
                                     key={action.title}
@@ -255,7 +268,7 @@ export default function ClientHub() {
                                     </div>
 
                                     <Button asChild variant="ghost" className="w-full text-white hover:bg-white/10 rounded-[1.5rem] font-bold text-xs uppercase tracking-widest h-12 border border-white/10">
-                                        <Link to="/profile">Manage Health Profile</Link>
+                                        <Link to="/user/profile">Manage Health Profile</Link>
                                     </Button>
                                 </CardContent>
                             </Card>

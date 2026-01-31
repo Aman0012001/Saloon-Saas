@@ -37,10 +37,8 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { Progress } from "@/components/ui/progress";
 import { AdminLayout } from "@/components/admin/AdminLayout";
 import api from "@/services/api";
-import {
-  format,
-  subMonths,
-} from "date-fns";
+import { format, subMonths } from "date-fns";
+import { cn, formatCompactNumber } from "@/lib/utils";
 import {
   BarChart,
   Bar,
@@ -306,11 +304,11 @@ export default function AdminDashboardEnhanced() {
         {/* Global Analytics Cards */}
         <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-5 gap-6">
           {[
-            { label: "Total Salons", value: dashboardStats.totalSalons, active: `${dashboardStats.activeSalons} Active`, icon: Building2, color: "text-blue-500", bg: "bg-blue-50" },
-            { label: "Plan Sales", value: `RM ${dashboardStats.planRevenue}`, active: "Subscription", icon: Zap, color: "text-indigo-500", bg: "bg-indigo-50" },
-            { label: "Service Sales", value: `RM ${dashboardStats.serviceRevenue}`, active: "Bookings", icon: Activity, color: "text-emerald-500", bg: "bg-emerald-50" },
-            { label: "Product Sales", value: `RM ${dashboardStats.productRevenue}`, active: "Retail", icon: Banknote, color: "text-rose-500", bg: "bg-rose-50" },
-            { label: "Total Revenue", value: `RM ${dashboardStats.monthlyRevenue}`, active: "Gross Intake", icon: BarChart3, color: "text-purple-500", bg: "bg-purple-50" },
+            { label: "Total Salons", value: formatCompactNumber(dashboardStats.totalSalons), active: `${dashboardStats.activeSalons} Active`, icon: Building2, color: "text-blue-500", bg: "bg-blue-50" },
+            { label: "Plan Sales", value: `RM ${formatCompactNumber(dashboardStats.planRevenue)}`, active: "Subscription", icon: Zap, color: "text-indigo-500", bg: "bg-indigo-50" },
+            { label: "Service Sales", value: `RM ${formatCompactNumber(dashboardStats.serviceRevenue)}`, active: "Bookings", icon: Activity, color: "text-emerald-500", bg: "bg-emerald-50" },
+            { label: "Product Sales", value: `RM ${formatCompactNumber(dashboardStats.productRevenue)}`, active: "Retail", icon: Banknote, color: "text-rose-500", bg: "bg-rose-50" },
+            { label: "Total Revenue", value: `RM ${formatCompactNumber(dashboardStats.monthlyRevenue)}`, active: "Gross Intake", icon: BarChart3, color: "text-purple-500", bg: "bg-purple-50" },
           ].map((stat, i) => (
             <Card key={i} className={`border-none shadow-sm bg-white rounded-3xl group hover:shadow-xl transition-all ${stat.label === 'Total Revenue' ? 'lg:col-span-1' : ''}`}>
               <CardContent className="p-6">
@@ -359,14 +357,14 @@ export default function AdminDashboardEnhanced() {
                     dataKey="name"
                     axisLine={false}
                     tickLine={false}
-                    tick={{ fill: '#94a3b8', fontWeight: 600, fontSize: 12 }}
+                    tick={{ fill: '#ffffff', fontWeight: 600, fontSize: 12 }}
                     dy={15}
                   />
                   <YAxis
                     axisLine={false}
                     tickLine={false}
-                    tick={{ fill: '#94a3b8', fontWeight: 600, fontSize: 12 }}
-                    tickFormatter={(value) => `RM ${value}`}
+                    tick={{ fill: '#ffffff', fontWeight: 600, fontSize: 12 }}
+                    tickFormatter={(value) => `RM ${formatCompactNumber(value)}`}
                     dx={-10}
                   />
                   <Tooltip
@@ -377,6 +375,7 @@ export default function AdminDashboardEnhanced() {
                       boxShadow: '0 10px 15px -3px rgba(0,0,0,0.5)',
                       padding: '12px'
                     }}
+                    labelStyle={{ color: '#fff', fontWeight: 700, marginBottom: '4px' }}
                     itemStyle={{ color: '#fff', fontWeight: 600 }}
                     cursor={{ fill: 'rgba(255,255,255,0.05)' }}
                   />

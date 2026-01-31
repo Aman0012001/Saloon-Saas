@@ -39,6 +39,7 @@ export function AddStaffDialog({ salonId, staffCount, onSuccess, trigger }: AddS
     const [uploading, setUploading] = useState(false);
     const [allServices, setAllServices] = useState<any[]>([]);
     const [loadingServices, setLoadingServices] = useState(false);
+    const [isDragging, setIsDragging] = useState(false);
 
     const [formData, setFormData] = useState({
         name: "",
@@ -108,8 +109,19 @@ export function AddStaffDialog({ salonId, staffCount, onSuccess, trigger }: AddS
         }
     };
 
+    const onDragOver = (e: React.DragEvent) => {
+        e.preventDefault();
+        setIsDragging(true);
+    };
+
+    const onDragLeave = (e: React.DragEvent) => {
+        e.preventDefault();
+        setIsDragging(false);
+    };
+
     const onDrop = async (e: React.DragEvent) => {
         e.preventDefault();
+        setIsDragging(false);
         const file = e.dataTransfer.files?.[0];
         if (file && file.type.startsWith('image/')) {
             await uploadFile(file);
@@ -326,11 +338,12 @@ export function AddStaffDialog({ salonId, staffCount, onSuccess, trigger }: AddS
 
                             <div className="flex gap-4">
                                 <div
-                                    onDragOver={(e) => e.preventDefault()}
+                                    onDragOver={onDragOver}
+                                    onDragLeave={onDragLeave}
                                     onDrop={onDrop}
                                     onClick={() => fileInputRef.current?.click()}
                                     className={`w-32 h-32 rounded-2xl border-2 border-dashed flex flex-col items-center justify-center cursor-pointer transition-all overflow-hidden relative group
-                                        ${formData.avatar_url ? 'border-[#F2A93B]/50' : 'border-slate-200 hover:border-[#F2A93B]/30 bg-slate-50'}`}
+                                        ${isDragging ? 'border-[#F2A93B] bg-[#F2A93B]/5 scale-105 ring-4 ring-[#F2A93B]/10' : formData.avatar_url ? 'border-[#F2A93B]/50' : 'border-slate-200 hover:border-[#F2A93B]/30 bg-slate-50'}`}
                                 >
                                     {uploading ? (
                                         <div className="flex flex-col items-center gap-2">
@@ -347,10 +360,15 @@ export function AddStaffDialog({ salonId, staffCount, onSuccess, trigger }: AddS
                                     ) : (
                                         <>
                                             <div className="w-10 h-10 rounded-full bg-slate-100 flex items-center justify-center mb-2 group-hover:bg-[#F2A93B]/10 group-hover:scale-110 transition-all">
-                                                <ImageIcon className="w-5 h-5 text-slate-400 group-hover:text-[#F2A93B]" />
+                                                {isDragging ? <UploadCloud className="w-5 h-5 text-[#F2A93B] animate-bounce" /> : <ImageIcon className="w-5 h-5 text-slate-400 group-hover:text-[#F2A93B]" />}
                                             </div>
-                                            <span className="text-[8px] font-bold text-slate-400 uppercase tracking-tighter">Import Asset</span>
+                                            <span className="text-[8px] font-bold text-slate-400 uppercase tracking-tighter">{isDragging ? 'Release Now' : 'Import Asset'}</span>
                                         </>
+                                    )}
+                                    {isDragging && (
+                                        <div className="absolute inset-0 bg-[#F2A93B]/10 backdrop-blur-[1px] flex items-center justify-center border-2 border-dashed border-[#F2A93B]">
+                                            <UploadCloud className="w-8 h-8 text-[#F2A93B] animate-bounce" />
+                                        </div>
                                     )}
                                     <input
                                         type="file"

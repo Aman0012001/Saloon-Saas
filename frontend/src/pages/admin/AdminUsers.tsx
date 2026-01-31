@@ -16,7 +16,10 @@ import {
   Clock,
   AlertTriangle,
   Download,
-  Trash2
+  Trash2,
+  Coins,
+  ArrowRightCircle,
+  Loader2
 } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -63,6 +66,7 @@ interface User {
   is_owner?: boolean;
   salon_name?: string;
   role?: string;
+  coin_balance?: number;
 }
 
 export default function AdminUsers() {
@@ -72,6 +76,9 @@ export default function AdminUsers() {
   const [typeFilter, setTypeFilter] = useState("all");
   const [selectedUser, setSelectedUser] = useState<User | null>(null);
   const [showDetailsDialog, setShowDetailsDialog] = useState(false);
+  const [adjustAmount, setAdjustAmount] = useState<string>("");
+  const [adjustDescription, setAdjustDescription] = useState<string>("Admin adjustment");
+  const [isAdjusting, setIsAdjusting] = useState(false);
   const { toast } = useToast();
 
   const fetchUsers = async () => {
@@ -98,6 +105,41 @@ export default function AdminUsers() {
       toast({ title: "Error", description: error.message, variant: "destructive" });
     }
   };
+
+  const handleAdjustCoins = async () => {
+    if (!selectedUser || !adjustAmount) return;
+
+    setIsAdjusting(true);
+    try {
+      await api.coins.adminAdjust(
+        selectedUser.id,
+        Number(adjustAmount),
+        Number(adjustAmount) > 0 ? 'earned' : 'spent',
+        adjustDescription
+      );
+
+      toast({
+        title: "Points Adjusted",
+        description: `Successfully ${Number(adjustAmount) > 0 ? 'added' : 'deducted'} ${Math.abs(Number(adjustAmount))} points.`
+      });
+
+      const updatedBalance = (selectedUser.coin_balance || 0) + Number(adjustAmount);
+      setSelectedUser({ ...selectedUser, coin_balance: updatedBalance });
+      setAdjustAmount("");
+      setAdjustDescription("Admin adjustment");
+      setUsers(users.map(u => u.id === selectedUser.id ? { ...u, coin_balance: updatedBalance } : u));
+    } catch (error: any) {
+      toast({ title: "Adjustment Failed", description: error.message, variant: "destructive" });
+    } finally {
+      setIsAdjusting(false);
+    }
+  };
+
+  const openDetails = async (user: User) => {
+    setSelectedUser(user);
+    setShowDetailsDialog(true);
+  };
+
 
   useEffect(() => {
     fetchUsers();
@@ -247,7 +289,7 @@ export default function AdminUsers() {
                       </TableCell>
                       <TableCell className="text-right px-8">
                         <div className="flex justify-end gap-2">
-                          <Button variant="ghost" size="sm" onClick={() => { setSelectedUser(user); setShowDetailsDialog(true); }} className="rounded-xl font-bold hover:bg-slate-100">
+                          <Button variant="ghost" size="sm" onClick={() => openDetails(user)} className="rounded-xl font-bold hover:bg-slate-100">
                             <Eye className="w-4 h-4 mr-2" /> View
                           </Button>
                           <Button variant="ghost" size="sm" onClick={() => handleDeleteUser(user)} className="rounded-xl font-bold hover:bg-red-50 text-red-600">
@@ -302,6 +344,38 @@ export default function AdminUsers() {
                     <p className="font-black text-slate-900">{selectedUser.salon_name}</p>
                   </div>
                 )}
+                <div className="space-y-1 p-4 bg-amber-50 rounded-2xl border border-amber-100">
+                  <p className="text-[10px] font-black uppercase text-amber-600 tracking-widest flex items-center gap-1">
+                    <Coins className="w-3 h-3" /> Point Balance
+                  </p>
+                  <p className="text-2xl font-black text-amber-700">{(selectedUser.coin_balance || 0).toFixed(2)}</p>
+                </div>
+              </div>
+
+              <div className="space-y-4 p-6 bg-slate-50 rounded-[2rem] border border-slate-100">
+                <p className="text-[10px] font-black uppercase text-slate-400 tracking-widest">Adjustment Console</p>
+                <div className="flex gap-2">
+                  <Input
+                    type="number"
+                    placeholder="Amt (+/-)"
+                    value={adjustAmount}
+                    onChange={e => setAdjustAmount(e.target.value)}
+                    className="bg-white border-none h-12 rounded-xl font-bold"
+                  />
+                  <Button
+                    onClick={handleAdjustCoins}
+                    disabled={isAdjusting || !adjustAmount}
+                    className="bg-amber-500 hover:bg-amber-600 text-white h-12 px-4 rounded-xl shadow-lg shadow-amber-500/20"
+                  >
+                    {isAdjusting ? <Loader2 className="w-4 h-4 animate-spin" /> : <ArrowRightCircle className="w-5 h-5" />}
+                  </Button>
+                </div>
+                <Input
+                  placeholder="Reason for adjustment..."
+                  value={adjustDescription}
+                  onChange={e => setAdjustDescription(e.target.value)}
+                  className="bg-white border-none h-10 rounded-xl text-xs"
+                />
               </div>
 
               <div className="pt-6 border-t border-slate-100 flex gap-3">

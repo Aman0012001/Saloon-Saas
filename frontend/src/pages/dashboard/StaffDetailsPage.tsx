@@ -78,7 +78,7 @@ export default function StaffDetailsPage() {
                     description: "Staff member not found.",
                     variant: "destructive",
                 });
-                navigate("/dashboard/staff");
+                navigate("/salon/staff");
                 return;
             }
             setStaff(staffMember);

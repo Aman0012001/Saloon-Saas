@@ -21,6 +21,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { useSalon } from "@/hooks/useSalon";
 import { useAuth } from "@/hooks/useAuth";
 import api from "@/services/api";
+import { cn } from "@/lib/utils";
 
 export default function CreateSalon() {
   const navigate = useNavigate();
@@ -30,6 +31,8 @@ export default function CreateSalon() {
   const [loading, setLoading] = useState(false);
   const [logoPreview, setLogoPreview] = useState<string | null>(null);
   const [coverPreview, setCoverPreview] = useState<string | null>(null);
+  const [isDraggingLogo, setIsDraggingLogo] = useState(false);
+  const [isDraggingCover, setIsDraggingCover] = useState(false);
   const [formData, setFormData] = useState({
     name: "",
     slug: "",
@@ -59,6 +62,37 @@ export default function CreateSalon() {
       }
     };
     reader.readAsDataURL(file);
+  };
+
+  const handleDrag = (e: React.DragEvent, type: 'logo' | 'cover', isEntering: boolean) => {
+    e.preventDefault();
+    e.stopPropagation();
+    if (type === 'logo') setIsDraggingLogo(isEntering);
+    else setIsDraggingCover(isEntering);
+  };
+
+  const handleDrop = async (e: React.DragEvent, type: 'logo' | 'cover') => {
+    e.preventDefault();
+    e.stopPropagation();
+    if (type === 'logo') setIsDraggingLogo(false);
+    else setIsDraggingCover(false);
+
+    const file = e.dataTransfer.files?.[0];
+    if (file && file.type.startsWith('image/')) {
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        if (type === 'logo') {
+          setLogoPreview(reader.result as string);
+          setFormData(p => ({ ...p, logo_url: reader.result as string }));
+        } else {
+          setCoverPreview(reader.result as string);
+          setFormData(p => ({ ...p, cover_image_url: reader.result as string }));
+        }
+      };
+      reader.readAsDataURL(file);
+    } else if (file) {
+      toast({ title: "Invalid File", description: "Please drop an image file", variant: "destructive" });
+    }
   };
 
   useEffect(() => {
@@ -149,24 +183,56 @@ export default function CreateSalon() {
               <div className="grid grid-cols-2 gap-6">
                 <div className="space-y-3">
                   <Label className="text-xs font-black uppercase text-slate-400 tracking-widest ml-1">Brand Logo</Label>
-                  <div className="h-40 rounded-[2rem] bg-slate-50 border-2 border-dashed border-slate-100 flex items-center justify-center relative overflow-hidden group">
+                  <div
+                    className={cn(
+                      "h-40 rounded-[2rem] bg-slate-50 border-2 border-dashed border-slate-100 flex items-center justify-center relative overflow-hidden group transition-all",
+                      isDraggingLogo && "scale-105 border-accent bg-accent/5 ring-4 ring-accent/10"
+                    )}
+                    onDragOver={(e) => handleDrag(e, 'logo', true)}
+                    onDragLeave={(e) => handleDrag(e, 'logo', false)}
+                    onDrop={(e) => handleDrop(e, 'logo')}
+                  >
                     {logoPreview ? (
                       <img src={logoPreview} className="w-full h-full object-cover" />
                     ) : (
-                      <Camera className="w-8 h-8 text-slate-200 group-hover:text-accent transition-colors" />
+                      <div className="flex flex-col items-center gap-2">
+                        <Camera className="w-8 h-8 text-slate-200 group-hover:text-accent transition-colors" />
+                        <span className="text-[8px] font-black text-slate-300 uppercase tracking-widest">Drag & Drop</span>
+                      </div>
                     )}
-                    <input type="file" className="absolute inset-0 opacity-0 cursor-pointer" onChange={e => onFileChange(e, 'logo')} />
+                    <input type="file" className="absolute inset-0 opacity-0 cursor-pointer" onChange={e => onFileChange(e, 'logo')} accept="image/*,.avif" />
+                    {isDraggingLogo && (
+                      <div className="absolute inset-0 bg-accent/10 backdrop-blur-[1px] flex items-center justify-center border-2 border-dashed border-accent rounded-[2rem]">
+                        <Upload className="w-10 h-10 text-accent animate-bounce" />
+                      </div>
+                    )}
                   </div>
                 </div>
                 <div className="space-y-3">
                   <Label className="text-xs font-black uppercase text-slate-400 tracking-widest ml-1">Cover Aesthetic</Label>
-                  <div className="h-40 rounded-[2rem] bg-slate-50 border-2 border-dashed border-slate-100 flex items-center justify-center relative overflow-hidden group">
+                  <div
+                    className={cn(
+                      "h-40 rounded-[2rem] bg-slate-50 border-2 border-dashed border-slate-100 flex items-center justify-center relative overflow-hidden group transition-all",
+                      isDraggingCover && "scale-105 border-accent bg-accent/5 ring-4 ring-accent/10"
+                    )}
+                    onDragOver={(e) => handleDrag(e, 'cover', true)}
+                    onDragLeave={(e) => handleDrag(e, 'cover', false)}
+                    onDrop={(e) => handleDrop(e, 'cover')}
+                  >
                     {coverPreview ? (
                       <img src={coverPreview} className="w-full h-full object-cover" />
                     ) : (
-                      <Upload className="w-8 h-8 text-slate-200 group-hover:text-accent transition-colors" />
+                      <div className="flex flex-col items-center gap-2">
+                        <Upload className="w-8 h-8 text-slate-200 group-hover:text-accent transition-colors" />
+                        <span className="text-[8px] font-black text-slate-300 uppercase tracking-widest">Drag & Drop</span>
+                      </div>
                     )}
-                    <input type="file" className="absolute inset-0 opacity-0 cursor-pointer" onChange={e => onFileChange(e, 'cover')} />
+                    <input type="file" className="absolute inset-0 opacity-0 cursor-pointer" onChange={e => onFileChange(e, 'cover')} accept="image/*,.avif" />
+                    {isDraggingCover && (
+                      <div className="absolute inset-0 bg-accent/10 backdrop-blur-[1px] flex items-center justify-center border-2 border-dashed border-accent rounded-[2rem]">
+                        <Upload className="w-10 h-10 text-accent animate-bounce" />
+                      </div>
+                    )}
                   </div>
                 </div>
               </div>

@@ -46,6 +46,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { AdminLayout } from "@/components/admin/AdminLayout";
 import api from "@/services/api";
 import { format } from "date-fns";
+import { formatCompactNumber } from "@/lib/utils";
 
 interface PaymentData {
   id: string;
@@ -165,7 +166,7 @@ export default function AdminPaymentsEnhanced() {
             </div>
             <div>
               <p className="text-[10px] font-black uppercase text-slate-400 tracking-widest">Net Platform Revenue</p>
-              <p className="text-2xl font-black text-slate-900">RM {totalRevenue}</p>
+              <p className="text-2xl font-black text-slate-900">RM {formatCompactNumber(totalRevenue)}</p>
             </div>
           </Card>
           <Card className="border-none shadow-sm bg-white rounded-3xl p-6 flex items-center gap-6">
@@ -174,7 +175,7 @@ export default function AdminPaymentsEnhanced() {
             </div>
             <div>
               <p className="text-[10px] font-black uppercase text-slate-400 tracking-widest">Settled Transactions</p>
-              <p className="text-2xl font-black text-slate-900">{payments.filter(p => p.status === 'completed').length}</p>
+              <p className="text-2xl font-black text-slate-900">{formatCompactNumber(payments.filter(p => p.status === 'completed').length)}</p>
             </div>
           </Card>
           <Card className="border-none shadow-sm bg-white rounded-3xl p-6 flex items-center gap-6">
@@ -182,8 +183,8 @@ export default function AdminPaymentsEnhanced() {
               <Clock className="w-7 h-7" />
             </div>
             <div>
-              <p className="text-[10px] font-black uppercase text-slate-400 tracking-widest">In-Progress Volume</p>
-              <p className="text-2xl font-black text-slate-900">RM {payments.filter(p => p.status === 'pending').reduce((s, p) => s + p.amount, 0)}</p>
+              <p className="text-[10px] font-black uppercase text-white tracking-widest">In-Progress Volume</p>
+              <p className="text-2xl font-black text-slate-900">RM {formatCompactNumber(payments.filter(p => p.status === 'pending').reduce((s, p) => s + p.amount, 0))}</p>
             </div>
           </Card>
         </div>

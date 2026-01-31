@@ -65,8 +65,8 @@ export default function SalonListing() {
         name: salon.name,
         image: getImageUrl(salon.cover_image_url, 'cover', salon.id),
         logo: getImageUrl(salon.logo_url, 'logo', salon.id),
-        rating: Number((4.5 + Math.random() * 0.5).toFixed(1)),
-        reviews: Math.floor(Math.random() * 200) + 10,
+        rating: Number(salon.rating || 0),
+        reviews: Number(salon.review_count || 0),
         address: salon.address || "Main Street",
         city: salon.city || "Local",
         distance: (Math.random() * 5).toFixed(1) + " km",
@@ -207,7 +207,10 @@ export default function SalonListing() {
                         <div className="absolute top-4 left-4">
                           <div className="flex items-center gap-1.5 bg-white/90 backdrop-blur-md px-3 py-1.5 rounded-xl shadow-sm">
                             <Star className="w-3.5 h-3.5 text-accent fill-accent" />
-                            <span className="text-xs font-black text-slate-900">{salon.rating}</span>
+                            <span className="text-xs font-black text-slate-900">
+                              {(typeof salon.rating === 'number' ? salon.rating : Number(salon.rating || 0)).toFixed(1)}
+                              {salon.reviews > 0 && <span className="text-slate-400 font-bold ml-1">· {salon.reviews}</span>}
+                            </span>
                           </div>
                         </div>
 

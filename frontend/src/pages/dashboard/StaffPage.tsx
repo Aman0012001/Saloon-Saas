@@ -139,7 +139,7 @@ export default function StaffPage() {
             <div className="absolute inset-0 border-4 border-slate-100 rounded-full"></div>
             <div className="absolute inset-0 border-4 border-[#F2A93B] rounded-full border-t-transparent animate-spin"></div>
           </div>
-          <p className="text-slate-400 font-bold uppercase tracking-widest text-[10px]">Synchronizing Team Registry...</p>
+          <p className="text-white font-bold uppercase tracking-widest text-[10px]">Synchronizing Team Registry...</p>
         </div>
       </ResponsiveDashboardLayout>
     );
@@ -270,7 +270,7 @@ export default function StaffPage() {
                   </div>
 
                   <Button
-                    onClick={() => navigate(`/dashboard/staff/${selectedStaff.id}`)}
+                    onClick={() => navigate(`/salon/staff/${selectedStaff.id}`)}
                     className="absolute top-8 right-8 bg-[#F2A93B] hover:bg-[#E29A2B] text-white font-bold h-10 px-8 rounded-md"
                   >
                     View

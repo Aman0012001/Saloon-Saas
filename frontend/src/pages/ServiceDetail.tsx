@@ -14,6 +14,8 @@ import Navbar from "@/components/Navbar";
 import Footer from "@/components/Footer";
 import { motion } from "framer-motion";
 import api from "@/services/api";
+import { useAuth } from "@/hooks/useAuth";
+import { useToast } from "@/hooks/use-toast";
 
 interface Service {
     id: string;
@@ -31,6 +33,8 @@ interface Service {
     salon_phone?: string;
     salon_email?: string;
     salon_pincode?: string;
+    rating?: number | string;
+    review_count?: number;
 }
 
 interface Review {
@@ -61,6 +65,21 @@ export default function ServiceDetail() {
     const [submittingReview, setSubmittingReview] = useState(false);
     const [newReview, setNewReview] = useState({ rating: 5, comment: "" });
     const [error, setError] = useState<string | null>(null);
+    const { user } = useAuth();
+    const { toast } = useToast();
+
+    const handleBooking = (url: string) => {
+        if (!user) {
+            toast({
+                title: "Authentication Required",
+                description: "To finalize your ritual scheduling, please join our community. Your unique profile ensures a bespoke experience.",
+                variant: "default",
+            });
+            navigate("/signup");
+            return;
+        }
+        navigate(url);
+    };
 
     useEffect(() => {
         const fetchService = async () => {
@@ -155,19 +174,27 @@ export default function ServiceDetail() {
                                 {service.name.split(' ').slice(1).join(' ')}
                             </h1>
                             <p className="text-sm font-medium text-slate-500">By {service.salon_name || "Premium Provider"} • {service.salon_city || "Active District"}</p>
-                            <div className="flex items-center gap-1 mt-1">
+                            <div className="flex items-center gap-2 mt-1">
                                 <div className="flex items-center gap-0.5">
                                     {[1, 2, 3, 4, 5].map((star) => (
-                                        <Star key={star} className="w-3.5 h-3.5 fill-amber-400 text-amber-400" />
+                                        <Star
+                                            key={star}
+                                            className={`w-3.5 h-3.5 ${star <= Math.floor(Number(service.rating || 0)) ? "fill-amber-400 text-amber-400" : "text-slate-200"}`}
+                                        />
                                     ))}
                                 </div>
-                                <span className="text-[10px] font-black text-slate-400 ml-2 uppercase tracking-widest">Verified Treatment</span>
+                                <span className="text-xs font-black text-slate-900 ml-1">
+                                    {Number(service.rating || 0).toFixed(1)}
+                                </span>
+                                <span className="text-[10px] font-black text-slate-400 ml-2 uppercase tracking-widest">
+                                    {service.review_count || 0} Verified Reviews
+                                </span>
                             </div>
                         </div>
                     </div>
 
                     <Button
-                        onClick={() => navigate(`/book?salonId=${service.salon_id}&serviceId=${service.id}`)}
+                        onClick={() => handleBooking(`/book?salonId=${service.salon_id}&serviceId=${service.id}`)}
                         className="bg-[#214E78] hover:bg-[#1a3d5e] text-white font-bold h-14 px-10 rounded-full shadow-md text-sm uppercase tracking-wider"
                     >
                         Schedule This Appoitment
@@ -389,7 +416,6 @@ export default function ServiceDetail() {
                     </div>
                 )}
             </main>
-
             <Footer />
         </div>
     );

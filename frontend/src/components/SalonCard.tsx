@@ -1,6 +1,8 @@
 import { Star } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { getImageUrl } from "@/utils/imageUrl";
+import { useAuth } from "@/hooks/useAuth";
+import { useToast } from "@/hooks/use-toast";
 
 interface SalonCardProps {
   id: string;
@@ -11,6 +13,7 @@ interface SalonCardProps {
   employees: number;
   coverImage: string;
   logoImage: string;
+  reviewCount?: number;
   ownerName?: string;
 }
 
@@ -25,9 +28,26 @@ const SalonCard = ({
   employees,
   coverImage,
   logoImage,
+  reviewCount,
   ownerName,
 }: SalonCardProps) => {
   const navigate = useNavigate();
+  const { user } = useAuth();
+  const { toast } = useToast();
+
+  const handleBookNow = (e: React.MouseEvent) => {
+    e.stopPropagation(); // Avoid triggering the card's click
+    if (!user) {
+      toast({
+        title: "Login Required",
+        description: "Join our elite registry to book your next bespoke experience.",
+        variant: "default",
+      });
+      navigate("/signup");
+      return;
+    }
+    navigate(`/book?salonId=${id}`);
+  };
 
   return (
     <div
@@ -71,10 +91,12 @@ const SalonCard = ({
             {Array.from({ length: 5 }).map((_, i) => (
               <Star
                 key={i}
-                className={`w-4 h-4 ${i < rating ? "fill-gold text-gold" : "fill-muted text-muted"
-                  }`}
+                className={`w-4 h-4 ${i < Math.floor(typeof rating === 'number' ? rating : Number(rating || 0)) ? "fill-[#F2A93B] text-[#F2A93B]" : "text-slate-200"}`}
               />
             ))}
+            <span className="text-xs text-muted-foreground ml-1">
+              ({(typeof rating === 'number' ? rating : Number(rating || 0)).toFixed(1)}) {reviewCount !== undefined && <span className="ml-1">· {reviewCount} reviews</span>}
+            </span>
           </div>
 
           {/* Stats */}
@@ -85,6 +107,7 @@ const SalonCard = ({
 
           {/* Book Button */}
           <Button
+            onClick={handleBookNow}
             variant="ghost"
             className="w-full mt-2 text-foreground hover:bg-[#533B26] hover:text-white font-medium transition-all duration-300"
           >

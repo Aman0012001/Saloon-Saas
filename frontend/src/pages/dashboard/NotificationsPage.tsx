@@ -221,7 +221,7 @@ export default function NotificationsPage() {
                                                             }`}
                                                         onClick={() => {
                                                             if (m.receiver_id === user?.id && !m.is_read) markAsRead(m.id, true);
-                                                            navigate('/dashboard/staff/messages');
+                                                            navigate('/salon/staff/messages');
                                                         }}
                                                     >
                                                         <div className="flex items-start gap-6">

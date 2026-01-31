@@ -138,7 +138,7 @@ export const CalendarView = ({ bookings, onDateSelect, selectedDate }: CalendarV
                                         {format(day, 'd')}
                                     </span>
                                     {dayBookings.length > 0 && (
-                                        <Badge className="bg-slate-900 text-white border-0 font-black text-[9px] px-2 h-5">
+                                        <Badge className="bg-[#F2A93B] text-white border-0 font-black text-[9px] px-2 h-5">
                                             {dayBookings.length}
                                         </Badge>
                                     )}
@@ -159,7 +159,7 @@ export const CalendarView = ({ bookings, onDateSelect, selectedDate }: CalendarV
                                                         </span>
                                                     </div>
                                                 </TooltipTrigger>
-                                                <TooltipContent side="right" className="bg-slate-900 text-white border-none p-4 rounded-2xl shadow-2xl w-64">
+                                                <TooltipContent side="right" className="bg-[#F2A93B] text-white border-none p-4 rounded-2xl shadow-2xl w-64">
                                                     <div className="space-y-3">
                                                         <div className="flex items-center justify-between">
                                                             <Badge className={cn("text-[8px] font-black uppercase tracking-widest", getStatusColor(booking.status))}>

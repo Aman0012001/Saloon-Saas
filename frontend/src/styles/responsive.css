@@ -1,0 +1,204 @@
+/* Responsive Utilities for Salon Style Clone */
+
+/* Mobile First Breakpoints */
+/* 
+  - xs: 0-639px (mobile)
+  - sm: 640px-767px (large mobile)
+  - md: 768px-1023px (tablet)
+  - lg: 1024px-1279px (small desktop)
+  - xl: 1280px-1535px (desktop)
+  - 2xl: 1536px+ (large desktop)
+*/
+
+/* Container Responsive Padding */
+.responsive-container {
+    @apply px-4 sm:px-6 md:px-8 lg:px-12 xl:px-16;
+}
+
+/* Responsive Grid Layouts */
+.grid-responsive-1-2-3 {
+    @apply grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 md:gap-6 lg:gap-8;
+}
+
+.grid-responsive-1-2-4 {
+    @apply grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 md:gap-6;
+}
+
+.grid-responsive-1-3 {
+    @apply grid grid-cols-1 md:grid-cols-3 gap-4 md:gap-6;
+}
+
+/* Responsive Text Sizes */
+.text-responsive-h1 {
+    @apply text-2xl sm:text-3xl md:text-4xl lg:text-5xl xl:text-6xl;
+}
+
+.text-responsive-h2 {
+    @apply text-xl sm:text-2xl md:text-3xl lg:text-4xl;
+}
+
+.text-responsive-h3 {
+    @apply text-lg sm:text-xl md:text-2xl lg:text-3xl;
+}
+
+.text-responsive-body {
+    @apply text-sm sm:text-base md:text-lg;
+}
+
+/* Responsive Spacing */
+.section-padding {
+    @apply py-8 sm:py-12 md:py-16 lg:py-20 xl:py-24;
+}
+
+.card-padding {
+    @apply p-4 sm:p-6 md:p-8;
+}
+
+/* Responsive Flex Layouts */
+.flex-responsive-col-row {
+    @apply flex flex-col md:flex-row;
+}
+
+.flex-responsive-row-col {
+    @apply flex flex-row md:flex-col;
+}
+
+/* Dashboard Specific */
+.dashboard-grid {
+    @apply grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 md:gap-6;
+}
+
+.dashboard-card {
+    @apply p-4 sm:p-6 rounded-lg sm:rounded-xl md:rounded-2xl;
+}
+
+/* Table Responsive */
+.table-responsive {
+    @apply overflow-x-auto -mx-4 sm:mx-0;
+}
+
+.table-cell-responsive {
+    @apply px-2 sm:px-4 md:px-6 py-3 sm:py-4;
+}
+
+/* Button Responsive */
+.btn-responsive {
+    @apply h-10 sm:h-12 md:h-14 px-4 sm:px-6 md:px-8 text-sm sm:text-base;
+}
+
+/* Modal/Dialog Responsive */
+.dialog-responsive {
+    @apply w-[95vw] sm:w-[90vw] md:w-[80vw] lg:w-[70vw] xl:w-[60vw] max-w-7xl;
+}
+
+/* Hide/Show on specific breakpoints */
+.mobile-only {
+    @apply block sm:hidden;
+}
+
+.tablet-up {
+    @apply hidden sm:block;
+}
+
+.desktop-only {
+    @apply hidden lg:block;
+}
+
+/* Responsive Sidebar */
+.sidebar-responsive {
+    @apply w-full lg:w-64 xl:w-72;
+}
+
+/* Admin Panel Specific */
+.admin-header-responsive {
+    @apply flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 sm:gap-6;
+}
+
+.admin-stats-grid {
+    @apply grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 md:gap-6;
+}
+
+/* Form Responsive */
+.form-grid-responsive {
+    @apply grid grid-cols-1 md:grid-cols-2 gap-4 md:gap-6;
+}
+
+.input-responsive {
+    @apply h-10 sm:h-12 md:h-14 px-3 sm:px-4 text-sm sm:text-base;
+}
+
+/* Card Grid Responsive */
+.card-grid-responsive {
+    @apply grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 sm:gap-6 md:gap-8;
+}
+
+/* Responsive Images */
+.img-responsive {
+    @apply w-full h-auto object-cover;
+}
+
+/* Responsive Rounded Corners */
+.rounded-responsive {
+    @apply rounded-lg sm:rounded-xl md:rounded-2xl lg:rounded-3xl;
+}
+
+/* Responsive Shadows */
+.shadow-responsive {
+    @apply shadow-sm sm:shadow-md md:shadow-lg lg:shadow-xl;
+}
+
+/* Navigation Responsive */
+.nav-responsive {
+    @apply flex flex-col lg:flex-row items-start lg:items-center gap-2 lg:gap-6;
+}
+
+/* Responsive Max Width Containers */
+.container-responsive-sm {
+    @apply max-w-screen-sm mx-auto;
+}
+
+.container-responsive-md {
+    @apply max-w-screen-md mx-auto;
+}
+
+.container-responsive-lg {
+    @apply max-w-screen-lg mx-auto;
+}
+
+.container-responsive-xl {
+    @apply max-w-screen-xl mx-auto;
+}
+
+.container-responsive-2xl {
+    @apply max-w-screen-2xl mx-auto;
+}
+
+/* Responsive Gap */
+.gap-responsive {
+    @apply gap-2 sm:gap-4 md:gap-6 lg:gap-8;
+}
+
+/* Responsive Overflow Handling */
+.overflow-responsive {
+    @apply overflow-auto lg:overflow-visible;
+}
+
+/* Touch-friendly sizing for mobile */
+.touch-target {
+    @apply min-h-[44px] min-w-[44px];
+}
+
+/* Responsive Font Weights */
+.font-responsive-bold {
+    @apply font-semibold sm:font-bold;
+}
+
+/* Responsive Line Heights */
+.leading-responsive {
+    @apply leading-normal sm:leading-relaxed;
+}
+
+/* Responsive Letter Spacing */
+.tracking-responsive {
+    @apply tracking-normal sm:tracking-wide;
+}

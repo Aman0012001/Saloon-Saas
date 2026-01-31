@@ -9,7 +9,7 @@ if ($method === 'GET' && $uriParts[1] === 'me') {
     }
 
     $stmt = $db->prepare("
-        SELECT u.id, u.email, u.email_verified, p.full_name, p.phone, p.avatar_url, p.user_type
+        SELECT u.id, u.email, u.email_verified, p.full_name, p.phone, p.avatar_url, p.avatar_public_id, p.user_type
         FROM users u
         LEFT JOIN profiles p ON u.id = p.user_id
         WHERE u.id = ?
@@ -31,18 +31,19 @@ if ($method === 'PUT' && $uriParts[1] === 'me') {
 
     $stmt = $db->prepare("
         UPDATE profiles SET
-            full_name = ?, phone = ?, avatar_url = ?
+            full_name = ?, phone = ?, avatar_url = ?, avatar_public_id = ?
         WHERE user_id = ?
     ");
     $stmt->execute([
         $data['full_name'] ?? null,
         $data['phone'] ?? null,
         $data['avatar_url'] ?? null,
+        $data['avatar_public_id'] ?? null,
         $userData['user_id']
     ]);
 
     $stmt = $db->prepare("
-        SELECT u.id, u.email, p.full_name, p.phone, p.avatar_url, p.user_type
+        SELECT u.id, u.email, p.full_name, p.phone, p.avatar_url, p.avatar_public_id, p.user_type
         FROM users u
         LEFT JOIN profiles p ON u.id = p.user_id
         WHERE u.id = ?

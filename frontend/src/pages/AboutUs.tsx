@@ -84,7 +84,7 @@ const AboutUs = () => {
       {/* Hero Section */}
       <section className="pt-24 pb-16 px-4">
         <div className="container mx-auto text-center">
-          <Badge className="mb-6 bg-accent/10 text-accent border-accent/20">
+          <Badge className="mt-8 mb-6 bg-accent/10 text-accent border-accent/20">
             About Noamskin
           </Badge>
           <h1 className="text-4xl md:text-6xl font-bold mb-6 bg-gradient-to-r from-foreground to-muted-foreground bg-clip-text text-transparent">

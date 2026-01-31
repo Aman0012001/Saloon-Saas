@@ -21,12 +21,22 @@ if ($method === 'GET' && count($uriParts) === 1) {
         // Only show active services from active salons
         // We use RAND() to show 'mixed' services across different categories and salons
         $stmt = $db->prepare("
-            SELECT s.*, sln.name as salon_name, sln.city as salon_city, p.full_name as owner_name
+            SELECT s.*, 
+                   sln.name as salon_name, 
+                   sln.city as salon_city, 
+                   sln.logo_url as salon_logo_url, 
+                   sln.cover_image_url as salon_cover_url, 
+                   p.full_name as owner_name,
+                   COALESCE(AVG(r.rating), 0) as rating,
+                   COUNT(r.id) as review_count
             FROM services s
             JOIN salons sln ON s.salon_id = sln.id
             LEFT JOIN user_roles ur ON sln.id = ur.salon_id AND ur.role = 'owner'
             LEFT JOIN profiles p ON ur.user_id = p.user_id
+            LEFT JOIN bookings b ON s.id = b.service_id
+            LEFT JOIN booking_reviews r ON b.id = r.booking_id
             WHERE s.is_active = 1 AND sln.is_active = 1
+            GROUP BY s.id
             ORDER BY RAND()
         ");
         $stmt->execute();
@@ -49,10 +59,15 @@ if ($method === 'GET' && count($uriParts) === 2) {
                sln.phone as salon_phone,
                sln.email as salon_email,
                sln.logo_url as salon_logo_url,
-               sln.cover_image_url as salon_cover_url
+               sln.cover_image_url as salon_cover_url,
+               COALESCE(AVG(r.rating), 0) as rating,
+               COUNT(r.id) as review_count
         FROM services s
         JOIN salons sln ON s.salon_id = sln.id
+        LEFT JOIN bookings b ON s.id = b.service_id
+        LEFT JOIN booking_reviews r ON b.id = r.booking_id
         WHERE s.id = ?
+        GROUP BY s.id
     ");
     $stmt->execute([$serviceId]);
     $service = $stmt->fetch();
@@ -77,8 +92,8 @@ if ($method === 'POST' && count($uriParts) === 1) {
 
     $serviceId = Auth::generateUuid();
     $stmt = $db->prepare("
-        INSERT INTO services (id, salon_id, name, description, price, duration_minutes, category, image_url)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+        INSERT INTO services (id, salon_id, name, description, price, duration_minutes, category, image_url, image_public_id)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
     ");
     $stmt->execute([
         $serviceId,
@@ -88,7 +103,8 @@ if ($method === 'POST' && count($uriParts) === 1) {
         $data['price'],
         $data['duration_minutes'],
         $data['category'] ?? null,
-        $data['image_url'] ?? null
+        $data['image_url'] ?? null,
+        $data['image_public_id'] ?? null
     ]);
 
     $stmt = $db->prepare("SELECT * FROM services WHERE id = ?");
@@ -119,7 +135,7 @@ if ($method === 'PUT' && count($uriParts) === 2) {
 
     $stmt = $db->prepare("
         UPDATE services SET
-            name = ?, description = ?, price = ?, duration_minutes = ?, category = ?, image_url = ?, is_active = ?
+            name = ?, description = ?, price = ?, duration_minutes = ?, category = ?, image_url = ?, image_public_id = ?, is_active = ?
         WHERE id = ?
     ");
     $stmt->execute([
@@ -129,6 +145,7 @@ if ($method === 'PUT' && count($uriParts) === 2) {
         $data['duration_minutes'],
         $data['category'] ?? null,
         $data['image_url'] ?? null,
+        $data['image_public_id'] ?? null,
         $data['is_active'] ?? 1,
         $serviceId
     ]);
@@ -145,7 +162,7 @@ if ($method === 'DELETE' && count($uriParts) === 2) {
     $serviceId = $uriParts[1];
 
     // Get service and check permission
-    $stmt = $db->prepare("SELECT salon_id FROM services WHERE id = ?");
+    $stmt = $db->prepare("SELECT salon_id, image_public_id FROM services WHERE id = ?");
     $stmt->execute([$serviceId]);
     $service = $stmt->fetch();
 
@@ -154,6 +171,12 @@ if ($method === 'DELETE' && count($uriParts) === 2) {
     }
 
     $userData = protectRoute(['owner', 'manager'], 'manage_services', $service['salon_id']);
+
+    // Delete from Cloudinary if exists
+    if (!empty($service['image_public_id'])) {
+        global $cloudinaryService;
+        $cloudinaryService->deleteFile($service['image_public_id']);
+    }
 
     $stmt = $db->prepare("DELETE FROM services WHERE id = ?");
     $stmt->execute([$serviceId]);

@@ -1,145 +1,77 @@
+import { useState, useEffect } from "react";
 import { Link } from "react-router-dom";
 import {
   Check,
   Star,
-  Crown,
   Zap,
-  Shield,
-  Users,
-  Calendar,
-  BarChart3,
-  Headphones,
-  Smartphone,
-  Globe,
+  Crown,
   ArrowRight
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import Navbar from "@/components/Navbar";
 import Footer from "@/components/Footer";
+import api from "@/services/api";
+
+interface Plan {
+  id: string;
+  name: string;
+  description: string;
+  price_monthly: number;
+  features: string[];
+  sort_order: number;
+  is_featured: boolean;
+  slug?: string;
+}
 
 const Pricing = () => {
-  const plans = [
-    {
-      name: "Starter",
-      icon: Star,
-      price: "RM 999",
-      period: "/month",
-      description: "Perfect for small salons getting started",
-      popular: false,
-      features: [
-        "Up to 100 bookings/month",
-        "Basic appointment management",
-        "Customer database",
-        "SMS notifications",
-        "Mobile app access",
-        "Basic reporting",
-        "Email support"
-      ],
-      limitations: [
-        "Limited to 1 salon location",
-        "Basic customization",
-        "Standard support"
-      ]
-    },
-    {
-      name: "Professional",
-      icon: Crown,
-      price: "RM 2,499",
-      period: "/month",
-      description: "Most popular choice for growing salons",
-      popular: true,
-      features: [
-        "Unlimited bookings",
-        "Advanced appointment management",
-        "Customer loyalty programs",
-        "SMS + Email + WhatsApp notifications",
-        "Staff management",
-        "Inventory tracking",
-        "Advanced analytics",
-        "Online payments",
-        "Custom branding",
-        "Priority support"
-      ],
-      limitations: [
-        "Up to 3 salon locations"
-      ]
-    },
-    {
-      name: "Enterprise",
-      icon: Zap,
-      price: "RM 4,999",
-      period: "/month",
-      description: "Complete solution for salon chains",
-      popular: false,
-      features: [
-        "Everything in Professional",
-        "Unlimited salon locations",
-        "Multi-location management",
-        "Advanced staff scheduling",
-        "Franchise management",
-        "Custom integrations",
-        "White-label solution",
-        "Dedicated account manager",
-        "24/7 phone support",
-        "Custom training"
-      ],
-      limitations: []
-    }
-  ];
+  const [plans, setPlans] = useState<Plan[]>([]);
+  const [loading, setLoading] = useState(true);
 
-  const addOns = [
-    {
-      name: "Advanced Analytics",
-      price: "RM 499/month",
-      description: "Detailed business insights and performance metrics",
-      icon: BarChart3
-    },
-    {
-      name: "WhatsApp Integration",
-      price: "RM 299/month",
-      description: "Send booking confirmations and reminders via WhatsApp",
-      icon: Smartphone
-    },
-    {
-      name: "Website Integration",
-      price: "RM 799/month",
-      description: "Embed booking widget on your salon website",
-      icon: Globe
-    },
-    {
-      name: "Dedicated Support",
-      price: "RM 1,999/month",
-      description: "Priority support with dedicated account manager",
-      icon: Headphones
-    }
-  ];
+  useEffect(() => {
+    const fetchData = async () => {
+      try {
+        const plansData = await api.subscriptions.getPlans();
+
+        const plansArray = Array.isArray(plansData) ? plansData : (plansData?.plans || []);
+        const processedPlans = plansArray.map((p: any) => ({
+          ...p,
+          features: typeof p.features === 'string' ? JSON.parse(p.features) : (p.features || [])
+        }));
+        setPlans(processedPlans);
+      } catch (error) {
+        console.error("Failed to fetch dynamic pricing data:", error);
+      } finally {
+        setLoading(false);
+      }
+    };
+    fetchData();
+  }, []);
+
+  const getPlanIcon = (name: string) => {
+    const n = name.toLowerCase();
+    if (n.includes('starter')) return Star;
+    if (n.includes('enterprise')) return Zap;
+    return Crown;
+  };
 
   const faqs = [
     {
       question: "Is there a free trial?",
-      answer: "Yes! We offer a 14-day free trial with full access to all features. No credit card required."
+      answer: "Yes! We offer a 14-day free trial on our premium plans for new salons. No credit card required."
     },
     {
       question: "Can I change plans anytime?",
-      answer: "Absolutely! You can upgrade or downgrade your plan at any time. Changes take effect immediately."
+      answer: "Absolutely! You can upgrade or downgrade your plan at any time from your salon dashboard."
     },
     {
       question: "What payment methods do you accept?",
-      answer: "We accept all major credit cards, debit cards, UPI, and net banking. All payments are secure and encrypted."
+      answer: "We accept all major credit cards, debit cards, and local online banking options."
     },
     {
       question: "Is there a setup fee?",
-      answer: "No setup fees! We'll help you get started for free, including data migration and staff training."
-    },
-    {
-      question: "What if I need more bookings?",
-      answer: "Our Professional and Enterprise plans include unlimited bookings. For Starter plan, additional bookings are RM 2 each."
-    },
-    {
-      question: "Do you offer discounts for annual payments?",
-      answer: "Yes! Save 20% when you pay annually. Contact our sales team for custom pricing for multiple locations."
+      answer: "No setup fees! We provide free onboarding support to help you migrate your data and train your staff."
     }
   ];
 
@@ -150,7 +82,7 @@ const Pricing = () => {
       {/* Header */}
       <section className="pt-24 pb-16 px-4 bg-gradient-to-br from-accent/5 to-accent/10">
         <div className="container mx-auto text-center">
-          <Badge className="mb-6 bg-accent/10 text-accent border-accent/20">
+          <Badge className="mt-8 mb-6 bg-accent/10 text-accent border-accent/20">
             Transparent Pricing
           </Badge>
           <h1 className="text-4xl md:text-6xl font-bold mb-6">
@@ -159,13 +91,13 @@ const Pricing = () => {
             <span className="text-accent">Pricing Plans</span>
           </h1>
           <p className="text-lg md:text-xl text-muted-foreground max-w-3xl mx-auto mb-8">
-            Choose the perfect plan for your salon. Start with our free trial and scale as you grow.
-            No hidden fees, no surprises.
+            Choose the perfect plan for your salon business.
+            Scale as you grow with no hidden fees and no surprises.
           </p>
           <div className="flex flex-col sm:flex-row gap-4 justify-center">
             <Link to="/dashboard/create-salon">
               <Button size="lg" className="bg-accent hover:bg-accent/90 text-white px-8">
-                Start Free Trial
+                Get Started Now
                 <ArrowRight className="w-5 h-5 ml-2" />
               </Button>
             </Link>
@@ -176,109 +108,72 @@ const Pricing = () => {
         </div>
       </section>
 
-      {/* Pricing Plans */}
+      {/* Pricing Grid */}
       <section className="py-16 px-4">
         <div className="container mx-auto">
-          <div className="grid lg:grid-cols-3 gap-8 max-w-6xl mx-auto">
-            {plans.map((plan, index) => {
-              const IconComponent = plan.icon;
+          {loading ? (
+            <div className="flex justify-center items-center min-h-[400px]">
+              <div className="w-12 h-12 border-4 border-accent border-t-transparent rounded-full animate-spin"></div>
+            </div>
+          ) : (
+            <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-8 max-w-6xl mx-auto">
+              {plans.map((plan) => {
+                const IconComponent = getPlanIcon(plan.name);
+                const isPopular = plan.is_featured;
 
-              return (
-                <Card
-                  key={plan.name}
-                  className={`relative border-2 transition-all duration-300 hover:shadow-xl ${plan.popular
-                      ? 'border-accent bg-gradient-to-b from-accent/5 to-accent/10 scale-105'
-                      : 'border-border hover:border-accent/30'
-                    }`}
-                >
-                  {plan.popular && (
-                    <div className="absolute -top-4 left-1/2 transform -translate-x-1/2">
-                      <Badge className="bg-accent text-white px-4 py-1">
+                return (
+                  <Card
+                    key={plan.id}
+                    className={`relative flex flex-col h-full border-2 transition-all hover:shadow-xl ${isPopular ? 'border-accent shadow-lg scale-105' : 'border-border'
+                      }`}
+                  >
+                    {isPopular && (
+                      <div className="absolute top-0 left-1/2 -translate-x-1/2 -translate-y-1/2 bg-accent text-white px-4 py-1 rounded-full text-sm font-bold">
                         Most Popular
-                      </Badge>
-                    </div>
-                  )}
-
-                  <CardHeader className="text-center pb-4">
-                    <div className="w-16 h-16 bg-accent/10 rounded-full flex items-center justify-center mx-auto mb-4">
-                      <IconComponent className="w-8 h-8 text-accent" />
-                    </div>
-                    <CardTitle className="text-2xl font-bold">{plan.name}</CardTitle>
-                    <p className="text-muted-foreground">{plan.description}</p>
-                    <div className="mt-4">
-                      <span className="text-4xl font-bold text-accent">{plan.price}</span>
-                      <span className="text-muted-foreground">{plan.period}</span>
-                    </div>
-                  </CardHeader>
-
-                  <CardContent className="space-y-6">
-                    <div className="space-y-3">
-                      {plan.features.map((feature, idx) => (
-                        <div key={idx} className="flex items-center gap-3">
-                          <Check className="w-5 h-5 text-green-500 flex-shrink-0" />
-                          <span className="text-sm">{feature}</span>
-                        </div>
-                      ))}
-                    </div>
-
-                    {plan.limitations.length > 0 && (
-                      <div className="pt-4 border-t">
-                        <p className="text-xs text-muted-foreground mb-2">Limitations:</p>
-                        {plan.limitations.map((limitation, idx) => (
-                          <p key={idx} className="text-xs text-muted-foreground">
-                            • {limitation}
-                          </p>
-                        ))}
                       </div>
                     )}
 
-                    <Link to="/dashboard/create-salon" className="block">
-                      <Button
-                        className={`w-full ${plan.popular
-                            ? 'bg-accent hover:bg-accent/90 text-white'
-                            : 'bg-background border-2 border-accent text-accent hover:bg-accent hover:text-white'
-                          }`}
-                        size="lg"
-                      >
-                        {plan.popular ? 'Start Free Trial' : 'Get Started'}
-                      </Button>
-                    </Link>
-                  </CardContent>
-                </Card>
-              );
-            })}
-          </div>
-        </div>
-      </section>
+                    <CardContent className="p-8 flex flex-col h-full">
+                      <div className="mb-8">
+                        <div className={`w-14 h-14 rounded-2xl flex items-center justify-center mb-6 ${isPopular ? 'bg-accent text-white' : 'bg-accent/10 text-accent'
+                          }`}>
+                          <IconComponent className="w-8 h-8" />
+                        </div>
+                        <h3 className="text-2xl font-bold mb-2">{plan.name}</h3>
+                        <p className="text-muted-foreground text-sm mb-6">{plan.description}</p>
+                        <div className="flex items-baseline gap-1">
+                          <span className="text-4xl font-bold">RM {parseFloat(plan.price_monthly.toString()).toLocaleString()}</span>
+                          <span className="text-muted-foreground">/month</span>
+                        </div>
+                      </div>
 
-      {/* Add-ons */}
-      <section className="py-16 px-4 bg-secondary/30">
-        <div className="container mx-auto">
-          <div className="text-center mb-12">
-            <h2 className="text-3xl md:text-4xl font-bold mb-4">Add-on Services</h2>
-            <p className="text-muted-foreground max-w-2xl mx-auto">
-              Enhance your salon management with these optional add-ons
-            </p>
-          </div>
+                      <div className="space-y-4 mb-8 flex-grow">
+                        {plan.features.map((feature, idx) => (
+                          <div key={idx} className="flex items-start gap-3">
+                            <div className="mt-1 w-5 h-5 rounded-full bg-green-500/10 flex items-center justify-center flex-shrink-0">
+                              <Check className="w-3 h-3 text-green-600" />
+                            </div>
+                            <span className="text-sm">{feature}</span>
+                          </div>
+                        ))}
+                      </div>
 
-          <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-6 max-w-6xl mx-auto">
-            {addOns.map((addon, index) => {
-              const IconComponent = addon.icon;
-
-              return (
-                <Card key={addon.name} className="text-center hover:shadow-lg transition-all">
-                  <CardContent className="p-6">
-                    <div className="w-12 h-12 bg-accent/10 rounded-full flex items-center justify-center mx-auto mb-4">
-                      <IconComponent className="w-6 h-6 text-accent" />
-                    </div>
-                    <h3 className="font-bold mb-2">{addon.name}</h3>
-                    <p className="text-sm text-muted-foreground mb-3">{addon.description}</p>
-                    <p className="text-lg font-bold text-accent">{addon.price}</p>
-                  </CardContent>
-                </Card>
-              );
-            })}
-          </div>
+                      <Link to={`/dashboard/create-salon?plan=${plan.slug}`}>
+                        <Button
+                          className={`w-full h-12 rounded-xl transition-all ${isPopular
+                            ? 'bg-accent hover:bg-accent/90 text-white shadow-lg shadow-accent/20'
+                            : 'bg-secondary hover:bg-secondary/80 text-foreground'
+                            }`}
+                        >
+                          {isPopular ? 'Start Free Trial' : 'Get Started Now'}
+                        </Button>
+                      </Link>
+                    </CardContent>
+                  </Card>
+                );
+              })}
+            </div>
+          )}
         </div>
       </section>
 
@@ -322,13 +217,7 @@ const Pricing = () => {
                 <ArrowRight className="w-5 h-5 ml-2" />
               </Button>
             </Link>
-            <Button size="lg" variant="outline" className="px-8">
-              Contact Sales
-            </Button>
           </div>
-          <p className="text-sm text-muted-foreground mt-4">
-            ⚡ Setup in 5 minutes • 📞 Free onboarding support • 🔒 Secure & reliable
-          </p>
         </div>
       </section>
 

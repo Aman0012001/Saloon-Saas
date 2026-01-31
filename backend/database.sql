@@ -17,6 +17,7 @@ DROP TABLE IF EXISTS staff_profiles;
 DROP TABLE IF EXISTS salons;
 DROP TABLE IF EXISTS profiles;
 DROP TABLE IF EXISTS users;
+DROP TABLE IF EXISTS platform_orders;
 
 -- Users table (authentication)
 CREATE TABLE users (
@@ -284,6 +285,23 @@ CREATE TABLE platform_payments (
     FOREIGN KEY (salon_id) REFERENCES salons(id) ON DELETE CASCADE,
     FOREIGN KEY (subscription_id) REFERENCES salon_subscriptions(id),
     INDEX idx_salon_id (salon_id),
+    INDEX idx_status (status)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+
+-- Platform Orders table
+CREATE TABLE platform_orders (
+    id VARCHAR(36) PRIMARY KEY DEFAULT (UUID()),
+    user_id VARCHAR(36) NULL,
+    guest_name VARCHAR(255) NULL,
+    guest_email VARCHAR(255) NULL,
+    items JSON,
+    shipping_address JSON,
+    total_amount DECIMAL(10,2) NOT NULL DEFAULT 0.00,
+    status ENUM('placed', 'dispatched', 'delivered', 'cancelled') DEFAULT 'placed',
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    INDEX idx_user_id (user_id),
     INDEX idx_status (status)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 

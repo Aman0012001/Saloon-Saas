@@ -1,24 +1,8 @@
-import { useState, useEffect, createContext, useContext, ReactNode } from "react";
+import { useState, useEffect, useContext, ReactNode } from "react";
 import api from "@/services/api";
+import { AuthContext, User, AuthContextType } from "./authContext";
 
-export interface User {
-  id: string;
-  email: string;
-  full_name?: string;
-  user_type?: 'customer' | 'salon_owner' | 'admin' | string;
-  salon_role?: 'owner' | 'manager' | 'staff' | null;
-}
-
-interface AuthContextType {
-  user: User | null;
-  loading: boolean;
-  login: (email: string, password: string) => Promise<void>;
-  signUp: (email: string, password: string, fullName: string, extraData?: any) => Promise<void>;
-  signOut: () => Promise<void>;
-  refreshUser: () => Promise<void>;
-}
-
-const AuthContext = createContext<AuthContextType | undefined>(undefined);
+export type { User, AuthContextType };
 
 export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const [user, setUser] = useState<User | null>(null);

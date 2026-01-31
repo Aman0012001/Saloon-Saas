@@ -59,4 +59,14 @@ if ($method === 'PUT' && count($uriParts) === 2 && $uriParts[1] === 'read-all') 
     sendResponse(['success' => true]);
 }
 
+// DELETE /api/notifications/:id - Delete/Dismiss notification
+if ($method === 'DELETE' && count($uriParts) === 2) {
+    $notifId = $uriParts[1];
+
+    $stmt = $db->prepare("DELETE FROM notifications WHERE id = ? AND user_id = ?");
+    $stmt->execute([$notifId, $userId]);
+
+    sendResponse(['success' => true]);
+}
+
 sendResponse(['error' => 'Notification route not found'], 404);

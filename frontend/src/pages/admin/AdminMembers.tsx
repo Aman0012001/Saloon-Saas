@@ -39,6 +39,7 @@ import {
     SelectTrigger,
     SelectValue,
 } from "@/components/ui/select";
+import { ScrollArea } from "@/components/ui/scroll-area";
 import { toast } from "@/hooks/use-toast";
 import api from "@/services/api";
 import { cn } from "@/lib/utils";
@@ -176,56 +177,65 @@ export default function AdminMembers() {
                                     <TableHead className="font-black text-[10px] uppercase tracking-widest text-gray-400 py-6">Control</TableHead>
                                 </TableRow>
                             </TableHeader>
-                            <TableBody>
-                                {filteredMembers.map((member) => (
-                                    <TableRow key={member.salon_id} className="border-gray-700 hover:bg-gray-700/30 transition-colors">
-                                        <TableCell className="py-6 px-8">
-                                            <div className="flex flex-col">
-                                                <span className="font-bold text-lg text-white">{member.salon_name}</span>
-                                                <span className="text-xs text-gray-500">{member.salon_email}</span>
-                                            </div>
-                                        </TableCell>
-                                        <TableCell className="py-6">
-                                            <div className="flex flex-col gap-2">
-                                                <Badge className={cn(
-                                                    "w-fit font-black text-[9px] uppercase tracking-widest px-3 py-1 rounded-full",
-                                                    member.plan_name ? "bg-blue-500/20 text-blue-400 border border-blue-500/20" : "bg-gray-700 text-gray-400"
-                                                )}>
-                                                    <Zap className="w-3 h-3 mr-1.5 inline" />
-                                                    {member.plan_name || "Unassigned"}
-                                                </Badge>
-                                                <div className="flex items-center gap-1.5">
-                                                    <div className={cn(
-                                                        "h-1.5 w-1.5 rounded-full",
-                                                        member.subscription_status === 'active' ? "bg-emerald-500" : "bg-red-500"
-                                                    )} />
-                                                    <span className="text-[10px] font-black uppercase tracking-widest text-gray-400">
-                                                        {member.subscription_status || "Inactive"}
+                        </Table>
+                    )}
+                    {loading ? null : (
+                        <ScrollArea className={cn(
+                            "w-full",
+                            filteredMembers.length > 4 ? "h-[600px]" : "h-auto"
+                        )}>
+                            <Table>
+                                <TableBody>
+                                    {filteredMembers.map((member) => (
+                                        <TableRow key={member.salon_id} className="border-gray-700 hover:bg-gray-700/30 transition-colors">
+                                            <TableCell className="py-6 px-8">
+                                                <div className="flex flex-col">
+                                                    <span className="font-bold text-lg text-white">{member.salon_name}</span>
+                                                    <span className="text-xs text-gray-500">{member.salon_email}</span>
+                                                </div>
+                                            </TableCell>
+                                            <TableCell className="py-6">
+                                                <div className="flex flex-col gap-2">
+                                                    <Badge className={cn(
+                                                        "w-fit font-black text-[9px] uppercase tracking-widest px-3 py-1 rounded-full",
+                                                        member.plan_name ? "bg-blue-500/20 text-blue-400 border border-blue-500/20" : "bg-gray-700 text-gray-400"
+                                                    )}>
+                                                        <Zap className="w-3 h-3 mr-1.5 inline" />
+                                                        {member.plan_name || "Unassigned"}
+                                                    </Badge>
+                                                    <div className="flex items-center gap-1.5">
+                                                        <div className={cn(
+                                                            "h-1.5 w-1.5 rounded-full",
+                                                            member.subscription_status === 'active' ? "bg-emerald-500" : "bg-red-500"
+                                                        )} />
+                                                        <span className="text-[10px] font-black uppercase tracking-widest text-gray-400">
+                                                            {member.subscription_status || "Inactive"}
+                                                        </span>
+                                                    </div>
+                                                </div>
+                                            </TableCell>
+                                            <TableCell className="py-6">
+                                                <div className="flex items-center gap-2 text-gray-400">
+                                                    <Calendar className="w-4 h-4" />
+                                                    <span className="text-sm font-medium">
+                                                        {member.subscription_end_date ? new Date(member.subscription_end_date).toLocaleDateString() : 'N/A'}
                                                     </span>
                                                 </div>
-                                            </div>
-                                        </TableCell>
-                                        <TableCell className="py-6">
-                                            <div className="flex items-center gap-2 text-gray-400">
-                                                <Calendar className="w-4 h-4" />
-                                                <span className="text-sm font-medium">
-                                                    {member.subscription_end_date ? new Date(member.subscription_end_date).toLocaleDateString() : 'N/A'}
-                                                </span>
-                                            </div>
-                                        </TableCell>
-                                        <TableCell className="py-6">
-                                            <Button
-                                                onClick={() => handleAssignClick(member)}
-                                                variant="outline"
-                                                className="bg-gray-900 border-gray-700 hover:bg-blue-600 hover:text-white hover:border-blue-600 transition-all rounded-xl font-bold text-xs"
-                                            >
-                                                Assign Plan &rarr;
-                                            </Button>
-                                        </TableCell>
-                                    </TableRow>
-                                ))}
-                            </TableBody>
-                        </Table>
+                                            </TableCell>
+                                            <TableCell className="py-6">
+                                                <Button
+                                                    onClick={() => handleAssignClick(member)}
+                                                    variant="outline"
+                                                    className="bg-gray-900 border-gray-700 hover:bg-blue-600 hover:text-white hover:border-blue-600 transition-all rounded-xl font-bold text-xs"
+                                                >
+                                                    Assign Plan &rarr;
+                                                </Button>
+                                            </TableCell>
+                                        </TableRow>
+                                    ))}
+                                </TableBody>
+                            </Table>
+                        </ScrollArea>
                     )}
                 </div>
             </div>

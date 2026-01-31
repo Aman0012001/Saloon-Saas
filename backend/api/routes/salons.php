@@ -7,10 +7,13 @@ if ($method === 'GET' && count($uriParts) === 1) {
         $stmt = $db->prepare("
             SELECT s.id, s.name, s.slug, s.description, s.address, s.city, s.state, s.pincode, 
                    s.phone, s.email, s.logo_url, s.cover_image_url, s.is_active,
-                   p.full_name as owner_name
+                   p.full_name as owner_name,
+                   COALESCE(AVG(r.rating), 0) as rating,
+                   COUNT(r.id) as review_count
             FROM salons s
             LEFT JOIN user_roles ur ON s.id = ur.salon_id AND ur.role = 'owner'
             LEFT JOIN profiles p ON ur.user_id = p.user_id
+            LEFT JOIN booking_reviews r ON s.id = r.salon_id
             WHERE s.is_active = 1 
             AND s.subscription_status IN ('active', 'trial')
             GROUP BY s.id
@@ -49,7 +52,13 @@ if ($method === 'GET' && $uriParts[1] === 'my') {
 if ($method === 'GET' && count($uriParts) === 2) {
     $salonId = $uriParts[1];
     $stmt = $db->prepare("
-        SELECT * FROM salons WHERE id = ? AND is_active = 1
+        SELECT s.*, 
+               COALESCE(AVG(r.rating), 0) as rating,
+               COUNT(r.id) as review_count
+        FROM salons s
+        LEFT JOIN booking_reviews r ON s.id = r.salon_id
+        WHERE s.id = ? AND s.is_active = 1
+        GROUP BY s.id
     ");
     $stmt->execute([$salonId]);
     $salon = $stmt->fetch();
@@ -155,7 +164,9 @@ if ($method === 'PUT' && count($uriParts) === 2) {
         'phone',
         'email',
         'logo_url',
+        'logo_public_id',
         'cover_image_url',
+        'cover_image_public_id',
         'is_active',
         'business_hours',
         'notification_settings',

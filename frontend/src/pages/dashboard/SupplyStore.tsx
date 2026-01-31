@@ -150,7 +150,7 @@ export default function SupplyStore() {
                             <Card key={product.id} className="group border-0 bg-white rounded-[2.5rem] overflow-hidden shadow-[0_20px_50px_rgba(0,0,0,0.03)] hover:shadow-2xl transition-all duration-500 hover:-translate-y-2 flex flex-col h-full">
                                 <div
                                     className="h-32 relative overflow-hidden bg-slate-50 cursor-pointer"
-                                    onClick={() => navigate(`/dashboard/store/${product.id}`)}
+                                    onClick={() => navigate(`/salon/store/${product.id}`)}
                                 >
                                     {product.image_url ? (
                                         <img
@@ -170,7 +170,7 @@ export default function SupplyStore() {
                                     </div>
                                     <div className="absolute inset-0 bg-indigo-900/20 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-3">
                                         <Button
-                                            onClick={() => navigate(`/dashboard/store/${product.id}`)}
+                                            onClick={() => navigate(`/salon/store/${product.id}`)}
                                             className="h-12 w-12 rounded-full bg-white text-indigo-600 hover:bg-indigo-600 hover:text-white transition-all scale-0 group-hover:scale-100 delay-75 shadow-lg"
                                         >
                                             <Info className="w-5 h-5" />

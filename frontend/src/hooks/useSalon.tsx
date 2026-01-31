@@ -16,7 +16,9 @@ interface Salon {
   email: string | null;
   gst_number: string | null;
   logo_url: string | null;
+  logo_public_id: string | null;
   cover_image_url: string | null;
+  cover_image_public_id: string | null;
   business_hours: any;
   tax_settings: any;
   notification_settings: any;

@@ -4,7 +4,8 @@ import {
     ArrowLeft,
     Camera,
     Loader2,
-    MinusCircle
+    MinusCircle,
+    UploadCloud
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -31,6 +32,7 @@ export default function AdminAddProduct() {
     const [uploadingField, setUploadingField] = useState<string | null>(null);
     const [customCategory, setCustomCategory] = useState("");
     const [customBrand, setCustomBrand] = useState("");
+    const [draggingField, setDraggingField] = useState<string | null>(null);
 
     // Multiple file input refs
     const fileInputRefs = {
@@ -97,6 +99,26 @@ export default function AdminAddProduct() {
         }
     };
 
+    const handleDrag = (e: React.DragEvent, field: string, isEntering: boolean) => {
+        e.preventDefault();
+        e.stopPropagation();
+        setDraggingField(isEntering ? field : null);
+    };
+
+    const handleDrop = async (e: React.DragEvent, field: keyof typeof fileInputRefs) => {
+        e.preventDefault();
+        e.stopPropagation();
+        setDraggingField(null);
+
+        const file = e.dataTransfer.files?.[0];
+        if (file && file.type.startsWith('image/')) {
+            const fakeEvent = { target: { files: [file] } } as any;
+            handleFileChange(fakeEvent, field);
+        } else if (file) {
+            toast({ title: "Invalid File", description: "Please drop an image file", variant: "destructive" });
+        }
+    };
+
     const handleCreate = async () => {
         if (!formData.name || !formData.price) {
             toast({
@@ -122,7 +144,7 @@ export default function AdminAddProduct() {
                 await api.platformProducts.create(submissionData);
                 toast({ title: "Success", description: "Product created successfully" });
             }
-            navigate("/admin/products");
+            navigate("/super-admin/products");
         } catch (error) {
             toast({
                 title: "Error",
@@ -140,7 +162,11 @@ export default function AdminAddProduct() {
 
             <div
                 onClick={() => fileInputRefs[field].current?.click()}
-                className="aspect-square bg-white border-2 border-dashed border-[#CBD5E1] rounded-xl flex flex-col items-center justify-center gap-6 cursor-pointer hover:border-blue-400 hover:bg-slate-50 transition-all overflow-hidden relative group shadow-sm"
+                onDragOver={(e) => handleDrag(e, field, true)}
+                onDragLeave={(e) => handleDrag(e, field, false)}
+                onDrop={(e) => handleDrop(e, field)}
+                className={`aspect-square bg-white border-2 border-dashed rounded-xl flex flex-col items-center justify-center gap-6 cursor-pointer transition-all overflow-hidden relative group shadow-sm
+                    ${draggingField === field ? 'border-blue-500 bg-blue-50 scale-[1.02] ring-4 ring-blue-500/10' : 'border-[#CBD5E1] hover:border-blue-400 hover:bg-slate-50'}`}
             >
                 {uploadingField === field ? (
                     <Loader2 className="w-10 h-10 text-blue-500 animate-spin" />
@@ -154,12 +180,17 @@ export default function AdminAddProduct() {
                         </Button>
                     </>
                 )}
+                {draggingField === field && (
+                    <div className="absolute inset-0 bg-blue-500/10 backdrop-blur-[1px] flex items-center justify-center border-2 border-dashed border-blue-500 rounded-xl">
+                        <UploadCloud className="w-12 h-12 text-blue-500 animate-bounce" />
+                    </div>
+                )}
                 <input
                     type="file"
                     className="hidden"
                     ref={fileInputRefs[field]}
                     onChange={(e) => handleFileChange(e, field)}
-                    accept="image/*"
+                    accept="image/*,.avif"
                 />
             </div>
 
@@ -190,7 +221,7 @@ export default function AdminAddProduct() {
                             <Button
                                 variant="ghost"
                                 size="icon"
-                                onClick={() => navigate("/admin/products")}
+                                onClick={() => navigate("/super-admin/products")}
                                 className="hover:bg-slate-100 text-slate-500"
                             >
                                 <ArrowLeft className="w-5 h-5" />
@@ -353,7 +384,7 @@ export default function AdminAddProduct() {
                     <div className="flex justify-end gap-6 pt-12 border-t border-slate-100 pb-20">
                         <Button
                             variant="outline"
-                            onClick={() => navigate("/admin/products")}
+                            onClick={() => navigate("/super-admin/products")}
                             className="h-14 px-14 rounded-xl font-bold text-[#1E293B] border-[#CBD5E1] bg-gradient-to-b from-white to-[#F8FAFC] shadow-sm hover:from-[#F8FAFC] hover:to-[#F1F5F9] min-w-[160px]"
                         >
                             Cancel
