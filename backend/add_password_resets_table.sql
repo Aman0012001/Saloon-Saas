@@ -4,7 +4,7 @@ CREATE TABLE IF NOT EXISTS password_resets (
     email VARCHAR(255) NOT NULL,
     token VARCHAR(255) NOT NULL,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    expires_at TIMESTAMP NOT NULL,
+    expires_at DATETIME NOT NULL,
     INDEX idx_email (email),
     INDEX idx_token (token)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;

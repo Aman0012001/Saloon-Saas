@@ -35,7 +35,9 @@ date_default_timezone_set('Asia/Kolkata');
 
 // Error Reporting (disable in production)
 error_reporting(E_ALL);
-ini_set('display_errors', 1);
+ini_set('display_errors', 0); // Important: stop HTML output breaking JSON
+ini_set('log_errors', 1);
+ini_set('error_log', dirname(__DIR__) . '/logs/php_error.log');
 // Google Drive Configuration
 define('GOOGLE_CLIENT_ID', '');
 define('GOOGLE_CLIENT_SECRET', '');
@@ -46,6 +48,14 @@ define('GOOGLE_DRIVE_FOLDER_ID', ''); // Optional: ID of the folder to upload to
 define('CLOUDINARY_CLOUD_NAME', getenv('CLOUDINARY_CLOUD_NAME') ?: 'de28lezdr');
 define('CLOUDINARY_API_KEY', getenv('CLOUDINARY_API_KEY') ?: '434569833245894');
 define('CLOUDINARY_API_SECRET', getenv('CLOUDINARY_API_SECRET') ?: 'TT-YIiotMjZAb2M4iwJJlkPu3Hw');
+
+// SMTP Configuration (Gmail)
+define('SMTP_HOST', 'smtp.gmail.com');
+define('SMTP_PORT', 587); // Use 465 for SSL, 587 for TLS
+define('SMTP_USER', 'amanajeetthakur644@gmail.com'); // Your Gmail address
+define('SMTP_PASS', 'xxxx xxxx xxxx xxxx'); // Your Gmail App Password (NOT your login password)
+define('SMTP_FROM_EMAIL', 'amanajeetthakur644@gmail.com');
+define('SMTP_FROM_NAME', 'Salon Style Support');
 
 /**
  * 🛠️ SIMPLE .ENV LOADER

@@ -249,15 +249,32 @@ if ($uriParts[1] === 'forgot-password') {
     $stmt = $db->prepare("INSERT INTO password_resets (email, token, expires_at) VALUES (?, ?, ?)");
     $stmt->execute([$email, $token, $expires]);
 
-    // Send notification/email mock
+    // Send notification/email
+    $resetLink = "http://localhost:5173/reset-password?token=" . $token;
+
+    // Call Real Email Service
+    $emailBody = "
+        <div style='font-family: sans-serif; padding: 20px; border: 1px solid #eee; border-radius: 10px;'>
+            <h2 style='color: #4f46e5;'>Password Reset Request</h2>
+            <p>You requested a password reset for your Salon account.</p>
+            <p>Click the button below to reset your password. This link expires in 1 hour.</p>
+            <a href='{$resetLink}' style='display: inline-block; padding: 12px 24px; bg-color: #4f46e5; color: white; text-decoration: none; border-radius: 5px; font-weight: bold;'>Reset Password</a>
+            <p style='margin-top: 20px; font-size: 12px; color: #666;'>If you didn't request this, you can safely ignore this email.</p>
+            <p style='font-size: 12px; color: #666;'>Link: {$resetLink}</p>
+        </div>
+    ";
+
+    $mailResult = EmailService::send($email, "Reset Your Password", $emailBody);
+
     if (isset($notifService)) {
-        $resetLink = "http://localhost:5173/reset-password?token=" . $token;
-        $notifService->notifyUser($user['id'], "Password Reset", "A password reset has been requested. Use token: " . $token, 'info');
+        $notifService->notifyUser($user['id'], "Password Reset", "A password reset email has been sent to " . $email, 'info');
     }
 
     sendResponse([
-        'message' => 'Reset link generated successfully.',
-        'mock_token' => $token // For local dev/testing
+        'success' => $mailResult['success'],
+        'message' => $mailResult['success'] ? 'Reset link sent successfully.' : 'Reset link generated but email failed to send.',
+        'error' => $mailResult['error'] ?? null,
+        'mock_token' => $token // Keep for local development ease
     ]);
 }
 

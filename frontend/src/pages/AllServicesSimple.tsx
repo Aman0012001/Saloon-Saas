@@ -134,12 +134,14 @@ const AllServicesSimple = () => {
       }));
       setServices(formatted);
 
+      /*
       if (data && data.length > 0) {
         toast({
           title: "Services Synchronized",
           description: `Retrieved ${data.length} services from local MySQL database.`,
         });
       }
+      */
     } catch (error) {
       console.error("Error fetching services:", error);
       toast({

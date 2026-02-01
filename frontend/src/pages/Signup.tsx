@@ -206,18 +206,7 @@ const Signup = () => {
                       required
                     />
                   </div>
-                  <div className="space-y-2">
-                    <Label className="text-[10px] font-black uppercase text-slate-400 tracking-widest ml-1">Local Handle (Slug)</Label>
-                    <div className="flex items-center bg-slate-50 rounded-2xl px-5 h-14 group focus-within:ring-2 ring-accent/20">
-                      <span className="text-slate-400 font-bold text-sm">/saloon/</span>
-                      <Input
-                        placeholder="my-saloon"
-                        value={salonSlug}
-                        onChange={(e) => setSalonSlug(e.target.value.toLowerCase().replace(/[^a-z0-9-]+/g, '-'))}
-                        className="border-none bg-transparent font-bold p-0 ml-1 h-full shadow-none focus-visible:ring-0"
-                      />
-                    </div>
-                  </div>
+
                 </div>
               </div>
             </div>

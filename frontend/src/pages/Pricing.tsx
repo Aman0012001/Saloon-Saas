@@ -95,7 +95,7 @@ const Pricing = () => {
             Scale as you grow with no hidden fees and no surprises.
           </p>
           <div className="flex flex-col sm:flex-row gap-4 justify-center">
-            <Link to="/dashboard/create-salon">
+            <Link to="/salon-owner/signup">
               <Button size="lg" className="bg-accent hover:bg-accent/90 text-white px-8">
                 Get Started Now
                 <ArrowRight className="w-5 h-5 ml-2" />
@@ -127,11 +127,11 @@ const Pricing = () => {
                     className={`relative flex flex-col h-full border-2 transition-all hover:shadow-xl ${isPopular ? 'border-accent shadow-lg scale-105' : 'border-border'
                       }`}
                   >
-                    {isPopular && (
+                    {/* {isPopular && (
                       <div className="absolute top-0 left-1/2 -translate-x-1/2 -translate-y-1/2 bg-accent text-white px-4 py-1 rounded-full text-sm font-bold">
                         Most Popular
                       </div>
-                    )}
+                    )} */}
 
                     <CardContent className="p-8 flex flex-col h-full">
                       <div className="mb-8">
@@ -158,7 +158,7 @@ const Pricing = () => {
                         ))}
                       </div>
 
-                      <Link to={`/dashboard/create-salon?plan=${plan.slug}`}>
+                      <Link to="/salon-owner/signup">
                         <Button
                           className={`w-full h-12 rounded-xl transition-all ${isPopular
                             ? 'bg-accent hover:bg-accent/90 text-white shadow-lg shadow-accent/20'
@@ -211,7 +211,7 @@ const Pricing = () => {
             Start your free trial today - no credit card required.
           </p>
           <div className="flex flex-col sm:flex-row gap-4 justify-center">
-            <Link to="/dashboard/create-salon">
+            <Link to="/salon-owner/signup">
               <Button size="lg" className="bg-accent hover:bg-accent/90 text-white px-8">
                 Start Free Trial
                 <ArrowRight className="w-5 h-5 ml-2" />

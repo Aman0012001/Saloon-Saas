@@ -90,6 +90,7 @@ import TermsOfService from "./pages/TermsOfService";
 import CookiePolicy from "./pages/CookiePolicy";
 import CartPage from "./pages/CartPage";
 import CheckoutPage from "./pages/CheckoutPage";
+import TestEmail from "./pages/TestEmail";
 import { CartProvider } from "./context/CartContext";
 
 const queryClient = new QueryClient();
@@ -135,6 +136,7 @@ const App = () => (
                   <Route path="/salon-owner/login" element={<SalonOwnerLogin />} />
                   <Route path="/book" element={<BookAppointment />} />
                   <Route path="/book/:id" element={<BookAppointment />} />
+                  <Route path="/test-email" element={<TestEmail />} />
 
                   {/* USER (Customer) Routes */}
                   <Route path="/user/dashboard" element={

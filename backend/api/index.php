@@ -73,6 +73,7 @@ try {
     require_once __DIR__ . '/../Services/MembershipService.php';
     require_once __DIR__ . '/../Services/GoogleDriveService.php';
     require_once __DIR__ . '/../Services/CloudinaryService.php';
+    require_once __DIR__ . '/../Services/EmailService.php';
 
 
     $notifService = new NotificationService($db);
@@ -300,6 +301,9 @@ try {
             break;
         case 'orders':
             require_once __DIR__ . '/routes/orders.php';
+            break;
+        case 'mail':
+            require_once __DIR__ . '/routes/mail.php';
             break;
         case 'newsletter':
             require_once __DIR__ . '/routes/newsletter.php';
