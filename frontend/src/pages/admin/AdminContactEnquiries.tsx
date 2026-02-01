@@ -121,7 +121,7 @@ export default function AdminContactEnquiries() {
                             </div>
                             <div>
                                 <h1 className="text-4xl font-black tracking-tight">Contact Enquiries</h1>
-                                <p className="text-slate-400 font-medium">Manage website contact form submissions</p>
+                                <p className="text-slate-400 font-medium mt-2">Manage website contact form submissions</p>
                             </div>
                         </div>
                         <Button onClick={fetchEnquiries} className="bg-white/10 hover:bg-white/20 border-white/10 backdrop-blur-md rounded-xl h-12 px-6 font-bold">

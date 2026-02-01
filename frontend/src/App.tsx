@@ -181,6 +181,11 @@ const App = () => (
                       <DashboardHome />
                     </RoleProtectedRoute>
                   } />
+                  <Route path="/salon/create-salon" element={
+                    <RoleProtectedRoute allowedRole="SALON_OWNER">
+                      <CreateSalon />
+                    </RoleProtectedRoute>
+                  } />
                   <Route path="/salon/appointments" element={
                     <RoleProtectedRoute allowedRole="SALON_OWNER">
                       <AppointmentsPage />
@@ -236,6 +241,16 @@ const App = () => (
                       <SettingsPage />
                     </RoleProtectedRoute>
                   } />
+                  <Route path="/salon/notifications" element={
+                    <RoleProtectedRoute allowedRole="SALON_OWNER">
+                      <NotificationsPage />
+                    </RoleProtectedRoute>
+                  } />
+                  <Route path="/salon/profile" element={
+                    <RoleProtectedRoute allowedRole="SALON_OWNER">
+                      <OwnerProfile />
+                    </RoleProtectedRoute>
+                  } />
 
                   {/* STAFF Routes */}
                   <Route path="/staff/dashboard" element={
@@ -261,6 +276,16 @@ const App = () => (
                   <Route path="/staff/profile/:id" element={
                     <RoleProtectedRoute allowedRole="STAFF">
                       <StaffDetailsPage />
+                    </RoleProtectedRoute>
+                  } />
+                  <Route path="/staff/notifications" element={
+                    <RoleProtectedRoute allowedRole="STAFF">
+                      <NotificationsPage />
+                    </RoleProtectedRoute>
+                  } />
+                  <Route path="/staff/profile" element={
+                    <RoleProtectedRoute allowedRole="STAFF">
+                      <OwnerProfile />
                     </RoleProtectedRoute>
                   } />
 
@@ -325,6 +350,11 @@ const App = () => (
                       <AdminMembers />
                     </RoleProtectedRoute>
                   } />
+                  <Route path="/super-admin/reviews" element={
+                    <RoleProtectedRoute allowedRole="SUPER_ADMIN">
+                      <AdminReviews />
+                    </RoleProtectedRoute>
+                  } />
                   <Route path="/super-admin/settings" element={
                     <RoleProtectedRoute allowedRole="SUPER_ADMIN">
                       <AdminSettings />
@@ -338,6 +368,18 @@ const App = () => (
 
                   {/* Fallbacks and Legacy Redirects */}
                   <Route path="/dashboard" element={<Navigate to="/salon/dashboard" replace />} />
+                  <Route path="/dashboard/notifications" element={<Navigate to="/salon/notifications" replace />} />
+                  <Route path="/dashboard/profile" element={<Navigate to="/salon/profile" replace />} />
+                  <Route path="/dashboard/staff" element={<Navigate to="/salon/staff" replace />} />
+                  <Route path="/dashboard/appointments" element={<Navigate to="/salon/appointments" replace />} />
+                  <Route path="/dashboard/customers" element={<Navigate to="/salon/customers" replace />} />
+                  <Route path="/dashboard/billing" element={<Navigate to="/salon/billing" replace />} />
+                  <Route path="/dashboard/services" element={<Navigate to="/salon/services" replace />} />
+                  <Route path="/dashboard/inventory" element={<Navigate to="/salon/inventory" replace />} />
+                  <Route path="/dashboard/reports" element={<Navigate to="/salon/reports" replace />} />
+                  <Route path="/dashboard/offers" element={<Navigate to="/salon/offers" replace />} />
+                  <Route path="/dashboard/settings" element={<Navigate to="/salon/settings" replace />} />
+                  <Route path="/dashboard/create-salon" element={<Navigate to="/salon/create-salon" replace />} />
                   <Route path="/admin" element={<Navigate to="/super-admin/dashboard" replace />} />
                   <Route path="/client-hub" element={<Navigate to="/user/dashboard" replace />} />
 

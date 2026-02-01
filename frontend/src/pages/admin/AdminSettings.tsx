@@ -119,7 +119,7 @@ export default function AdminSettings() {
               </div>
               <div>
                 <h1 className="text-4xl font-black tracking-tight">Platform Controls</h1>
-                <p className="text-slate-400 font-bold uppercase tracking-widest text-[10px]">Local Configuration Registry</p>
+                <p className="text-slate-400 font-bold uppercase tracking-widest text-[10px] mt-2">Configuration Registry</p>
               </div>
             </div>
             <Button onClick={handleSave} disabled={saving} className="bg-accent text-white font-black rounded-xl h-14 px-8 shadow-lg shadow-accent/20">
@@ -233,7 +233,7 @@ export default function AdminSettings() {
                 <div className="w-12 h-12 bg-amber-100 rounded-2xl flex items-center justify-center">
                   <Coins className="w-6 h-6 text-amber-600" />
                 </div>
-                <h3 className="text-2xl font-black text-slate-900">Loyalty Economy</h3>
+                <h3 className="text-2xl font-black text-slate-900">Set Point Value</h3>
               </div>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-10">
                 <div className="space-y-4">

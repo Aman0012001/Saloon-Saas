@@ -173,7 +173,7 @@ export default function AdminMembershipPlans() {
                                 </div>
                                 <div>
                                     <h1 className="text-4xl font-black tracking-tight text-[#1E293B]">Subscription Management</h1>
-                                    <p className="text-slate-500 font-bold uppercase tracking-widest text-[10px] mt-1">Configure packages and micro-plans for Saloon Owners</p>
+                                    <p className="text-slate-500 font-bold uppercase tracking-widest text-[10px] mt-2">Configure packages  for Saloon Owners</p>
                                 </div>
                             </div>
                             <div className="flex gap-4">

@@ -6,12 +6,14 @@ import {
   CheckCircle,
   XCircle,
   Eye,
+  EyeOff,
   MapPin,
   Clock,
   RefreshCw,
   Zap,
   Trash2,
-  Plus
+  Plus,
+  Shield
 } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -52,6 +54,8 @@ interface Salon {
   subscription_status: string | null;
   created_at: string;
   owner_name?: string;
+  owner_account_email?: string;
+  owner_password_plain?: string;
   booking_count?: number;
 }
 
@@ -71,6 +75,15 @@ export default function AdminSalons() {
   const [showCreateDialog, setShowCreateDialog] = useState(false);
   const [actionReason, setActionReason] = useState("");
   const [actionLoading, setActionLoading] = useState(false);
+  const [showOwnerPassword, setShowOwnerPassword] = useState(false);
+  const [showResetPasswordDialog, setShowResetPasswordDialog] = useState(false);
+  const [resetPasswordValue, setResetPasswordValue] = useState("");
+
+  useEffect(() => {
+    if (showDetailsDialog) {
+      setShowOwnerPassword(false);
+    }
+  }, [showDetailsDialog]);
 
   // Creation Form State
   const [newSalon, setNewSalon] = useState({
@@ -151,6 +164,22 @@ export default function AdminSalons() {
     }
   };
 
+  const handleResetPassword = async () => {
+    if (!selectedSalon || !resetPasswordValue) return;
+    setActionLoading(true);
+    try {
+      await api.admin.resetSalonPassword(selectedSalon.id, resetPasswordValue);
+      toast({ title: "Password Updated", description: "The salon owner's password has been successfully reset." });
+      setShowResetPasswordDialog(false);
+      setResetPasswordValue("");
+      fetchSalons(); // Refresh to show new plain password if needed
+    } catch (error: any) {
+      toast({ title: "Reset Failed", description: error.message, variant: "destructive" });
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
   const statusCounts = {
     all: salons.length,
     pending: salons.filter(s => s.approval_status === 'pending').length,
@@ -182,7 +211,7 @@ export default function AdminSalons() {
               </div>
               <div>
                 <h1 className="text-4xl font-black tracking-tight">Saloon Registry</h1>
-                <p className="text-slate-400 font-medium font-bold uppercase tracking-wider text-[10px]">Verification & Governance Control</p>
+                <p className="text-slate-400 font-medium font-bold uppercase tracking-wider text-[10px] mt-2">Verification Control</p>
               </div>
             </div>
             <div className="flex gap-3">
@@ -337,6 +366,62 @@ export default function AdminSalons() {
                   <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Phone Link</p>
                   <p className="font-bold text-slate-700">{selectedSalon.phone || 'N/A'}</p>
                 </div>
+
+                {/* <div className="col-span-2 p-5 rounded-3xl bg-slate-900 text-white shadow-xl shadow-slate-900/10 space-y-4">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <p className="text-[9px] font-black text-slate-400 uppercase tracking-[0.2em]">Governance Credentials</p>
+                      <p className="font-bold text-sm mt-1">Owner Account Access</p>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => setShowResetPasswordDialog(true)}
+                        className="h-8 px-3 rounded-lg bg-white/5 hover:bg-white/10 text-accent font-black text-[9px] uppercase tracking-widest transition-all"
+                      >
+                        Reset
+                      </Button>
+                      <div className="h-8 w-8 rounded-lg bg-white/5 flex items-center justify-center">
+                        <Zap className="w-4 h-4 text-accent" />
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="space-y-3 pt-2 border-t border-white/5">
+                    <div className="flex justify-between items-center bg-white/5 p-3 rounded-xl border border-white/5">
+                      <span className="text-[10px] font-bold text-slate-400">EMAIL</span>
+                      <span className="font-mono text-xs text-white">{selectedSalon.owner_account_email || 'No owner assigned'}</span>
+                    </div>
+
+                    <div className="flex justify-between items-center bg-white/5 p-3 rounded-xl border border-white/5">
+                      <span className="text-[10px] font-bold text-slate-400">PASSWORD</span>
+                      <div className="flex items-center gap-3">
+                        <span className="font-mono text-xs text-white">
+                          {showOwnerPassword
+                            ? (selectedSalon.owner_password_plain || 'Not Stored')
+                            : '••••••••••••'}
+                        </span>
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="icon"
+                          onClick={(e) => {
+                            e.preventDefault();
+                            e.stopPropagation();
+                            setShowOwnerPassword(prev => !prev);
+                          }}
+                          className="h-8 w-8 hover:bg-white/10 text-slate-400 hover:text-white"
+                        >
+                          {showOwnerPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                        </Button>
+                      </div>
+                    </div>
+                    {!selectedSalon.owner_password_plain && (
+                      <p className="text-[9px] text-slate-500 italic px-2">※ Password was not stored in plain text during registration.</p>
+                    )}
+                  </div>
+                </div> */}
               </div>
 
               <div className="p-6 rounded-[2rem] border-2 border-slate-50 space-y-2">
@@ -399,6 +484,49 @@ export default function AdminSalons() {
               {actionLoading ? 'Creating...' : 'Create Registration'}
             </Button>
           </form>
+        </DialogContent>
+      </Dialog>
+
+      {/* Reset Password Dialog */}
+      <Dialog open={showResetPasswordDialog} onOpenChange={setShowResetPasswordDialog}>
+        <DialogContent className="rounded-[2.5rem] p-8 max-w-sm">
+          <DialogHeader className="text-center">
+            <div className="mx-auto w-12 h-12 bg-amber-500/10 rounded-2xl flex items-center justify-center mb-4">
+              <Shield className="w-6 h-6 text-amber-500" />
+            </div>
+            <DialogTitle className="text-2xl font-black">Reset Owner Access</DialogTitle>
+            <p className="text-slate-500 text-sm font-medium mt-2">
+              Set a new plain-text password for this salon owner.
+            </p>
+          </DialogHeader>
+          <div className="space-y-4 mt-6">
+            <div className="space-y-2">
+              <Label className="text-[10px] font-black uppercase tracking-widest text-slate-400">New Password</Label>
+              <Input
+                type="text"
+                value={resetPasswordValue}
+                onChange={e => setResetPasswordValue(e.target.value)}
+                placeholder="SecurePass2024!"
+                className="rounded-xl h-12 font-mono"
+              />
+            </div>
+            <div className="flex flex-col gap-3 pt-2">
+              <Button
+                disabled={actionLoading || !resetPasswordValue}
+                onClick={handleResetPassword}
+                className="w-full h-12 rounded-xl bg-slate-900 text-white font-black hover:bg-slate-800"
+              >
+                {actionLoading ? "Updating Registry..." : "Enforce New Password"}
+              </Button>
+              <Button
+                variant="ghost"
+                onClick={() => setShowResetPasswordDialog(false)}
+                className="w-full text-slate-400 font-bold text-xs uppercase"
+              >
+                Cancel
+              </Button>
+            </div>
+          </div>
         </DialogContent>
       </Dialog>
     </AdminLayout>

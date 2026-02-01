@@ -92,8 +92,8 @@ export default function AdminReviews() {
                                 <Star className="h-8 w-8 fill-amber-400" />
                             </div>
                             <div>
-                                <h1 className="text-4xl font-black tracking-tight">Review Registry</h1>
-                                <p className="text-white/60 font-bold uppercase tracking-widest text-[10px]">Platform Sentiment & Feedback Hub</p>
+                                <h1 className="text-4xl font-black tracking-tight">Platform Comments</h1>
+                                <p className="text-white/60 font-bold uppercase tracking-widest text-[10px]">User Feedback & Sentiment Hub</p>
                             </div>
                         </div>
                         <div className="flex gap-4">
@@ -160,7 +160,7 @@ export default function AdminReviews() {
 
                                     <div className="pt-4 border-t border-slate-50 flex items-center justify-between">
                                         <div className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">
-                                            Session ID: {review.id.slice(0, 8)}
+                                            Comment ID: {review.id.slice(0, 8)}
                                         </div>
                                         <Button
                                             variant="ghost"

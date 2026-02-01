@@ -22,76 +22,86 @@ import {
   SheetTrigger,
 } from "@/components/ui/sheet";
 import { useSalon } from "@/hooks/useSalon";
-
-const mainTabs = [
-  {
-    icon: LayoutDashboard,
-    label: "Home",
-    path: "/dashboard",
-    badge: null,
-  },
-  {
-    icon: Calendar,
-    label: "Bookings",
-    path: "/dashboard/appointments",
-    badge: "3",
-  },
-  {
-    icon: Users,
-    label: "Customers",
-    path: "/dashboard/customers",
-    badge: null,
-  },
-  {
-    icon: Receipt,
-    label: "Billing",
-    path: "/dashboard/billing",
-    badge: null,
-  },
-];
-
-const moreTabs = [
-  {
-    icon: UserCog,
-    label: "Staff Management",
-    path: "/dashboard/staff",
-    description: "Manage team members & roles",
-  },
-  {
-    icon: Scissors,
-    label: "Services & Pricing",
-    path: "/dashboard/services",
-    description: "Service catalog & pricing",
-  },
-  {
-    icon: Package,
-    label: "Inventory",
-    path: "/dashboard/inventory",
-    description: "Stock management",
-  },
-  {
-    icon: BarChart3,
-    label: "Reports & Analytics",
-    path: "/dashboard/reports",
-    description: "Business insights & metrics",
-  },
-  {
-    icon: Gift,
-    label: "Offers & Promotions",
-    path: "/dashboard/offers",
-    description: "Discounts & special deals",
-  },
-  {
-    icon: Settings,
-    label: "Settings",
-    path: "/dashboard/settings",
-    description: "Business configuration",
-  },
-];
+import { useAuth } from "@/hooks/useAuth";
 
 export const MobileBottomNav = () => {
   const location = useLocation();
   const { isOwner, isManager } = useSalon();
+  const { user } = useAuth();
+
+  const isUserStaff = user?.user_type === 'salon_staff' || user?.salon_role === 'staff';
+  const basePath = isUserStaff ? '/staff' : '/salon';
+
+  const mainTabs = [
+    {
+      icon: LayoutDashboard,
+      label: "Home",
+      path: `${basePath}/dashboard`,
+      badge: null,
+    },
+  ];
+
+  if (!isUserStaff) {
+    mainTabs.push(
+      {
+        icon: Calendar,
+        label: "Bookings",
+        path: `${basePath}/appointments`,
+        badge: "3",
+      },
+      {
+        icon: Users,
+        label: "Customers",
+        path: `${basePath}/customers`,
+        badge: null,
+      },
+      {
+        icon: Receipt,
+        label: "Billing",
+        path: `${basePath}/billing`,
+        badge: null,
+      }
+    );
+  }
+
+  const moreTabs = [
+    {
+      icon: UserCog,
+      label: "Staff Management",
+      path: `${basePath}/staff`,
+      description: "Manage team members & roles",
+    },
+    {
+      icon: Scissors,
+      label: "Services & Pricing",
+      path: `${basePath}/services`,
+      description: "Service catalog & pricing",
+    },
+    {
+      icon: Package,
+      label: "Inventory",
+      path: `${basePath}/inventory`,
+      description: "Stock management",
+    },
+    {
+      icon: BarChart3,
+      label: "Reports & Analytics",
+      path: `${basePath}/reports`,
+      description: "Business insights & metrics",
+    },
+    {
+      icon: Gift,
+      label: "Offers & Promotions",
+      path: `${basePath}/offers`,
+      description: "Discounts & special deals",
+    },
+    {
+      icon: Settings,
+      label: "Settings",
+      path: `${basePath}/settings`,
+      description: "Business configuration",
+    },
+  ];
 
   const filteredMoreTabs = moreTabs.filter((tab) => {
     // Staff can only see limited items
@@ -117,7 +127,7 @@ export const MobileBottomNav = () => {
               key={tab.path}
               to={tab.path}
               className={cn(
-                "flex flex-col items-center justify-center min-w-0 flex-1 py-2 px-1 rounded-xl transition-all duration-200 relative",
+                "flex flex-col items-center justify-center min-w-0 flex-1 py-1.5 px-1 rounded-xl transition-all duration-200 relative",
                 isActive
                   ? "text-accent"
                   : "text-muted-foreground hover:text-foreground active:scale-95"
@@ -125,17 +135,17 @@ export const MobileBottomNav = () => {
             >
               <div className="relative">
                 <tab.icon className={cn(
-                  "w-6 h-6 mb-1 transition-transform duration-200",
+                  "w-5 h-5 mb-1 transition-transform duration-200",
                   isActive && "scale-110"
                 )} />
                 {tab.badge && (
-                  <Badge className="absolute -top-2 -right-2 w-5 h-5 p-0 text-xs bg-destructive text-white flex items-center justify-center">
+                  <Badge className="absolute -top-2 -right-2 w-4 h-4 p-0 text-[10px] bg-destructive text-white flex items-center justify-center">
                     {tab.badge}
                   </Badge>
                 )}
               </div>
               <span className={cn(
-                "text-xs font-medium truncate max-w-full",
+                "text-[10px] font-medium truncate max-w-full",
                 isActive ? "text-accent font-semibold" : "text-muted-foreground"
               )}>
                 {tab.label}
@@ -152,18 +162,18 @@ export const MobileBottomNav = () => {
           <SheetTrigger asChild>
             <button
               className={cn(
-                "flex flex-col items-center justify-center min-w-0 flex-1 py-2 px-1 rounded-xl transition-all duration-200 relative",
+                "flex flex-col items-center justify-center min-w-0 flex-1 py-1.5 px-1 rounded-xl transition-all duration-200 relative",
                 isMoreTabActive
                   ? "text-accent"
                   : "text-muted-foreground hover:text-foreground active:scale-95"
               )}
             >
               <MoreHorizontal className={cn(
-                "w-6 h-6 mb-1 transition-transform duration-200",
+                "w-5 h-5 mb-1 transition-transform duration-200",
                 isMoreTabActive && "scale-110"
               )} />
               <span className={cn(
-                "text-xs font-medium",
+                "text-[10px] font-medium",
                 isMoreTabActive ? "text-accent font-semibold" : "text-muted-foreground"
               )}>
                 More
@@ -177,7 +187,7 @@ export const MobileBottomNav = () => {
             <SheetHeader className="pb-6">
               <SheetTitle className="text-left text-xl font-bold">More Options</SheetTitle>
             </SheetHeader>
-            <div className="grid grid-cols-1 gap-3 overflow-y-auto">
+            <div className="grid grid-cols-1 gap-3 overflow-y-auto pb-10">
               {filteredMoreTabs.map((tab) => {
                 const isActive = location.pathname === tab.path;
                 return (

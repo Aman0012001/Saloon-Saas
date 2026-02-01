@@ -83,7 +83,11 @@ interface Booking {
 export default function DashboardHome() {
   const navigate = useNavigate();
   const { user, loading: authLoading } = useAuth();
-  const { currentSalon, loading: salonLoading, isOwner, isStaff, subscription } = useSalon();
+  const { currentSalon, loading: salonLoading, isOwner: salonOwnerRole, isStaff: salonStaffRole, subscription } = useSalon();
+
+  const isOwner = user?.user_type === 'salon_owner' || salonOwnerRole || (user?.salon_role && ['owner', 'manager'].includes(user.salon_role));
+  const isStaff = user?.user_type === 'salon_staff' || salonStaffRole || user?.salon_role === 'staff';
+
   const isMobile = useMobile();
   const { toast } = useToast();
 
@@ -181,8 +185,12 @@ export default function DashboardHome() {
     if (!authLoading) {
       if (!user) {
         navigate("/login");
-      } else if (user.user_type === 'customer') {
-        navigate("/");
+      } else {
+        const isStaffOrOwner = user.salon_role === 'staff' || user.salon_role === 'owner' || user.salon_role === 'manager' || user.user_type === 'salon_owner' || user.user_type === 'salon_staff' || user.user_type === 'admin';
+
+        if (user.user_type === 'customer' && !isStaffOrOwner) {
+          navigate("/");
+        }
       }
     }
   }, [user, authLoading, navigate]);

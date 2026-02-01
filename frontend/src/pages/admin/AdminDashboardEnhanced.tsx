@@ -290,8 +290,8 @@ export default function AdminDashboardEnhanced() {
                 <Sparkles className="h-8 w-8 text-white" />
               </div>
               <div>
-                <h1 className="text-4xl font-black tracking-tight">Executive Dashboard</h1>
-                <p className="text-slate-400 font-medium">Platform overview powered by local MySQL</p>
+                <h1 className="text-4xl font-black tracking-tight">Admin Dashboard</h1>
+                <p className="text-slate-400 font-medium mt-2">Platform overview</p>
               </div>
             </div>
             <Button onClick={fetchEnhancedStats} className="bg-white/10 hover:bg-white/20 border-white/10 backdrop-blur-md rounded-xl h-12 px-6 font-bold">

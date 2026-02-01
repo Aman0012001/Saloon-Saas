@@ -322,6 +322,13 @@ export const adminAPI = {
         });
     },
 
+    async resetSalonPassword(salonId: string, password: string) {
+        return await fetchWithAuth(`/admin/salons/${salonId}/reset-password`, {
+            method: 'POST',
+            body: JSON.stringify({ password }),
+        });
+    },
+
     async createSalon(data: any) {
         return await fetchWithAuth('/admin/salons', {
             method: 'POST',

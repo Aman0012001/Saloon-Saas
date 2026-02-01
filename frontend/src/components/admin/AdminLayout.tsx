@@ -81,7 +81,6 @@ const navigation = [
   {
     title: "Platform",
     items: [
-      { icon: Bell, label: "Notifications", path: "/super-admin/notifications" },
       { icon: Settings, label: "Platform Settings", path: "/super-admin/settings" },
     ]
   }
@@ -176,7 +175,7 @@ export function AdminLayout({ children }: AdminLayoutProps) {
           </div>
           <div>
             <h1 className="font-bold text-xl text-white">Super Admin</h1>
-            <p className="text-xs text-gray-400">Platform Control Center</p>
+            <p className="text-xs text-gray-400 mt-2" >Platform Control Center</p>
           </div>
         </Link>
       </div>

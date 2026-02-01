@@ -42,51 +42,6 @@ interface MobileLayoutProps {
   showBottomNav?: boolean;
 }
 
-// Define which pages should show back button and which should show bottom nav
-const getPageConfig = (pathname: string) => {
-  // Main tab pages - show bottom nav, no back button
-  const mainPages = ['/dashboard', '/dashboard/appointments', '/dashboard/customers', '/dashboard/billing'];
-
-  // More tab pages - show bottom nav with back button
-  const morePages = [
-    '/dashboard/staff',
-    '/dashboard/services',
-    '/dashboard/inventory',
-    '/dashboard/reports',
-    '/dashboard/offers',
-    '/dashboard/settings',
-    '/dashboard/profile'
-  ];
-
-  const isMainPage = mainPages.includes(pathname);
-  const isMorePage = morePages.includes(pathname);
-
-  return {
-    showBackButton: isMorePage,
-    showBottomNav: isMainPage || isMorePage,
-    title: getPageTitle(pathname)
-  };
-};
-
-const getPageTitle = (pathname: string): string => {
-  const titles: Record<string, string> = {
-    '/dashboard': 'Dashboard',
-    '/dashboard/appointments': 'Appointments',
-    '/dashboard/customers': 'Customers',
-    '/dashboard/billing': 'Billing',
-    '/dashboard/staff': 'Staff',
-    '/dashboard/services': 'Services',
-    '/dashboard/reports': 'Reports',
-    '/dashboard/offers': 'Offers',
-    '/dashboard/settings': 'Settings',
-    '/dashboard/inventory': 'Inventory',
-    '/dashboard/profile': 'My Profile',
-    '/dashboard/create-salon': 'Create Salon',
-  };
-
-  return titles[pathname] || 'NoamSkin';
-};
-
 export const MobileLayout = ({
   children,
   title: customTitle,
@@ -98,6 +53,59 @@ export const MobileLayout = ({
   const location = useLocation();
   const { user, signOut } = useAuth();
   const { salons, currentSalon, setCurrentSalon, isOwner, isManager } = useSalon();
+
+  const isUserStaff = user?.user_type === 'salon_staff' || user?.salon_role === 'staff';
+  const basePath = isUserStaff ? '/staff' : '/salon';
+
+  // Define which pages should show back button and which should show bottom nav
+  const getPageConfig = (pathname: string) => {
+    // Main tab pages - show bottom nav, no back button
+    const mainPages = [
+      `${basePath}/dashboard`,
+      `${basePath}/appointments`,
+      `${basePath}/customers`,
+      `${basePath}/billing`
+    ];
+
+    // More tab pages - show bottom nav with back button
+    const morePages = [
+      `${basePath}/staff`,
+      `${basePath}/services`,
+      `${basePath}/inventory`,
+      `${basePath}/reports`,
+      `${basePath}/offers`,
+      `${basePath}/settings`,
+      `${basePath}/profile`
+    ];
+
+    const isMainPage = mainPages.includes(pathname);
+    const isMorePage = morePages.includes(pathname);
+
+    return {
+      showBackButton: isMorePage,
+      showBottomNav: isMainPage || isMorePage,
+      title: getPageTitle(pathname)
+    };
+  };
+
+  const getPageTitle = (pathname: string): string => {
+    const titles: Record<string, string> = {
+      [`${basePath}/dashboard`]: 'Dashboard',
+      [`${basePath}/appointments`]: 'Appointments',
+      [`${basePath}/customers`]: 'Customers',
+      [`${basePath}/billing`]: 'Billing',
+      [`${basePath}/staff`]: 'Staff',
+      [`${basePath}/services`]: 'Services',
+      [`${basePath}/reports`]: 'Reports',
+      [`${basePath}/offers`]: 'Offers',
+      [`${basePath}/settings`]: 'Settings',
+      [`${basePath}/inventory`]: 'Inventory',
+      [`${basePath}/profile`]: 'My Profile',
+      [`${basePath}/create-salon`]: 'Create Salon',
+    };
+
+    return titles[pathname] || 'NoamSkin';
+  };
 
   // Get page configuration
   const pageConfig = getPageConfig(location.pathname);
@@ -114,7 +122,7 @@ export const MobileLayout = ({
     if (window.history.length > 1) {
       navigate(-1);
     } else {
-      navigate('/dashboard');
+      navigate(`${basePath}/dashboard`);
     }
   };
 
@@ -156,7 +164,7 @@ export const MobileLayout = ({
               {/* Profile Section */}
               {!isOwner && (
                 <Link
-                  to="/dashboard/profile"
+                  to={`${basePath}/profile`}
                   className="flex items-center gap-3 p-4 rounded-xl bg-secondary/30 mb-6 active:scale-95 transition-transform"
                 >
                   <Avatar className="w-12 h-12 ring-2 ring-accent/20">
@@ -219,7 +227,7 @@ export const MobileLayout = ({
                       ))}
                       <DropdownMenuSeparator />
                       <DropdownMenuItem
-                        onClick={() => navigate("/dashboard/create-salon")}
+                        onClick={() => navigate(`${basePath}/create-salon`)}
                         className="cursor-pointer p-3 text-accent"
                       >
                         <Plus className="w-4 h-4 mr-2" />

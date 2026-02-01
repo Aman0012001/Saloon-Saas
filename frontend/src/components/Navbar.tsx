@@ -126,13 +126,13 @@ const Navbar = () => {
                     let dashPath = "/user/dashboard";
                     let dashLabel = "My Dashboard";
 
-                    if (user.user_type === 'admin') {
+                    if (user.user_type === 'admin' || user.user_type === 'super_admin') {
                       dashPath = "/super-admin/dashboard";
                       dashLabel = "Super Admin";
-                    } else if (user.user_type === 'salon_owner') {
+                    } else if (user.user_type === 'salon_owner' || user.salon_role === 'owner' || user.salon_role === 'manager') {
                       dashPath = "/salon/dashboard";
                       dashLabel = "Salon Hub";
-                    } else if (user.salon_role === 'staff') {
+                    } else if (user.user_type === 'salon_staff' || user.salon_role === 'staff') {
                       dashPath = "/staff/dashboard";
                       dashLabel = "Staff Hub";
                     } else if (user.user_type === 'customer') {

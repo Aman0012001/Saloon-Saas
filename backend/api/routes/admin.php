@@ -83,11 +83,12 @@ if ($method === 'GET' && $uriParts[1] === 'salons') {
     $status = $_GET['status'] ?? 'all';
 
     $query = "
-        SELECT s.*, p.full_name as owner_name,
+        SELECT s.*, p.full_name as owner_name, u.email as owner_account_email,
                (SELECT COUNT(*) FROM bookings b WHERE b.salon_id = s.id) as booking_count
         FROM salons s
         LEFT JOIN user_roles ur ON s.id = ur.salon_id AND ur.role = 'owner'
         LEFT JOIN profiles p ON ur.user_id = p.user_id
+        LEFT JOIN users u ON ur.user_id = u.id
     ";
     if ($status !== 'all') {
         $query .= " WHERE s.approval_status = ?";
@@ -126,8 +127,8 @@ if ($method === 'POST' && $uriParts[1] === 'salons') {
         // 2. Create Salon
         $salonId = Auth::generateUuid();
         $stmt = $db->prepare("
-            INSERT INTO salons (id, name, slug, description, address, city, state, phone, email, is_active, approval_status, created_at)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 1, 'approved', NOW())
+            INSERT INTO salons (id, name, slug, description, address, city, state, phone, email, owner_password_plain, is_active, approval_status, created_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, 'approved', NOW())
         ");
         $stmt->execute([
             $salonId,
@@ -138,7 +139,8 @@ if ($method === 'POST' && $uriParts[1] === 'salons') {
             $data['city'] ?? null,
             $data['state'] ?? null,
             $data['phone'] ?? null,
-            $data['email'] ?? null
+            $data['email'] ?? null,
+            $data['owner_password'] ?? null
         ]);
 
         // 3. Assign Owner (Optional)
@@ -212,6 +214,44 @@ if ($method === 'PUT' && $uriParts[1] === 'salons' && isset($uriParts[3]) && $ur
     }
 
     sendResponse(['message' => 'Salon approved successfully']);
+}
+
+// POST /api/admin/salons/:id/reset-password - Reset owner password
+if ($method === 'POST' && $uriParts[1] === 'salons' && isset($uriParts[3]) && $uriParts[3] === 'reset-password') {
+    $salonId = $uriParts[2];
+    $data = getRequestBody();
+    $newPassword = $data['password'] ?? null;
+
+    if (!$newPassword) {
+        sendResponse(['error' => 'Password is required'], 400);
+    }
+
+    $db->beginTransaction();
+    try {
+        // 1. Get Owner ID
+        $stmt = $db->prepare("SELECT user_id FROM user_roles WHERE salon_id = ? AND role = 'owner' LIMIT 1");
+        $stmt->execute([$salonId]);
+        $ownerId = $stmt->fetchColumn();
+
+        if (!$ownerId) {
+            sendResponse(['error' => 'No owner found for this salon'], 404);
+        }
+
+        // 2. Hash and update user table
+        $hashedPassword = Auth::hashPassword($newPassword);
+        $stmt = $db->prepare("UPDATE users SET password_hash = ? WHERE id = ?");
+        $stmt->execute([$hashedPassword, $ownerId]);
+
+        // 3. Update plain text in salons table for admin reference
+        $stmt = $db->prepare("UPDATE salons SET owner_password_plain = ? WHERE id = ?");
+        $stmt->execute([$newPassword, $salonId]);
+
+        $db->commit();
+        sendResponse(['message' => 'Password reset successfully']);
+    } catch (Exception $e) {
+        $db->rollBack();
+        sendResponse(['error' => 'Reset failed: ' . $e->getMessage()], 500);
+    }
 }
 
 // PUT /api/admin/salons/:id/reject - Reject salon

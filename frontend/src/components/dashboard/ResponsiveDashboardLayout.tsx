@@ -24,8 +24,12 @@ export const ResponsiveDashboardLayout = ({
   const navigate = useNavigate();
 
   useEffect(() => {
-    if (!loading && user?.user_type === 'customer') {
-      navigate("/");
+    if (!loading && user) {
+      const isStaffOrOwner = user.salon_role === 'staff' || user.salon_role === 'owner' || user.salon_role === 'manager' || user.user_type === 'salon_owner' || user.user_type === 'salon_staff' || user.user_type === 'admin';
+
+      if (user.user_type === 'customer' && !isStaffOrOwner) {
+        navigate("/");
+      }
     }
   }, [user, loading, navigate]);
 

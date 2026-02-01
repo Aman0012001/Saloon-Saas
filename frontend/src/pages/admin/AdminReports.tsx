@@ -94,8 +94,8 @@ export default function AdminReports() {
                 <BarChart3 className="h-8 h-8" />
               </div>
               <div>
-                <h1 className="text-4xl font-black tracking-tight">Intelligence Nexus</h1>
-                <p className="text-white font-bold uppercase tracking-widest text-[10px]">Aggregated Local Performance Data</p>
+                <h1 className="text-4xl font-black tracking-tight">Intelligence</h1>
+                <p className="text-white font-bold uppercase tracking-widest text-[10px] mt-2">Aggregated Local Performance Data</p>
               </div>
             </div>
             <div className="flex gap-4">
@@ -196,6 +196,7 @@ export default function AdminReports() {
                       padding: '12px'
                     }}
                     itemStyle={{ color: '#fff', fontWeight: 600 }}
+                    labelStyle={{ color: '#fff', fontWeight: 700, marginBottom: '4px' }}
                   />
                   <Area type="monotone" dataKey="value" stroke="none" fill="url(#cyanGradient)" />
                   <Line
@@ -222,7 +223,15 @@ export default function AdminReports() {
                       <Cell key={i} fill={COLORS[i % COLORS.length]} />
                     ))}
                   </Pie>
-                  <Tooltip />
+                  <Tooltip
+                    contentStyle={{
+                      backgroundColor: '#0f172a',
+                      borderRadius: '12px',
+                      border: '1px solid #1e293b',
+                      color: '#fff'
+                    }}
+                    itemStyle={{ color: '#fff' }}
+                  />
                 </PieChart>
               </ResponsiveContainer>
             </div>

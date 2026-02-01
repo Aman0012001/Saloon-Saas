@@ -231,7 +231,7 @@ export default function AdminAddProduct() {
                             </h1>
                         </div>
                         <p className="text-slate-500 font-medium ml-14">
-                            {productId ? "Update product details and assets." : "Fill the details to add a new product."}
+                            {productId ? "Update product details and assets." : "Fill the details for add a new product."}
                         </p>
                     </div>
 

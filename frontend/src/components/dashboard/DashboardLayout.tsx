@@ -134,12 +134,6 @@ export const DashboardLayout = ({ children }: DashboardLayoutProps) => {
         description: "Personal overview"
       },
       {
-        icon: Calendar,
-        label: "My Schedule",
-        path: "/staff/dashboard", // Assuming appointments for staff is at dashboard for now
-        description: "View appointments"
-      },
-      {
         icon: User,
         label: "My Attendance",
         path: "/staff/attendance",
@@ -216,18 +210,21 @@ export const DashboardLayout = ({ children }: DashboardLayoutProps) => {
   };
 
   const filteredNavItems = navItems.filter((item) => {
+    // If it's the overridden list for staff, don't filter it further
+    if (isUserStaff) {
+      return true;
+    }
+
     // Owners don't need "Staff Profile ", "Supply Store" or "Inventory" in the main sidebar list
     if (isOwner && (item.label === "Staff Profile " || item.label === "Supply Store" || item.label === "Inventory")) {
       return false;
     }
-    // Staff can only see limited items
-    if (!isOwner && !isManager) {
-      return ["Dashboard", "Calendar"].includes(item.label);
-    }
+
     // Managers can see most items except Settings
     if (isManager && !isOwner) {
       return item.label !== "Settings";
     }
+
     return true;
   });
 
@@ -349,7 +346,7 @@ export const DashboardLayout = ({ children }: DashboardLayoutProps) => {
                   ))}
                   <DropdownMenuSeparator />
                   <DropdownMenuItem
-                    onClick={() => navigate("/dashboard/create-salon")}
+                    onClick={() => navigate(`${basePath}/create-salon`)}
                     className="cursor-pointer p-3 text-accent hover:bg-accent/10"
                   >
                     <Plus className="w-4 h-4 mr-2" />
@@ -418,7 +415,7 @@ export const DashboardLayout = ({ children }: DashboardLayoutProps) => {
             <div className="flex items-center gap-3 p-3 rounded-xl bg-secondary/30 transition-colors">
               <div
                 className="flex items-center gap-3 flex-1 min-w-0 cursor-pointer hover:opacity-80 transition-opacity"
-                onClick={() => navigate("/dashboard/notifications")}
+                onClick={() => navigate(`${basePath}/notifications`)}
               >
                 <div className="relative">
                   <Avatar className="w-10 h-10 ring-2 ring-accent/20">
@@ -456,7 +453,7 @@ export const DashboardLayout = ({ children }: DashboardLayoutProps) => {
                   </Button>
                 </DropdownMenuTrigger>
                 <DropdownMenuContent align="end" className="w-48 bg-white/95 backdrop-blur-xl border-border/50">
-                  <DropdownMenuItem className="cursor-pointer" onClick={() => navigate("/dashboard/profile")}>
+                  <DropdownMenuItem className="cursor-pointer" onClick={() => navigate(`${basePath}/profile`)}>
                     <User className="w-4 h-4 mr-2" />
                     Profile Settings
                   </DropdownMenuItem>
@@ -540,7 +537,7 @@ export const DashboardLayout = ({ children }: DashboardLayoutProps) => {
             <div className="flex items-center gap-3">
               <SalonNotificationSystem />
 
-              <div className="relative h-11 w-11 rounded-xl border-2 border-border/30 hover:border-accent/50 transition-colors cursor-pointer lg:hidden" onClick={() => navigate("/dashboard/notifications")}>
+              <div className="relative h-11 w-11 rounded-xl border-2 border-border/30 hover:border-accent/50 transition-colors cursor-pointer lg:hidden" onClick={() => navigate(`${basePath}/notifications`)}>
                 <Avatar className="h-full w-full">
                   <AvatarFallback className="bg-accent/10 text-accent text-xs font-bold">
                     {user?.email ? getInitials(user.email) : "U"}
