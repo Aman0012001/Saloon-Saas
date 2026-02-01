@@ -10,22 +10,19 @@
 $origin = $_SERVER['HTTP_ORIGIN'] ?? '';
 
 // Allow any localhost or 127.0.0.1 origin for local development
-if (!empty($origin) && (strpos($origin, 'localhost') !== false || strpos($origin, '127.0.0.1') !== false)) {
+if (!empty($origin)) {
     header("Access-Control-Allow-Origin: $origin");
     header('Access-Control-Allow-Credentials: true');
-    header('Access-Control-Allow-Methods: GET, POST, PUT, DELETE, OPTIONS, PATCH');
-    header('Access-Control-Allow-Headers: Content-Type, Authorization, X-Requested-With, Accept, Origin, Cache-Control, Pragma');
-} else if (empty($origin)) {
+} else {
     header("Access-Control-Allow-Origin: *");
 }
 
+header('Access-Control-Allow-Methods: GET, POST, PUT, DELETE, OPTIONS, PATCH');
+header('Access-Control-Allow-Headers: Content-Type, Authorization, X-Requested-With, Accept, Origin, Cache-Control, Pragma');
+
 // Handle preflight requests
 if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
-    header("Access-Control-Allow-Origin: " . ($origin ?: '*'));
-    header('Access-Control-Allow-Methods: GET, POST, PUT, DELETE, OPTIONS, PATCH');
-    header('Access-Control-Allow-Headers: Content-Type, Authorization, X-Requested-With, Accept, Origin, Cache-Control, Pragma');
     header('Access-Control-Max-Age: 86400');
-    // Preflight responses should use 204 or 200
     http_response_code(204);
     exit();
 }
@@ -176,7 +173,10 @@ try {
     $method = $_SERVER['REQUEST_METHOD'] ?? 'GET';
 
     // Parse URI path
-    $basePath = '/backend/api';
+    $basePath = '/api';
+    if (strpos($_SERVER['REQUEST_URI'], '/backend/api') !== false) {
+        $basePath = '/backend/api';
+    }
     $path = parse_url($uri, PHP_URL_PATH);
     $path = str_replace($basePath, '', $path);
     $uriParts = explode('/', trim($path, '/'));
