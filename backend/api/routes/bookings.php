@@ -18,6 +18,8 @@ if ($method === 'GET' && count($uriParts) === 1) {
 
         $date = $_GET['date'] ?? null;
         $status = $_GET['status'] ?? null;
+        $staffId = $_GET['staff_id'] ?? null;
+
         $params = [$salonId];
         $whereSql = "WHERE b.salon_id = ?";
 
@@ -28,6 +30,10 @@ if ($method === 'GET' && count($uriParts) === 1) {
         if ($status) {
             $whereSql .= " AND b.status = ?";
             $params[] = $status;
+        }
+        if ($staffId) {
+            $whereSql .= " AND b.staff_id = ?";
+            $params[] = $staffId;
         }
 
         $stmt = $db->prepare("

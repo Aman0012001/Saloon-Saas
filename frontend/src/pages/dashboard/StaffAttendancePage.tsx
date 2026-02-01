@@ -18,7 +18,7 @@ import { ResponsiveDashboardLayout } from "@/components/dashboard/ResponsiveDash
 import { useSalon } from "@/hooks/useSalon";
 import { useAuth } from "@/hooks/useAuth";
 import api from "@/services/api";
-import { format, differenceInMinutes } from "date-fns";
+import { format, differenceInMinutes, parseISO } from "date-fns";
 import { motion, AnimatePresence } from "framer-motion";
 import { cn } from "@/lib/utils";
 
@@ -48,10 +48,15 @@ export default function StaffAttendancePage() {
                 const uniqueDays = new Set();
 
                 history.forEach((rec: any) => {
-                    if (rec.check_in && rec.check_out) {
-                        totalMins += differenceInMinutes(new Date(rec.check_out), new Date(rec.check_in));
+                    const checkIn = typeof rec.check_in === 'string' ? parseISO(rec.check_in.replace(' ', 'T')) : undefined;
+                    const checkOut = typeof rec.check_out === 'string' ? parseISO(rec.check_out.replace(' ', 'T')) : undefined;
+
+                    if (checkIn && checkOut) {
+                        totalMins += differenceInMinutes(checkOut, checkIn);
                     }
-                    uniqueDays.add(format(new Date(rec.check_in), "yyyy-MM-dd"));
+                    if (checkIn) {
+                        uniqueDays.add(format(checkIn, "yyyy-MM-dd"));
+                    }
                 });
 
                 setStats({
@@ -138,9 +143,14 @@ export default function StaffAttendancePage() {
                             </div>
                         ) : (
                             attendance.map((rec, i) => {
-                                const durationMins = rec.check_out ? differenceInMinutes(new Date(rec.check_out), new Date(rec.check_in)) : null;
+                                const checkIn = typeof rec.check_in === 'string' ? parseISO(rec.check_in.replace(' ', 'T')) : undefined;
+                                const checkOut = typeof rec.check_out === 'string' ? parseISO(rec.check_out.replace(' ', 'T')) : undefined;
+
+                                const durationMins = (checkIn && checkOut) ? differenceInMinutes(checkOut, checkIn) : null;
                                 const hours = durationMins ? Math.floor(durationMins / 60) : 0;
                                 const mins = durationMins ? durationMins % 60 : 0;
+
+                                if (!checkIn) return null;
 
                                 return (
                                     <motion.div
@@ -153,21 +163,21 @@ export default function StaffAttendancePage() {
                                             <CardContent className="p-8 flex flex-wrap items-center justify-between gap-8">
                                                 <div className="flex items-center gap-6">
                                                     <div className="w-16 h-16 rounded-2xl bg-slate-900 text-white flex flex-col items-center justify-center shadow-xl shadow-slate-900/10 transition-transform group-hover:scale-105">
-                                                        <span className="text-[8px] font-black uppercase opacity-60">{format(new Date(rec.check_in), "MMM")}</span>
-                                                        <span className="text-xl font-black">{format(new Date(rec.check_in), "dd")}</span>
+                                                        <span className="text-[8px] font-black uppercase opacity-60">{format(checkIn, "MMM")}</span>
+                                                        <span className="text-xl font-black">{format(checkIn, "dd")}</span>
                                                     </div>
                                                     <div className="space-y-1">
-                                                        <h4 className="text-lg font-black text-slate-900 tracking-tight">{format(new Date(rec.check_in), "EEEE")}</h4>
+                                                        <h4 className="text-lg font-black text-slate-900 tracking-tight">{format(checkIn, "EEEE")}</h4>
                                                         <div className="flex items-center gap-4">
                                                             <Badge className="bg-emerald-50 text-emerald-600 border-none font-black text-[9px] uppercase px-3">
-                                                                {format(new Date(rec.check_in), "h:mm a")}
+                                                                {format(checkIn, "h:mm a")}
                                                             </Badge>
                                                             <span className="text-slate-200">/</span>
                                                             <Badge className={cn(
                                                                 "border-none font-black text-[9px] uppercase px-3",
-                                                                rec.check_out ? "bg-rose-50 text-rose-600" : "bg-blue-50 text-blue-600 animate-pulse"
+                                                                checkOut ? "bg-rose-50 text-rose-600" : "bg-blue-50 text-blue-600 animate-pulse"
                                                             )}>
-                                                                {rec.check_out ? format(new Date(rec.check_out), "h:mm a") : "Active Duty"}
+                                                                {checkOut ? format(checkOut, "h:mm a") : "Active Duty"}
                                                             </Badge>
                                                         </div>
                                                     </div>

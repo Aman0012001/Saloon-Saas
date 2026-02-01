@@ -29,7 +29,7 @@ import { useSalon } from "@/hooks/useSalon";
 import { useAuth } from "@/hooks/useAuth";
 import api from "@/services/api";
 import { useToast } from "@/hooks/use-toast";
-import { format, isToday, parseISO } from "date-fns";
+import { format, isToday, parseISO, isAfter, differenceInSeconds } from "date-fns";
 import { motion, AnimatePresence } from "framer-motion";
 import { cn } from "@/lib/utils";
 import { useNavigate } from "react-router-dom";
@@ -37,7 +37,7 @@ import { useNavigate } from "react-router-dom";
 export function StaffDashboard() {
     const navigate = useNavigate();
     const { user } = useAuth();
-    const { currentSalon } = useSalon();
+    const { currentSalon, loading: salonLoading } = useSalon();
     const { toast } = useToast();
 
     const [staffInfo, setStaffInfo] = useState<any>(null);
@@ -56,6 +56,12 @@ export function StaffDashboard() {
     });
     const [savingRecord, setSavingRecord] = useState(false);
 
+    const [upcomingBookings, setUpcomingBookings] = useState<any[]>([]);
+
+    const [currentSession, setCurrentSession] = useState<any>(null);
+    const [liveDuration, setLiveDuration] = useState("00:00:00");
+    const [lastSync, setLastSync] = useState<Date>(new Date());
+
     const fetchData = useCallback(async () => {
         if (!currentSalon || !user) return;
 
@@ -72,22 +78,39 @@ export function StaffDashboard() {
                 const statData = await api.staff.getProfileStats(me.id, month, year);
                 setStats(statData.stats);
 
-                // 3. Get assigned bookings for today
+                // 3. Get assigned bookings
                 const allBookings = await api.bookings.getAll({
                     salon_id: currentSalon.id,
                     staff_id: me.id
                 });
-                const todayStr = format(new Date(), "yyyy-MM-dd");
-                setTodayBookings(allBookings.filter((b: any) => b.booking_date === todayStr));
+
+                // Categorize bookings
+                const today: any[] = [];
+                const upcoming: any[] = [];
+
+                allBookings.forEach((b: any) => {
+                    const bDate = parseISO(b.booking_date);
+                    if (isToday(bDate)) {
+                        today.push(b);
+                    } else if (isAfter(bDate, new Date()) && b.status !== 'cancelled' && b.status !== 'completed') {
+                        upcoming.push(b);
+                    }
+                });
+
+                setTodayBookings(today);
+                setUpcomingBookings(upcoming.slice(0, 5)); // Show next 5 upcoming
 
                 // 4. Get attendance history (check if clocked in today)
                 const history = await api.staff.getAttendance(me.id);
                 setAttendance(history);
+                setLastSync(new Date());
 
-                const latest = history[0];
-                if (latest && !latest.check_out && isToday(new Date(latest.check_in))) {
+                const active = history.find((rec: any) => !rec.check_out);
+                if (active) {
+                    setCurrentSession(active);
                     setIsClockedIn(true);
                 } else {
+                    setCurrentSession(null);
                     setIsClockedIn(false);
                 }
             }
@@ -99,9 +122,50 @@ export function StaffDashboard() {
     }, [currentSalon, user]);
 
     useEffect(() => {
-        fetchData();
-    }, [fetchData]);
+        if (!salonLoading && !currentSalon) {
+            setLoading(false);
+            return;
+        }
 
+        if (currentSalon && user) {
+            fetchData();
+        }
+
+        // Auto refresh every 30 seconds
+        const interval = setInterval(() => {
+            if (currentSalon && user) fetchData();
+        }, 30000);
+
+        return () => clearInterval(interval);
+    }, [fetchData, currentSalon, user, salonLoading]);
+
+    useEffect(() => {
+        let interval: NodeJS.Timeout;
+        if (isClockedIn && currentSession?.check_in) {
+            // Function to update timer
+            const updateTimer = () => {
+                const start = typeof currentSession.check_in === 'string'
+                    ? parseISO(currentSession.check_in.replace(' ', 'T'))
+                    : new Date(currentSession.check_in);
+
+                const diff = differenceInSeconds(new Date(), start);
+                if (diff >= 0) {
+                    const h = Math.floor(diff / 3600);
+                    const m = Math.floor((diff % 3600) / 60);
+                    const s = diff % 60;
+                    setLiveDuration(`${h.toString().padStart(2, '0')}:${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`);
+                }
+            };
+
+            updateTimer(); // Initial call
+            interval = setInterval(updateTimer, 1000);
+        } else {
+            setLiveDuration("00:00:00");
+        }
+        return () => clearInterval(interval);
+    }, [isClockedIn, currentSession]);
+
+    // ... handleClockToggle ...
     const handleClockToggle = async () => {
         if (!currentSalon) return;
         setClockLoading(true);
@@ -122,10 +186,16 @@ export function StaffDashboard() {
                 description: error.message || "Attendance sync failed.",
                 variant: "destructive"
             });
+            // If we get "Already checked in", we should probably re-fetch to sync state
+            if (error.message?.includes("Already checked in")) {
+                fetchData();
+            }
         } finally {
             setClockLoading(false);
         }
     };
+
+    // ... (rest of functions) ...
 
     const updateBookingStatus = async (id: string, status: string) => {
         try {
@@ -158,11 +228,30 @@ export function StaffDashboard() {
         }
     };
 
-    if (loading) {
+    if (loading || (!currentSalon && !user)) {
         return (
             <div className="flex flex-col items-center justify-center h-[60vh] space-y-4">
                 <div className="w-10 h-10 border-4 border-[#F2A93B] border-t-transparent rounded-full animate-spin" />
-                <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">Restoring Staff Session...</p>
+                <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">
+                    {loading ? "Restoring Staff Session..." : "authenticating..."}
+                </p>
+            </div>
+        );
+    }
+
+    if (!currentSalon) {
+        return (
+            <div className="flex flex-col items-center justify-center h-[60vh] space-y-6">
+                <div className="p-6 bg-orange-50 rounded-full">
+                    <AlertCircle className="w-12 h-12 text-[#F2A93B]" />
+                </div>
+                <div className="text-center space-y-2">
+                    <h2 className="text-xl font-black text-slate-900">No Salon Assigned</h2>
+                    <p className="text-sm text-slate-500 font-medium max-w-sm">
+                        You do not appear to be assigned to any salon workspace.
+                        Please contact your administrator.
+                    </p>
+                </div>
             </div>
         );
     }
@@ -173,10 +262,12 @@ export function StaffDashboard() {
             <div className="flex flex-col md:flex-row md:items-center justify-between gap-6">
                 <div className="space-y-1">
                     <h1 className="text-4xl font-black text-slate-900 tracking-tight">
-                        Hello, {staffInfo?.display_name?.split(' ')[0]} 👋
+                        Hello, {staffInfo?.display_name?.split(' ')?.[0] || 'Staff'} 👋
                     </h1>
                     <p className="text-[10px] font-black uppercase tracking-[0.2em] text-[#F2A93B]">
-                        {isClockedIn ? "Duty Active • Secure Session" : "Shift Pending • System Ready"}
+                        {isClockedIn && currentSession?.check_in
+                            ? `Duty Active • Started ${format(parseISO(currentSession.check_in.replace(' ', 'T')), "h:mm a")}`
+                            : "Shift Pending • System Ready"}
                     </p>
                 </div>
 
@@ -204,11 +295,16 @@ export function StaffDashboard() {
                         </Button>
                         <div className="flex flex-col">
                             <span className={cn("text-[10px] font-black uppercase tracking-widest", isClockedIn ? "text-white/80" : "text-slate-400")}>
-                                {isClockedIn ? "Clocked In At" : "Not Clocked In"}
+                                {isClockedIn ? "Active Duty" : "Not Clocked In"}
                             </span>
                             <span className="text-sm font-black">
-                                {isClockedIn && attendance[0] ? format(new Date(attendance[0].check_in), "h:mm a") : "--:--"}
+                                {isClockedIn ? liveDuration : "--:--"}
                             </span>
+                            {isClockedIn && currentSession?.check_in && (
+                                <span className="text-[9px] font-bold text-white/60">
+                                    {format(parseISO(currentSession.check_in.replace(' ', 'T')), "h:mm a")}
+                                </span>
+                            )}
                         </div>
                     </Card>
                 </div>
@@ -335,6 +431,42 @@ export function StaffDashboard() {
                             ))
                         )}
                     </div>
+
+                    {/* Upcoming Assignments */}
+                    {upcomingBookings.length > 0 && (
+                        <div className="space-y-6 pt-6">
+                            <div className="flex items-center justify-between px-2">
+                                <h3 className="text-xl font-black text-slate-900 uppercase tracking-tight opacity-50">Upcoming Missions</h3>
+                            </div>
+                            <div className="space-y-4">
+                                {upcomingBookings.map((b, i) => (
+                                    <Card key={i} className="rounded-[2rem] border-none shadow-sm bg-white/50 overflow-hidden group hover:shadow-xl transition-all grayscale hover:grayscale-0 opacity-70 hover:opacity-100">
+                                        <CardContent className="p-6 flex flex-wrap items-center justify-between gap-6">
+                                            <div className="flex items-center gap-5">
+                                                <div className="flex flex-col items-center justify-center w-16 h-16 bg-slate-200 text-slate-500 rounded-[1.2rem] transition-all group-hover:bg-slate-800 group-hover:text-white">
+                                                    <span className="text-[8px] font-black uppercase tracking-tighter opacity-60">
+                                                        {format(parseISO(b.booking_date), "MMM")}
+                                                    </span>
+                                                    <span className="text-xl font-black">
+                                                        {format(parseISO(b.booking_date), "dd")}
+                                                    </span>
+                                                </div>
+                                                <div className="space-y-1">
+                                                    <h4 className="text-sm font-black text-slate-700">{b.service_name}</h4>
+                                                    <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">
+                                                        Scheduled: {b.booking_time}
+                                                    </p>
+                                                </div>
+                                            </div>
+                                            <Badge variant="outline" className="rounded-lg border-slate-100 text-[8px] font-black uppercase tracking-widest px-3 text-slate-400">
+                                                Next Deployment
+                                            </Badge>
+                                        </CardContent>
+                                    </Card>
+                                ))}
+                            </div>
+                        </div>
+                    )}
                 </div>
 
                 {/* Tactical Links & Messages */}
@@ -343,15 +475,31 @@ export function StaffDashboard() {
                         <h3 className="text-xl font-black text-slate-900 uppercase tracking-tight px-2">Operational Hub</h3>
                         <div className="grid grid-cols-1 gap-4">
                             {[
-                                { label: "My Profile", icon: User, path: `/staff/profile/${staffInfo?.id}`, desc: "View performance stats" },
+                                {
+                                    label: "My Profile",
+                                    icon: User,
+                                    path: staffInfo?.id ? `/staff/profile/${staffInfo.id}` : '#',
+                                    desc: "View performance stats",
+                                    disabled: !staffInfo
+                                },
                                 { label: "Deployment Logs", icon: Clock, path: "/staff/attendance", desc: "View work hour history" },
                                 { label: "Time-Off", icon: CalendarDays, path: "/staff/leaves", desc: "Request absence authorization" },
                                 { label: "Mail System", icon: Mail, path: "/staff/messages", desc: "Internal communications", alert: true },
                             ].map((link, i) => (
                                 <button
                                     key={i}
-                                    onClick={() => navigate(link.path)}
-                                    className="p-5 bg-white rounded-3xl border border-slate-100 flex items-center gap-5 text-left group hover:bg-slate-50 transition-all hover:shadow-xl"
+                                    onClick={() => {
+                                        if (link.disabled) {
+                                            toast({ title: "Profile Unavailable", description: "Staff profile data not loaded.", variant: "destructive" });
+                                            return;
+                                        }
+                                        navigate(link.path);
+                                    }}
+                                    className={cn(
+                                        "p-5 bg-white rounded-3xl border border-slate-100 flex items-center gap-5 text-left group transition-all hover:shadow-xl",
+                                        link.disabled ? "opacity-50 cursor-not-allowed" : "hover:bg-slate-50"
+                                    )}
+                                    disabled={!!link.disabled}
                                 >
                                     <div className="w-12 h-12 rounded-2xl bg-slate-50 flex items-center justify-center group-hover:bg-[#F2A93B] group-hover:text-white transition-all shadow-inner">
                                         <link.icon className="w-5 h-5" />
@@ -381,10 +529,14 @@ export function StaffDashboard() {
                             <div className="space-y-2">
                                 <h4 className="text-lg font-black tracking-tight">Deployment Ready</h4>
                                 <p className="text-[10px] font-bold text-white/50 leading-relaxed uppercase tracking-widest">
-                                    Terminal is currently synchronized with the central salon node. All operations are logged.
+                                    Last Sync: {format(lastSync, "h:mm:ss a")} • System Optimized
                                 </p>
                             </div>
-                            <Button className="w-full h-12 bg-white text-slate-900 font-black text-[10px] uppercase tracking-widest rounded-2xl hover:bg-slate-100 transition-all shadow-xl shadow-white/5">
+                            <Button
+                                onClick={() => fetchData()}
+                                className="w-full h-12 bg-white text-slate-900 font-black text-[10px] uppercase tracking-widest rounded-2xl hover:bg-slate-100 transition-all shadow-xl shadow-white/5"
+                            >
+                                {loading ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : null}
                                 Refresh Matrix
                             </Button>
                         </div>

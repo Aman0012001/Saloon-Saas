@@ -97,9 +97,10 @@ export default function StaffDetailsPage() {
             const salonServices = await api.services.getBySalon(staffMember.salon_id);
             setAllServices(salonServices);
         } catch (error: any) {
+            console.error("Staff Profile Sync Error:", error);
             toast({
                 title: "Data Sync Failed",
-                description: "Could not retrieve comprehensive profile records.",
+                description: error.message || "Could not retrieve comprehensive profile records.",
                 variant: "destructive",
             });
         } finally {

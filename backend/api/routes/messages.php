@@ -35,11 +35,13 @@ if ($method === 'GET' && (!isset($uriParts[1]) || $uriParts[1] === '')) {
 
     // Owners and Super Admins can see all messages for the salon
     // Staff can only see messages they sent or received
+    // Owners and Super Admins can see all messages for the salon
+    // Staff can only see messages they sent or received
     if ($userRole === 'owner' || $userRole === 'super_admin') {
         $query = "
-            SELECT m.*, 
-                   p_sender.full_name as sender_name,
-                   p_receiver.full_name as receiver_name
+            SELECT m.id, m.sender_id, m.receiver_id, m.salon_id, m.subject, m.content, m.is_read, m.recipient_type, m.created_at,
+                   COALESCE(p_sender.full_name, 'Unknown Sender') as sender_name,
+                   COALESCE(p_receiver.full_name, 'Unknown Receiver') as receiver_name
             FROM messages m
             LEFT JOIN profiles p_sender ON m.sender_id = p_sender.user_id
             LEFT JOIN profiles p_receiver ON m.receiver_id = p_receiver.user_id
@@ -48,9 +50,9 @@ if ($method === 'GET' && (!isset($uriParts[1]) || $uriParts[1] === '')) {
         $params = [$salonId];
     } else {
         $query = "
-            SELECT m.*, 
-                   p_sender.full_name as sender_name,
-                   p_receiver.full_name as receiver_name
+            SELECT m.id, m.sender_id, m.receiver_id, m.salon_id, m.subject, m.content, m.is_read, m.recipient_type, m.created_at,
+                   COALESCE(p_sender.full_name, 'Unknown Sender') as sender_name,
+                   COALESCE(p_receiver.full_name, 'Unknown Receiver') as receiver_name
             FROM messages m
             LEFT JOIN profiles p_sender ON m.sender_id = p_sender.user_id
             LEFT JOIN profiles p_receiver ON m.receiver_id = p_receiver.user_id
@@ -61,11 +63,15 @@ if ($method === 'GET' && (!isset($uriParts[1]) || $uriParts[1] === '')) {
 
     $query .= " ORDER BY m.created_at DESC";
 
-    $stmt = $db->prepare($query);
-    $stmt->execute($params);
-    $messages = $stmt->fetchAll();
-
-    sendResponse($messages);
+    try {
+        $stmt = $db->prepare($query);
+        $stmt->execute($params);
+        $messages = $stmt->fetchAll(PDO::FETCH_ASSOC);
+        sendResponse($messages);
+    } catch (PDOException $e) {
+        error_log("[Messages API Error] " . $e->getMessage());
+        sendResponse(['error' => 'Failed to fetch messages'], 500);
+    }
 }
 
 // 2. ==========================================

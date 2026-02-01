@@ -61,12 +61,19 @@ export default function StaffMessagesPage() {
                 // Find first relevant message for the tab
                 const filtered = data.filter((m: any) => {
                     if (isOwner || isManager) return activeTab === 'inbox' ? m.sender_id !== user.id : m.sender_id === user.id;
-                    return activeTab === 'inbox' ? m.receiver_id === user.id : m.sender_id === user.id;
+                    return activeTab === 'inbox'
+                        ? (m.receiver_id === user.id || (m.recipient_type === 'staff' && !m.receiver_id))
+                        : m.sender_id === user.id;
                 });
                 if (filtered.length > 0) setActiveMessage(filtered[0]);
             }
-        } catch (error) {
+        } catch (error: any) {
             console.error("Fetch messages error:", error);
+            toast({
+                title: "Transmission Error",
+                description: error.message || "Failed to synchronize messages.",
+                variant: "destructive"
+            });
         } finally {
             setLoading(false);
         }
@@ -75,6 +82,12 @@ export default function StaffMessagesPage() {
     useEffect(() => {
         fetchMessages();
     }, [fetchMessages]);
+
+    useEffect(() => {
+        if (isOwner) {
+            setComposeData(prev => ({ ...prev, recipient_type: "staff" }));
+        }
+    }, [isOwner]);
 
     const handleSendMessage = async () => {
         if (!composeData.content.trim() || !currentSalon) return;
@@ -121,7 +134,9 @@ export default function StaffMessagesPage() {
         if (isOwner || isManager) {
             return activeTab === 'inbox' ? m.sender_id !== user?.id : m.sender_id === user?.id;
         }
-        return activeTab === 'inbox' ? m.receiver_id === user?.id : m.sender_id === user?.id;
+        return activeTab === 'inbox'
+            ? (m.receiver_id === user?.id || (m.recipient_type === 'staff' && !m.receiver_id))
+            : m.sender_id === user?.id;
     });
 
 
@@ -166,7 +181,7 @@ export default function StaffMessagesPage() {
                                             </SelectTrigger>
                                             <SelectContent className="rounded-xl border-none shadow-xl bg-white">
                                                 {!isOwner && <SelectItem value="owner" className="font-bold py-3">SALON OWNER</SelectItem>}
-                                                <SelectItem value="staff" className="font-bold py-3">STAFF BROADCAST</SelectItem>
+                                                {(isOwner || isManager) && <SelectItem value="staff" className="font-bold py-3">STAFF BROADCAST</SelectItem>}
                                                 {isOwner && <SelectItem value="super_admin" className="font-bold py-3">SUPER ADMIN</SelectItem>}
                                             </SelectContent>
                                         </Select>

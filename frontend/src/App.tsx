@@ -196,6 +196,11 @@ const App = () => (
                       <StaffPage />
                     </RoleProtectedRoute>
                   } />
+                  <Route path="/salon/staff/messages" element={
+                    <RoleProtectedRoute allowedRole="SALON_OWNER">
+                      <StaffMessagesPage />
+                    </RoleProtectedRoute>
+                  } />
                   <Route path="/salon/staff/:id" element={
                     <RoleProtectedRoute allowedRole="SALON_OWNER">
                       <StaffDetailsPage />
@@ -285,7 +290,7 @@ const App = () => (
                   } />
                   <Route path="/staff/profile" element={
                     <RoleProtectedRoute allowedRole="STAFF">
-                      <OwnerProfile />
+                      <Navigate to="/staff/dashboard" replace />
                     </RoleProtectedRoute>
                   } />
 
