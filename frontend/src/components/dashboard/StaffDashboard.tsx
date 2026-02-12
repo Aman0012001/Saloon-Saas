@@ -37,7 +37,7 @@ import { useNavigate } from "react-router-dom";
 export function StaffDashboard() {
     const navigate = useNavigate();
     const { user } = useAuth();
-    const { currentSalon, loading: salonLoading } = useSalon();
+    const { currentSalon, isOwner, loading: salonLoading } = useSalon();
     const { toast } = useToast();
 
     const [staffInfo, setStaffInfo] = useState<any>(null);
@@ -55,6 +55,7 @@ export function StaffDashboard() {
         improvement_notes: ""
     });
     const [savingRecord, setSavingRecord] = useState(false);
+    const [unreadMessagesCount, setUnreadMessagesCount] = useState(0);
 
     const [upcomingBookings, setUpcomingBookings] = useState<any[]>([]);
 
@@ -113,6 +114,18 @@ export function StaffDashboard() {
                     setCurrentSession(null);
                     setIsClockedIn(false);
                 }
+
+                // 5. Get unread messages count
+                const messages = await api.messages.getAll(currentSalon.id);
+                const unread = messages.filter((m: any) => {
+                    if (m.is_read) return false;
+                    if (m.receiver_id === user.id) return true;
+                    if (!m.receiver_id) {
+                        if (m.recipient_type === 'staff') return true; // Everyone in staff dashboard is staff/manager/owner in staff view
+                    }
+                    return false;
+                });
+                setUnreadMessagesCount(unread.length);
             }
         } catch (error) {
             console.error("Staff dashboard fetch error:", error);
@@ -199,14 +212,14 @@ export function StaffDashboard() {
 
     const updateBookingStatus = async (id: string, status: string) => {
         try {
-            await api.bookings.updateStatus(id, status);
+            await api.bookings.updateStatus(id, status, staffInfo?.id);
             toast({ title: "Status Updated", description: `Appointment marked as ${status}.` });
             if (status === 'completed') {
                 setRecordBookingId(id);
             }
             fetchData();
-        } catch (error) {
-            toast({ title: "Error", description: "Could not update status.", variant: "destructive" });
+        } catch (error: any) {
+            toast({ title: "Error", description: error.message || "Could not update status.", variant: "destructive" });
         }
     };
 
@@ -221,8 +234,8 @@ export function StaffDashboard() {
             toast({ title: "Record Saved", description: "Treatment details successfully logged." });
             setRecordBookingId(null);
             setTreatmentData({ treatment_details: "", products_used: "", skin_reaction: "", improvement_notes: "" });
-        } catch (error) {
-            toast({ title: "Error", description: "Could not save treatment record.", variant: "destructive" });
+        } catch (error: any) {
+            toast({ title: "Error", description: error.message || "Could not save treatment record.", variant: "destructive" });
         } finally {
             setSavingRecord(false);
         }
@@ -313,10 +326,10 @@ export function StaffDashboard() {
             {/* Main Stats Grid */}
             <div className="grid grid-cols-2 lg:grid-cols-4 gap-6">
                 {[
-                    { label: 'Today Apps', value: todayBookings.length, icon: CalendarDays, color: 'text-blue-500', bg: 'bg-blue-50' },
-                    { label: 'Monthly Reps', value: stats?.customers || 0, icon: User, color: 'text-[#F2A93B]', bg: 'bg-orange-50' },
-                    { label: 'Yield Share', value: `$${stats?.earnings?.toLocaleString() || 0}`, icon: DollarSign, color: 'text-emerald-500', bg: 'bg-emerald-50' },
-                    { label: 'Uptime (Hrs)', value: `${stats?.total_hours || 0}h`, icon: TrendingUp, color: 'text-purple-500', bg: 'bg-purple-50' },
+                    { label: 'Total Revenue', value: `RM ${stats?.revenue?.toLocaleString() || 0}`, icon: TrendingUp, color: 'text-[#F2A93B]', bg: 'bg-orange-50' },
+                    { label: 'Monthly Earnings', value: `RM ${stats?.earnings?.toLocaleString() || 0}`, icon: DollarSign, color: 'text-emerald-500', bg: 'bg-emerald-50' },
+                    { label: 'Commission Rate', value: `${stats?.commission_rate || 30}%`, icon: User, color: 'text-blue-500', bg: 'bg-blue-50' },
+                    { label: 'Uptime (Hrs)', value: `${stats?.total_hours || 0}h`, icon: Clock, color: 'text-purple-500', bg: 'bg-purple-50' },
                 ].map((stat, i) => (
                     <motion.div
                         key={i}
@@ -396,10 +409,14 @@ export function StaffDashboard() {
 
                                         <div className="flex items-center gap-3">
                                             {b.status === 'pending' && (
-                                                <>
+                                                <div className="flex items-center gap-2">
                                                     <Button
                                                         onClick={() => updateBookingStatus(b.id, 'confirmed')}
-                                                        className="bg-emerald-500 hover:bg-emerald-600 text-white font-black text-[10px] uppercase tracking-widest h-12 px-6 rounded-2xl"
+                                                        disabled={!isClockedIn}
+                                                        className={cn(
+                                                            "bg-emerald-500 hover:bg-emerald-600 text-white font-black text-[10px] uppercase tracking-widest h-12 px-6 rounded-2xl",
+                                                            !isClockedIn && "opacity-50 cursor-not-allowed"
+                                                        )}
                                                     >
                                                         Confirm
                                                     </Button>
@@ -410,15 +427,24 @@ export function StaffDashboard() {
                                                     >
                                                         <XCircle className="w-6 h-6" />
                                                     </Button>
-                                                </>
+                                                </div>
                                             )}
                                             {b.status === 'confirmed' && (
                                                 <Button
                                                     onClick={() => updateBookingStatus(b.id, 'completed')}
-                                                    className="bg-[#F2A93B] hover:bg-[#E29A2B] text-white font-black text-[10px] uppercase tracking-widest h-12 px-8 rounded-2xl"
+                                                    disabled={!isClockedIn}
+                                                    className={cn(
+                                                        "bg-[#F2A93B] hover:bg-[#E29A2B] text-white font-black text-[10px] uppercase tracking-widest h-12 px-8 rounded-2xl",
+                                                        !isClockedIn && "opacity-50 cursor-not-allowed"
+                                                    )}
                                                 >
                                                     Mark Complete
                                                 </Button>
+                                            )}
+                                            {!isClockedIn && (b.status === 'pending' || b.status === 'confirmed') && (
+                                                <p className="hidden md:block text-[8px] font-black uppercase tracking-widest text-[#F2A93B] animate-pulse">
+                                                    Clock-in required
+                                                </p>
                                             )}
                                             {b.status === 'completed' && (
                                                 <Badge className="bg-emerald-100 text-emerald-600 border-none font-black text-[10px] uppercase tracking-widest h-10 px-6 rounded-xl flex items-center gap-2">
@@ -436,7 +462,7 @@ export function StaffDashboard() {
                     {upcomingBookings.length > 0 && (
                         <div className="space-y-6 pt-6">
                             <div className="flex items-center justify-between px-2">
-                                <h3 className="text-xl font-black text-slate-900 uppercase tracking-tight opacity-50">Upcoming Missions</h3>
+                                <h3 className="text-xl font-black text-slate-900 uppercase tracking-tight opacity-50">Upcoming </h3>
                             </div>
                             <div className="space-y-4">
                                 {upcomingBookings.map((b, i) => (
@@ -484,8 +510,7 @@ export function StaffDashboard() {
                                 },
                                 { label: "Deployment Logs", icon: Clock, path: "/staff/attendance", desc: "View work hour history" },
                                 { label: "Time-Off", icon: CalendarDays, path: "/staff/leaves", desc: "Request absence authorization" },
-                                { label: "Mail System", icon: Mail, path: "/staff/messages", desc: "Internal communications", alert: true },
-                            ].map((link, i) => (
+                            ].filter(Boolean).map((link: any, i) => (
                                 <button
                                     key={i}
                                     onClick={() => {
@@ -496,22 +521,40 @@ export function StaffDashboard() {
                                         navigate(link.path);
                                     }}
                                     className={cn(
-                                        "p-5 bg-white rounded-3xl border border-slate-100 flex items-center gap-5 text-left group transition-all hover:shadow-xl",
-                                        link.disabled ? "opacity-50 cursor-not-allowed" : "hover:bg-slate-50"
+                                        "p-5 rounded-3xl border flex items-center gap-5 text-left group transition-all hover:shadow-xl",
+                                        link.isGold ? "bg-[#F2A93B] border-[#F2A93B] text-white hover:bg-[#E29A2B]" : "bg-white border-slate-100 text-slate-900 hover:bg-slate-50",
+                                        link.disabled ? "opacity-50 cursor-not-allowed" : ""
                                     )}
                                     disabled={!!link.disabled}
                                 >
-                                    <div className="w-12 h-12 rounded-2xl bg-slate-50 flex items-center justify-center group-hover:bg-[#F2A93B] group-hover:text-white transition-all shadow-inner">
+                                    <div className={cn(
+                                        "w-12 h-12 rounded-2xl flex items-center justify-center transition-all shadow-inner",
+                                        link.isGold ? "bg-white/20 text-white" : "bg-slate-50 text-slate-900 group-hover:bg-[#F2A93B] group-hover:text-white"
+                                    )}>
                                         <link.icon className="w-5 h-5" />
                                     </div>
                                     <div className="flex-1">
                                         <div className="flex items-center gap-2">
-                                            <span className="text-sm font-black text-slate-900">{link.label}</span>
-                                            {link.alert && <div className="w-1.5 h-1.5 rounded-full bg-[#F2A93B] animate-ping" />}
+                                            <span className={cn(
+                                                "text-sm font-black",
+                                                link.isGold ? "text-white" : "text-slate-900"
+                                            )}>{link.label}</span>
+                                            {link.alert && unreadMessagesCount > 0 && (
+                                                <div className={cn(
+                                                    "w-1.5 h-1.5 rounded-full animate-ping",
+                                                    link.isGold ? "bg-white" : "bg-[#F2A93B]"
+                                                )} />
+                                            )}
                                         </div>
-                                        <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mt-0.5">{link.desc}</p>
+                                        <p className={cn(
+                                            "text-[10px] font-bold uppercase tracking-widest mt-0.5",
+                                            link.isGold ? "text-white/80" : "text-slate-400"
+                                        )}>{link.desc}</p>
                                     </div>
-                                    <ChevronRight className="w-4 h-4 text-slate-200 group-hover:translate-x-1 group-hover:text-slate-900 transition-all" />
+                                    <ChevronRight className={cn(
+                                        "w-4 h-4 transition-all group-hover:translate-x-1",
+                                        link.isGold ? "text-white/40 group-hover:text-white" : "text-slate-200 group-hover:text-slate-900"
+                                    )} />
                                 </button>
                             ))}
                         </div>

@@ -26,8 +26,18 @@ const slides = [
 const HeroVideoCarousel = () => {
     const navigate = useNavigate();
 
+    useEffect(() => {
+        const video = document.querySelector('video');
+        if (video) {
+            video.muted = true;
+            video.play().catch(error => {
+                console.error("Autoplay was prevented:", error);
+            });
+        }
+    }, []);
+
     return (
-        <section className="relative w-full h-[700px] md:h-[800px] lg:h-[90vh] overflow-hidden bg-black">
+        <section className="relative w-full h-[700px] md:h-[800px] lg:h-[1056px] overflow-hidden bg-black">
             {/* Background Layer */}
             <div className="absolute inset-0 z-0">
                 <div className="absolute inset-0 overflow-hidden">
@@ -36,15 +46,21 @@ const HeroVideoCarousel = () => {
                         muted
                         loop
                         playsInline
-                        className="w-full h-full object-cover scale-105"
-                        src="https://assets.mixkit.co/videos/preview/mixkit-beauty-treatment-of-a-woman-in-a-spa-3184-large.mp4"
-                    />
+                        poster="/images/salon_banner_1.png"
+                        className="w-full h-full object-cover scale-105 brightness-[0.7] contrast-[1.1]"
+                    >
+                        <source
+                            src="https://assets.mixkit.co/videos/preview/mixkit-beauty-treatment-of-a-woman-in-a-spa-3184-large.mp4"
+                            type="video/mp4"
+                        />
+                        Your browser does not support the video tag.
+                    </video>
                 </div>
 
-                {/* Overlays */}
-                <div className="absolute inset-0 bg-black/40" />
-                <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-black/30" />
-                <div className="absolute inset-0 bg-gradient-to-r from-black/40 via-transparent to-transparent" />
+                {/* Overlays - Perfected as requested */}
+                <div className="absolute inset-0 bg-black/20" />
+                <div className="absolute inset-0 bg-gradient-to-b from-black/40 via-transparent to-transparent" />
+                <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent" />
             </div>
 
             {/* Content Container */}
@@ -96,13 +112,13 @@ const HeroVideoCarousel = () => {
             </div>
 
             {/* Scroll indicator */}
-            <motion.div
+            {/* <motion.div
                 animate={{ y: [0, 10, 0] }}
                 transition={{ duration: 2, repeat: Infinity }}
-                className="absolute bottom-6 left-1/2 -translate-x-1/2 z-30 flex flex-col items-center gap-2"
+                className="absolute bottom-10 left-1/2 -translate-x-1/2 z-30 flex flex-col items-center gap-2"
             >
-                {/* <div className="w-px h-12 bg-gradient-to-b from-transparent via-white/50 to-transparent" /> */}
-            </motion.div>
+                <div className="w-px h-16 bg-gradient-to-b from-white/80 to-transparent" />
+            </motion.div> */}
         </section>
     );
 };

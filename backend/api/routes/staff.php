@@ -37,10 +37,6 @@ if ($method === 'GET' && ($uriParts[1] ?? '') === 'available-specialists') {
     $date = $_GET['date'] ?? null;
     $time = $_GET['time'] ?? null;
 
-    if (!$salonId) {
-        sendResponse(['error' => 'salon_id is required'], 400);
-    }
-
     $query = "
         SELECT s.*, ur.role
         FROM staff_profiles s
@@ -102,7 +98,6 @@ if ($method === 'GET' && ($uriParts[1] ?? '') === 'me') {
 
 // GET /api/staff/:id - Get staff member by ID
 if ($method === 'GET' && !empty($uriParts[1]) && empty($uriParts[2])) {
-    $staffId = $uriParts[1];
     $staffId = $uriParts[1];
     $userData = protectRoute(['owner', 'manager', 'staff']);
 
@@ -366,39 +361,22 @@ if ($method === 'GET' && !empty($uriParts[1]) && ($uriParts[2] ?? '') === 'profi
     // Permission Check: Allow if self OR if owner/manager
     $isSelf = ($staff['user_id'] === $userData['user_id']);
     $managementRoles = ['owner', 'manager', 'super_admin', 'admin'];
-    // Check if user is management in THIS salon (basic role check + context)
-    // For simplicity, we trust the role string from token/DB for now, assuming robust login.
     $isManagement = in_array($userData['role'], $managementRoles);
 
-    // Correction: Salon Owners should only manage their OWN salon's staff
-    if ($isManagement && $userData['role'] === 'owner') {
-        // Verify owner owns this salon
-        // This logic is partially handled by global RBAC but let's be safe:
-        // For now, if role is owner, we assume they can view staff (context check is harder here without salon_id in token)
-        // Ideally we check: does user own $staff['salon_id']?
-        // Let's stick to the simpler check that works for 'leaves' first.
-    }
-
     if (!$isSelf && !$isManagement) {
-        // Fallback: Check for explicit permission if not self/management
-        // But for this specific "My Profile" feature, self/management is the key.
         sendResponse(['error' => 'Forbidden - You can only view your own stats'], 403);
     }
-
-    if (!$staff)
-        sendResponse(['error' => 'Staff record not found'], 404);
 
     $salonId = $staff['salon_id'];
     $month = $_GET['month'] ?? date('m');
     $year = $_GET['year'] ?? date('Y');
 
     // 2. Calculate Earnings & Customers Handled
-    // We join bookings with services to get price and calculate commission
     $stmt = $db->prepare("
         SELECT 
             COUNT(b.id) as total_customers,
-            SUM(s.price) as gross_revenue,
-            SUM(s.price * (st.commission_percentage / 100)) as total_earnings
+            COALESCE(SUM(COALESCE(b.price_paid, s.price)), 0) as gross_revenue,
+            COALESCE(MAX(st.commission_percentage), 0) as commission_percentage
         FROM bookings b
         JOIN services s ON b.service_id = s.id
         JOIN staff_profiles st ON b.staff_id = st.id
@@ -409,8 +387,13 @@ if ($method === 'GET' && !empty($uriParts[1]) && ($uriParts[2] ?? '') === 'profi
     ");
     $stmt->execute([$staffId, $month, $year]);
     $monthStats = $stmt->fetch();
-    if (!$monthStats)
-        $monthStats = ['total_customers' => 0, 'gross_revenue' => 0, 'total_earnings' => 0];
+    
+    if (!$monthStats) {
+        $monthStats = ['total_customers' => 0, 'gross_revenue' => 0, 'commission_percentage' => 0];
+    }
+
+    $effectiveCommission = (int)$monthStats['commission_percentage'] > 0 ? (int)$monthStats['commission_percentage'] : 30;
+    $totalEarnings = (float)$monthStats['gross_revenue'] * ($effectiveCommission / 100);
 
     // 3. Attendance Summary (Monthly)
     $stmt = $db->prepare("
@@ -440,31 +423,64 @@ if ($method === 'GET' && !empty($uriParts[1]) && ($uriParts[2] ?? '') === 'profi
     if (!$leaveStats)
         $leaveStats = ['leave_days' => 0];
 
-    // 5. Recent Customers
+    // 5. Recent Customers (Filtered by selected month/year)
     $stmt = $db->prepare("
-        SELECT b.*, s.name as service_name, s.price, u.email, p.full_name
+        SELECT b.*, s.name as service_name, s.price as service_price, 
+               COALESCE(b.price_paid, s.price) as effective_price,
+               u.email, p.full_name
         FROM bookings b
         JOIN services s ON b.service_id = s.id
         JOIN users u ON b.user_id = u.id
         LEFT JOIN profiles p ON u.id = p.user_id
         WHERE b.staff_id = ?
+        AND MONTH(b.booking_date) = ?
+        AND YEAR(b.booking_date) = ?
         ORDER BY b.booking_date DESC, b.booking_time DESC
-        LIMIT 10
+        LIMIT 100
     ");
-    $stmt->execute([$staffId]);
+    $stmt->execute([$staffId, $month, $year]);
     $recentCustomers = $stmt->fetchAll();
+
+    // 6. Daily Revenue for Chart
+    $stmt = $db->prepare("
+        SELECT DAY(b.booking_date) as day, SUM(COALESCE(b.price_paid, s.price)) as daily_revenue
+        FROM bookings b
+        JOIN services s ON b.service_id = s.id
+        WHERE b.staff_id = ?
+        AND b.status = 'completed'
+        AND MONTH(b.booking_date) = ?
+        AND YEAR(b.booking_date) = ?
+        GROUP BY DAY(b.booking_date)
+        ORDER BY day ASC
+    ");
+    $stmt->execute([$staffId, $month, $year]);
+    $dailyRevenue = $stmt->fetchAll();
+
+    // 7. Attendance Logs (Full list for the month)
+    $stmt = $db->prepare("
+        SELECT DATE(check_in) as date, check_in, check_out
+        FROM staff_attendance
+        WHERE staff_id = ?
+        AND MONTH(check_in) = ?
+        AND YEAR(check_in) = ?
+        ORDER BY check_in ASC
+    ");
+    $stmt->execute([$staffId, $month, $year]);
+    $attendanceLogs = $stmt->fetchAll();
 
     sendResponse([
         'stats' => [
             'customers' => (int) $monthStats['total_customers'],
             'revenue' => (float) $monthStats['gross_revenue'],
-            'earnings' => (float) $monthStats['total_earnings'],
+            'earnings' => (float) $totalEarnings,
+            'commission_rate' => (float) $effectiveCommission,
             'days_worked' => (int) $attendanceStats['days_worked'],
             'total_hours' => round($attendanceStats['total_minutes'] / 60, 1),
             'leave_days' => (int) $leaveStats['leave_days']
         ],
         'recent_customers' => $recentCustomers,
-        'attendance_logs' => [] // Detailed logs can be fetched separately or included
+        'daily_revenue' => $dailyRevenue,
+        'attendance_logs' => $attendanceLogs
     ]);
 }
 
@@ -494,7 +510,6 @@ if ($method === 'GET' && !empty($uriParts[1]) && ($uriParts[2] ?? '') === 'leave
     sendResponse(['leaves' => $leaves]);
 }
 
-// POST /api/staff/:id/leaves - Create leave request
 // POST /api/staff/:id/leaves - Create leave request
 if ($method === 'POST' && !empty($uriParts[1]) && ($uriParts[2] ?? '') === 'leaves') {
     $staffId = $uriParts[1];
@@ -597,14 +612,9 @@ if ($method === 'POST' && in_array('attendance', $uriParts) && in_array('check-o
 
 // GET /api/staff/attendance/:staff_id - Get attendance history
 if ($method === 'GET' && in_array('attendance', $uriParts) && !empty($uriParts[1])) {
-    $staffId = $uriParts[2] ?? $uriParts[1]; // Handle different URL structures if needed
-
-    // In index.php, staff/attendance/STAFF_ID -> uriParts[0]=staff, uriParts[1]=attendance, uriParts[2]=STAFF_ID
     $staffId = $uriParts[2];
-
     $userData = protectRoute(['staff', 'manager', 'owner'], 'view_attendance');
 
-    // Fetch records
     $stmt = $db->prepare("SELECT * FROM staff_attendance WHERE staff_id = ? ORDER BY check_in DESC");
     $stmt->execute([$staffId]);
     $history = $stmt->fetchAll();

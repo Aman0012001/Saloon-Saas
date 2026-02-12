@@ -56,6 +56,7 @@ export const DashboardLayout = ({ children }: DashboardLayoutProps) => {
   const { salons, currentSalon, setCurrentSalon, isOwner, isManager, isStaff, refreshSalons } = useSalon();
   const [appointmentCount, setAppointmentCount] = useState(0);
   const [unreadCount, setUnreadCount] = useState(0);
+  const [unreadMessagesCount, setUnreadMessagesCount] = useState(0);
 
   const isUserStaff = isStaff && !isOwner && !isManager;
   const basePath = isUserStaff ? "/staff" : "/salon";
@@ -150,12 +151,6 @@ export const DashboardLayout = ({ children }: DashboardLayoutProps) => {
         label: "Leaves",
         path: "/staff/leaves",
         description: "Manage time off"
-      },
-      {
-        icon: Mail,
-        label: "Messages",
-        path: "/staff/messages",
-        description: "Internal communications"
       }
     );
   }
@@ -182,19 +177,20 @@ export const DashboardLayout = ({ children }: DashboardLayoutProps) => {
         unread_only: '1'
       });
 
-      // 3. Fetch Unread Messages
-      const messages = await api.messages.getAll(currentSalon.id);
-      const unreadMessages = messages.filter((m: any) => {
-        if (m.is_read) return false;
-        if (m.receiver_id === user.id) return true;
-        if (!m.receiver_id) {
-          if (isOwner && m.recipient_type === 'owner') return true;
-          if (isStaff && m.recipient_type === 'staff') return true;
-        }
-        return false;
-      }).length;
+      // 3. Fetch Unread Messages (REMOVED GLOBAL FEATURE)
+      // const messages = await api.messages.getAll(currentSalon.id);
+      // const unreadMessages = messages.filter((m: any) => {
+      //   if (m.is_read) return false;
+      //   if (m.receiver_id === user.id) return true;
+      //   if (!m.receiver_id) {
+      //     if (isOwner && m.recipient_type === 'owner') return true;
+      //     if (isStaff && m.recipient_type === 'staff') return true;
+      //   }
+      //   return false;
+      // });
+      // setUnreadMessagesCount(unreadMessages.length);
 
-      setUnreadCount((notifications?.length || 0) + unreadMessages);
+      setUnreadCount((notifications?.length || 0));
     } catch (error) {
       console.error('Failed to fetch dashboard stats:', error);
     }
@@ -292,7 +288,7 @@ export const DashboardLayout = ({ children }: DashboardLayoutProps) => {
                 </div>
                 <div>
                   <span className="font-bold text-xl text-foreground">NoamSkin</span>
-                  <p className="text-xs text-muted-foreground">Staff Profile</p>
+                  <p className="text-xs text-muted-foreground">{isOwner ? "Owner Dashboard" : isManager ? "Manager Dashboard" : "Staff Profile"}</p>
                 </div>
               </Link>
               <Button
@@ -399,12 +395,20 @@ export const DashboardLayout = ({ children }: DashboardLayoutProps) => {
                         {item.description}
                       </span>
                     </div>
-                    {item.label === "Appointments" && appointmentCount > 0 && (
+                    {(item.label === "Calendar" || item.label === "Appointments") && appointmentCount > 0 && (
                       <Badge className={cn(
                         "ml-auto h-5 w-5 p-0 flex items-center justify-center text-[10px] font-black rounded-full",
                         isActive ? "bg-white text-accent" : "bg-accent text-white"
                       )}>
                         {appointmentCount}
+                      </Badge>
+                    )}
+                    {item.label === "Messages" && unreadMessagesCount > 0 && !isOwner && (
+                      <Badge className={cn(
+                        "ml-auto h-5 w-5 p-0 flex items-center justify-center text-[10px] font-black rounded-full",
+                        isActive ? "bg-white text-accent" : "bg-accent text-white"
+                      )}>
+                        {unreadMessagesCount}
                       </Badge>
                     )}
                   </div>

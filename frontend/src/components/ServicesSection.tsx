@@ -115,7 +115,7 @@ const ServicesSection = () => {
                 ))}
               </CarouselContent>
 
-              <div className="hidden lg:flex absolute -left-4 top-1/2 -translate-y-1/2 items-center">
+              <div className="hidden lg:flex absolute -left-4 top-1/2 -translate-y-1/1 items-center">
                 <CarouselPrevious className="relative left-0 translate-y-0 h-12 w-12 rounded-full border-none bg-white shadow-xl hover:bg-slate-50 transition-all" />
               </div>
               <div className="hidden lg:flex absolute -right-4 top-1/2 -translate-y-1/2 items-center">

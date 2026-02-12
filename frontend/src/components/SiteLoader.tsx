@@ -65,9 +65,9 @@ export default function SiteLoader() {
                     transition={{ delay: 0.4, duration: 0.8 }}
                     className="text-center"
                 >
-                    <h1 className="text-3xl font-black text-[#1A1A1A] tracking-tighter mb-4">
+                    {/* <h1 className="text-3xl font-black text-[#1A1A1A] tracking-tighter mb-4">
                         StyleSync
-                    </h1>
+                    </h1> */}
 
                     {/* Syncing Indicator Bars */}
                     <div className="flex items-center justify-center gap-1.5 h-6">

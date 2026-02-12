@@ -528,6 +528,14 @@ export const profilesAPI = {
         return data?.user || data;
     },
 
+    async updateById(userId: string, profileData: any) {
+        const data = await fetchWithAuth(`/users/${userId}`, {
+            method: 'PUT',
+            body: JSON.stringify(profileData),
+        });
+        return data?.user || data;
+    },
+
     async getById(userId: string) {
         const data = await fetchWithAuth(`/profiles/${userId}`);
         return data?.profile || data?.user || data;

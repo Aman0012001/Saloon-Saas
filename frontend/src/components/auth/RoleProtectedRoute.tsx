@@ -4,7 +4,7 @@ import { useAuth, User } from "@/hooks/useAuth";
 
 interface RoleProtectedRouteProps {
     children: ReactNode;
-    allowedRole: 'SUPER_ADMIN' | 'SALON_OWNER' | 'STAFF' | 'USER';
+    allowedRole: 'SUPER_ADMIN' | 'SALON_OWNER' | 'STAFF' | 'USER' | ('SUPER_ADMIN' | 'SALON_OWNER' | 'STAFF' | 'USER')[];
 }
 
 const getMappedRole = (user: User | null): string | null => {
@@ -58,7 +58,11 @@ export const RoleProtectedRoute = ({ children, allowedRole }: RoleProtectedRoute
     }
 
     // Strict access control and automatic redirection based on role
-    if (currentRole !== allowedRole) {
+    const isAllowed = Array.isArray(allowedRole)
+        ? allowedRole.includes(currentRole as any)
+        : currentRole === allowedRole;
+
+    if (!isAllowed) {
         const correctDashboard = getRoleDashboard(currentRole);
         return <Navigate to={correctDashboard} replace />;
     }

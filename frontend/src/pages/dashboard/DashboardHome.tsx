@@ -135,12 +135,24 @@ export default function DashboardHome() {
 
       const enrichedAll = enrich(bookingsArray as any[]);
       const recent = enrichedAll.slice(0, 8);
-      const today = enrichedAll.filter(b => b.booking_date === todayDate && b.status !== 'cancelled');
+      const today = enrichedAll.filter(b => {
+        // Robust date matching: handle "YYYY-MM-DD", "YYYY-MM-DD HH:MM:SS", or ISO strings
+        const bDatePart = b.booking_date?.includes('T')
+          ? b.booking_date.split('T')[0]
+          : b.booking_date?.split(' ')[0];
+        return bDatePart === todayDate && b.status !== 'cancelled';
+      });
       const pending = enrichedAll.filter(b => b.status === "pending");
 
-      const confirmedToday = today.filter(b => b.status === "confirmed" || b.status === "completed");
-      const todayRevenue = confirmedToday.reduce((sum, b) => sum + Number(b.price || b.service?.price || 0), 0);
-      const uniqueCustomerCount = new Set(enrichedAll.map(b => b.user_id)).size;
+      const todayRevenue = today.reduce((sum, b) => {
+        // Exhaustive price check: price (from COALESCE), price_paid, service_price, or nested service price
+        const p = Number(b.price || b.price_paid || b.service_price || b.service?.price || 0);
+        return sum + (isNaN(p) ? 0 : p);
+      }, 0);
+
+      // Filter for unique customers who have at least one confirmed or completed booking
+      const activeCustomerBookings = enrichedAll.filter(b => b.status === "confirmed" || b.status === "completed");
+      const uniqueCustomerCount = new Set(activeCustomerBookings.map(b => b.user_id)).size;
 
       setRecentBookings(recent);
       setPendingBookings(pending);
@@ -287,7 +299,7 @@ export default function DashboardHome() {
     },
   ];
 
-  if (isStaff) {
+  if (isStaff && !isOwner) {
     return (
       <ResponsiveDashboardLayout>
         <div className="py-6 px-4">

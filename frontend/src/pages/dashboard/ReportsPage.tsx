@@ -231,8 +231,8 @@ export default function ReportsPage() {
           <div className="absolute top-0 right-0 w-80 h-80 bg-accent/20 blur-[120px] rounded-full" />
           <div className="relative z-10 flex flex-col md:flex-row items-center justify-between gap-6">
             <div className="flex items-center gap-5">
-              <div className="h-16 w-16 bg-white/10 backdrop-blur-md rounded-2xl flex items-center justify-center border border-white/10 text-accent">
-                <BarChart3 className="h-8 h-8" />
+              <div className="h-16 w-16 bg-white/10 backdrop-blur-md rounded-2xl flex items-center justify-center border border-white/10 text-white">
+                <BarChart3 className="h-8 w-8" />
               </div>
               <div>
                 <h1 className="text-4xl font-black tracking-tight">Intelligence Hub</h1>
@@ -414,7 +414,9 @@ export default function ReportsPage() {
                     <p className="text-white text-[23px] font-black tracking-tighter leading-none">
                       RM {periodTotal >= 1000 ? `${(periodTotal / 1000).toFixed(1)}k` : periodTotal.toLocaleString()}
                     </p>
-                    <span className="text-2xl font-bold text-slate-500 tracking-tight">{periodLabel}</span>
+                    <span className="text-2xl font-bold text-white tracking-tight">
+                      {periodLabel}
+                    </span>
                   </div>
                 </div>
               </Card>

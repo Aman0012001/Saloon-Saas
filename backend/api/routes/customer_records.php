@@ -30,6 +30,93 @@ if ($method === 'GET' && count($uriParts) === 4 && $uriParts[2] === 'salon') {
     sendResponse(['profile' => $profile]);
 }
 
+// Ensure tables exist
+$db->exec("CREATE TABLE IF NOT EXISTS customer_salon_profiles (
+    id VARCHAR(36) PRIMARY KEY DEFAULT (UUID()),
+    user_id VARCHAR(36) NOT NULL,
+    salon_id VARCHAR(36) NOT NULL,
+    date_of_birth DATE,
+    skin_type VARCHAR(50),
+    skin_issues TEXT,
+    allergy_records TEXT,
+    medical_conditions TEXT,
+    notes TEXT,
+    concern_photo_url VARCHAR(255),
+    concern_photo_public_id VARCHAR(255),
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    UNIQUE KEY unique_user_salon_profile (user_id, salon_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;");
+
+// Ensure all columns exist (Migration Helper)
+$columns = $db->query("SHOW COLUMNS FROM customer_salon_profiles")->fetchAll(PDO::FETCH_COLUMN);
+$requiredColumns = [
+    'medical_conditions' => "ALTER TABLE customer_salon_profiles ADD COLUMN medical_conditions TEXT",
+    'notes' => "ALTER TABLE customer_salon_profiles ADD COLUMN notes TEXT",
+    'concern_photo_url' => "ALTER TABLE customer_salon_profiles ADD COLUMN concern_photo_url VARCHAR(255)",
+    'concern_photo_public_id' => "ALTER TABLE customer_salon_profiles ADD COLUMN concern_photo_public_id VARCHAR(255)"
+];
+
+foreach ($requiredColumns as $col => $sql) {
+    if (!in_array($col, $columns)) {
+        $db->exec($sql);
+    }
+}
+
+$db->exec("CREATE TABLE IF NOT EXISTS treatment_records (
+    id VARCHAR(36) PRIMARY KEY DEFAULT (UUID()),
+    booking_id VARCHAR(36),
+    user_id VARCHAR(36) NOT NULL,
+    salon_id VARCHAR(36) NOT NULL,
+    service_name_manual VARCHAR(255),
+    record_date DATE,
+    treatment_details TEXT,
+    products_used TEXT,
+    skin_reaction TEXT,
+    improvement_notes TEXT,
+    recommended_next_treatment TEXT,
+    post_treatment_instructions TEXT,
+    follow_up_reminder_date DATE,
+    marketing_notes TEXT,
+    before_photo_url TEXT,
+    before_photo_public_id VARCHAR(255),
+    after_photo_url TEXT,
+    after_photo_public_id VARCHAR(255),
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;");
+
+// Ensure all columns exist for treatment records (Migration Helper)
+$tColumns = $db->query("SHOW COLUMNS FROM treatment_records")->fetchAll(PDO::FETCH_COLUMN);
+$requiredTColumns = [
+    'marketing_notes' => "ALTER TABLE treatment_records ADD COLUMN marketing_notes TEXT",
+    'before_photo_url' => "ALTER TABLE treatment_records ADD COLUMN before_photo_url VARCHAR(255)",
+    'before_photo_public_id' => "ALTER TABLE treatment_records ADD COLUMN before_photo_public_id VARCHAR(255)",
+    'after_photo_url' => "ALTER TABLE treatment_records ADD COLUMN after_photo_url VARCHAR(255)",
+    'after_photo_public_id' => "ALTER TABLE treatment_records ADD COLUMN after_photo_public_id VARCHAR(255)",
+    'service_name_manual' => "ALTER TABLE treatment_records ADD COLUMN service_name_manual VARCHAR(255)",
+    'follow_up_reminder_date' => "ALTER TABLE treatment_records ADD COLUMN follow_up_reminder_date DATE",
+    'record_date' => "ALTER TABLE treatment_records ADD COLUMN record_date DATE"
+];
+
+foreach ($requiredTColumns as $col => $sql) {
+    if (!in_array($col, $tColumns)) {
+        try {
+            $db->exec($sql);
+        }
+        catch (Exception $e) {
+        }
+    }
+}
+
+// Add unique constraint to treatment_records if missing
+try {
+    $db->exec("ALTER TABLE treatment_records ADD UNIQUE INDEX idx_unique_booking (booking_id)");
+}
+catch (Exception $e) {
+// Index already exists probably
+}
+
 // POST /api/customer_records - Create or update profile
 if ($method === 'POST' && count($uriParts) === 1) {
     $userData = Auth::getUserFromToken();
@@ -45,31 +132,66 @@ if ($method === 'POST' && count($uriParts) === 1) {
         sendResponse(['error' => 'User ID and Salon ID are required'], 400);
     }
 
-    // Check permission (only salon staff can update health records)
-    $stmt = $db->prepare("SELECT id FROM user_roles WHERE user_id = ? AND salon_id = ?");
-    $stmt->execute([$userData['user_id'], $salonId]);
-    if (!$stmt->fetch()) {
+    // Check permission (user themselves OR salon staff)
+    $hasAccess = ($userData['user_id'] === $userId);
+    if (!$hasAccess) {
+        $stmt = $db->prepare("SELECT id FROM user_roles WHERE user_id = ? AND salon_id = ?");
+        $stmt->execute([$userData['user_id'], $salonId]);
+        $hasAccess = (bool)$stmt->fetch();
+    }
+
+    if (!$hasAccess) {
+        // Bypass for super_admin
+        $stmt = $db->prepare("SELECT 1 FROM platform_admins WHERE user_id = ? AND is_active = 1");
+        $stmt->execute([$userData['user_id']]);
+        if ($stmt->fetch()) {
+            $hasAccess = true;
+        }
+    }
+
+    if (!$hasAccess) {
         sendResponse(['error' => 'Forbidden'], 403);
     }
 
+    // Prepare arrays if they are arrays
+    $skinIssues = $data['skin_issues'] ?? null;
+    if (is_array($skinIssues))
+        $skinIssues = implode(', ', $skinIssues);
+
+    $allergies = $data['allergies'] ?? null;
+    if (is_array($allergies))
+        $allergies = implode(', ', $allergies);
+
+    $conditions = $data['medical_conditions'] ?? null;
+    if (is_array($conditions))
+        $conditions = implode(', ', $conditions);
+
     $stmt = $db->prepare("
-        INSERT INTO customer_salon_profiles (id, user_id, salon_id, date_of_birth, skin_type, skin_issues, allergy_records)
-        VALUES (?, ?, ?, ?, ?, ?, ?)
+        INSERT INTO customer_salon_profiles (id, user_id, salon_id, date_of_birth, skin_type, skin_issues, allergy_records, medical_conditions, notes, concern_photo_url, concern_photo_public_id)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         ON DUPLICATE KEY UPDATE 
             date_of_birth = VALUES(date_of_birth),
             skin_type = VALUES(skin_type),
             skin_issues = VALUES(skin_issues),
-            allergy_records = VALUES(allergy_records)
+            allergy_records = VALUES(allergy_records),
+            medical_conditions = VALUES(medical_conditions),
+            notes = VALUES(notes),
+            concern_photo_url = VALUES(concern_photo_url),
+            concern_photo_public_id = VALUES(concern_photo_public_id)
     ");
 
     $stmt->execute([
-        Auth::generateUuid(),
+        Auth::generateUuid(), // Keep Auth::generateUuid() for the ID
         $userId,
         $salonId,
         $data['date_of_birth'] ?? null,
         $data['skin_type'] ?? null,
-        $data['skin_issues'] ?? null,
-        $data['allergy_records'] ?? null
+        $skinIssues,
+        $allergies,
+        $conditions,
+        $data['notes'] ?? null,
+        $data['concern_photo_url'] ?? null,
+        $data['concern_photo_public_id'] ?? null
     ]);
 
     sendResponse(['success' => true]);
@@ -117,8 +239,29 @@ if ($method === 'POST' && count($uriParts) === 2 && $uriParts[1] === 'treatments
     // Check permission
     $stmt = $db->prepare("SELECT id FROM user_roles WHERE user_id = ? AND salon_id = ?");
     $stmt->execute([$userData['user_id'], $salonId]);
-    if (!$stmt->fetch()) {
+    $hasAccess = (bool)$stmt->fetch();
+
+    if (!$hasAccess) {
+        // Bypass for super_admin
+        $stmt = $db->prepare("SELECT 1 FROM platform_admins WHERE user_id = ? AND is_active = 1");
+        $stmt->execute([$userData['user_id']]);
+        $hasAccess = (bool)$stmt->fetch();
+    }
+
+    if (!$hasAccess) {
         sendResponse(['error' => 'Forbidden'], 403);
+    }
+
+    $recordId = $data['id'] ?? Auth::generateUuid();
+
+    // Check if record exists for this booking to update specific record
+    if ($bookingId) {
+        $stmt = $db->prepare("SELECT id FROM treatment_records WHERE booking_id = ?");
+        $stmt->execute([$bookingId]);
+        $existing = $stmt->fetch();
+        if ($existing) {
+            $recordId = $existing['id'];
+        }
     }
 
     $stmt = $db->prepare("
@@ -147,7 +290,7 @@ if ($method === 'POST' && count($uriParts) === 2 && $uriParts[1] === 'treatments
     ");
 
     $stmt->execute([
-        Auth::generateUuid(),
+        $recordId,
         $bookingId,
         $userId,
         $salonId,

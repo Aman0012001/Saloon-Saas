@@ -28,7 +28,7 @@ export default function NotificationsPage() {
     const [messages, setMessages] = useState<any[]>([]);
     const [loading, setLoading] = useState(true);
     const [searchQuery, setSearchQuery] = useState("");
-    const { currentSalon } = useSalon();
+    const { currentSalon, isOwner } = useSalon();
     const { user } = useAuth();
     const navigate = useNavigate();
 
@@ -146,9 +146,11 @@ export default function NotificationsPage() {
                                     <TabsTrigger value="notifications" className="border-b-2 border-transparent data-[state=active]:border-accent rounded-none bg-transparent px-0 py-4 font-black text-sm uppercase tracking-widest text-slate-400 data-[state=active]:text-accent">
                                         System Alerts ({notifications.filter(n => !n.is_read).length})
                                     </TabsTrigger>
-                                    <TabsTrigger value="messages" className="border-b-2 border-transparent data-[state=active]:border-accent rounded-none bg-transparent px-0 py-4 font-black text-sm uppercase tracking-widest text-slate-400 data-[state=active]:text-accent">
-                                        Staff Messages ({messages.filter(m => m.receiver_id === user?.id && !m.is_read).length})
-                                    </TabsTrigger>
+                                    {/* {!isOwner && (
+                                        <TabsTrigger value="messages" className="border-b-2 border-transparent data-[state=active]:border-accent rounded-none bg-transparent px-0 py-4 font-black text-sm uppercase tracking-widest text-slate-400 data-[state=active]:text-accent">
+                                            Staff Messages ({messages.filter(m => m.receiver_id === user?.id && !m.is_read).length})
+                                        </TabsTrigger>
+                                    )} */}
                                 </TabsList>
                             </div>
 

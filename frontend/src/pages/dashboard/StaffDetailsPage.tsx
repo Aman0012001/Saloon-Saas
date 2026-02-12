@@ -63,6 +63,8 @@ export default function StaffDetailsPage() {
     const [stats, setStats] = useState<any>(null);
     const [recentCustomers, setRecentCustomers] = useState<any[]>([]);
     const [leaves, setLeaves] = useState<any[]>([]);
+    const [dailyRevenue, setDailyRevenue] = useState<any[]>([]);
+    const [attendanceLogs, setAttendanceLogs] = useState<any[]>([]);
     const [selectedDate, setSelectedDate] = useState(new Date());
 
     const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
@@ -105,6 +107,8 @@ export default function StaffDetailsPage() {
 
             setStats(statsRes.stats);
             setRecentCustomers(statsRes.recent_customers || []);
+            setDailyRevenue(statsRes.daily_revenue || []);
+            setAttendanceLogs(statsRes.attendance_logs || []);
             setLeaves(leavesRes);
 
             // Fetch all salon services
@@ -267,9 +271,11 @@ export default function StaffDetailsPage() {
                             </div>
 
                             <div className="flex lg:flex-col gap-3">
-                                <Button className="h-12 px-8 bg-[#F2A93B] hover:bg-[#E29A2B] text-white font-black text-[10px] uppercase tracking-[0.2em] rounded-2xl shadow-xl shadow-[#F2A93B]/20 transition-all active:scale-95">
-                                    Message Staff
-                                </Button>
+                                {!isOwner && (
+                                    <Button className="h-12 px-8 bg-[#F2A93B] hover:bg-[#E29A2B] text-white font-black text-[10px] uppercase tracking-[0.2em] rounded-2xl shadow-xl shadow-[#F2A93B]/20 transition-all active:scale-95">
+                                        Message Staff
+                                    </Button>
+                                )}
                                 <Button
                                     variant="outline"
                                     onClick={handleEditClick}
@@ -324,7 +330,7 @@ export default function StaffDetailsPage() {
                                     { value: 'attendance', label: 'Time Logs', icon: Clock },
                                     { value: 'leaves', label: 'Absences', icon: Calendar },
                                     { value: 'customers', label: 'Clients', icon: Users },
-                                ].map(tab => (
+                                ].filter(tab => !isOwner || tab.value !== 'earnings').map(tab => (
                                     <TabsTrigger
                                         key={tab.value}
                                         value={tab.value}
@@ -377,7 +383,6 @@ export default function StaffDetailsPage() {
                                                 {[
                                                     { label: 'Clients Handled', value: stats?.customers || 0, icon: Users, color: 'bg-blue-500', trend: '+12%' },
                                                     { label: 'Force Output (Hrs)', value: `${stats?.total_hours || 0}h`, icon: Clock, color: 'bg-[#F2A93B]', trend: '+5h' },
-                                                    { label: 'Settled Earnings', value: `RM ${stats?.earnings?.toLocaleString() || 0}`, icon: DollarSign, color: 'bg-emerald-500', trend: '+18%' },
                                                     { label: 'Remaining Leaves', value: stats?.leave_days || 0, icon: Calendar, color: 'bg-rose-500', trend: 'Healthy' },
                                                 ].map((stat, i) => (
                                                     <Card key={i} className="rounded-3xl border-none shadow-sm bg-white overflow-hidden group hover:shadow-xl transition-all duration-300">
@@ -393,6 +398,21 @@ export default function StaffDetailsPage() {
                                                         </CardContent>
                                                     </Card>
                                                 ))}
+                                                {/* Conditionally render Earnings Card for Non-Owners or if required */}
+                                                {!isOwner && (
+                                                    <Card className="rounded-3xl border-none shadow-sm bg-white overflow-hidden group hover:shadow-xl transition-all duration-300">
+                                                        <CardContent className="p-8">
+                                                            <div className="flex items-center justify-between mb-4">
+                                                                <div className="w-12 h-12 rounded-2xl flex items-center justify-center text-white shadow-lg bg-emerald-500">
+                                                                    <DollarSign className="w-6 h-6" />
+                                                                </div>
+                                                                <span className="text-[10px] font-black text-emerald-500 uppercase tracking-widest">+18%</span>
+                                                            </div>
+                                                            <h3 className="text-3xl font-black text-slate-900">RM {stats?.earnings?.toLocaleString() || 0}</h3>
+                                                            <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mt-1">Settled Earnings</p>
+                                                        </CardContent>
+                                                    </Card>
+                                                )}
                                             </div>
 
                                             <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
@@ -404,22 +424,29 @@ export default function StaffDetailsPage() {
                                                     </CardHeader>
                                                     <CardContent className="p-10 pt-4">
                                                         <div className="h-64 flex items-end gap-3 pt-8 pb-4 border-b border-slate-50">
-                                                            {[45, 60, 40, 75, 55, 90, 65, 80, 50, 70, 85, 45, 60, 55, 90].map((h, i) => (
-                                                                <div key={i} className="flex-1 group relative">
-                                                                    <motion.div
-                                                                        initial={{ height: 0 }}
-                                                                        animate={{ height: `${h}%` }}
-                                                                        transition={{ delay: i * 0.05, duration: 0.5 }}
-                                                                        className={cn(
-                                                                            "w-full bg-slate-100 rounded-t-xl group-hover:bg-[#F2A93B] transition-all cursor-pointer relative",
-                                                                            h > 80 && "bg-[#F2A93B]/20"
+                                                            {Array.from({ length: 30 }, (_, i) => {
+                                                                const day = i + 1;
+                                                                const revenueData = dailyRevenue.find(d => d.day === day);
+                                                                const h = revenueData ? Math.min(100, (revenueData.daily_revenue / (Math.max(...dailyRevenue.map(d => d.daily_revenue), 1) || 1)) * 100) : 0;
+                                                                return (
+                                                                    <div key={i} className="flex-1 group relative">
+                                                                        <motion.div
+                                                                            initial={{ height: 0 }}
+                                                                            animate={{ height: `${h || 2}%` }}
+                                                                            transition={{ delay: i * 0.02, duration: 0.5 }}
+                                                                            className={cn(
+                                                                                "w-full bg-slate-100 rounded-t-xl group-hover:bg-[#F2A93B] transition-all cursor-pointer relative",
+                                                                                h > 0 ? "bg-[#F2A93B]/20" : "bg-slate-50"
+                                                                            )}
+                                                                        />
+                                                                        {h > 0 && (
+                                                                            <div className="absolute -top-10 left-1/2 -translate-x-1/2 bg-slate-900 text-white text-[8px] font-black px-2 py-1 rounded opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap z-20">
+                                                                                RM {revenueData?.daily_revenue.toLocaleString()}
+                                                                            </div>
                                                                         )}
-                                                                    />
-                                                                    <div className="absolute -top-10 left-1/2 -translate-x-1/2 bg-slate-900 text-white text-[8px] font-black px-2 py-1 rounded opacity-0 group-hover:opacity-100 transition-opacity">
-                                                                        RM {(h * 15).toLocaleString()}
                                                                     </div>
-                                                                </div>
-                                                            ))}
+                                                                );
+                                                            })}
                                                         </div>
                                                         <div className="flex justify-between mt-4">
                                                             <span className="text-[9px] font-black text-slate-300 uppercase">Week 01</span>
@@ -460,106 +487,108 @@ export default function StaffDetailsPage() {
                                             </div>
                                         </TabsContent>
 
-                                        <TabsContent value="earnings" className="m-0 animate-in fade-in slide-in-from-bottom-2 duration-500">
-                                            <div className="grid grid-cols-1 lg:grid-cols-4 gap-8">
-                                                <div className="lg:col-span-1 space-y-6">
-                                                    <Card className="rounded-[2.5rem] bg-slate-900 text-white overflow-hidden relative border-none shadow-2xl">
-                                                        <div className="absolute top-0 right-0 w-64 h-64 bg-[#F2A93B]/20 blur-[100px] rounded-full" />
-                                                        <CardContent className="p-10 relative z-10 space-y-6">
-                                                            <div className="w-14 h-14 rounded-2xl bg-white/10 flex items-center justify-center backdrop-blur-md border border-white/10">
-                                                                <DollarSign className="w-7 h-7 text-[#F2A93B]" />
-                                                            </div>
-                                                            <div>
-                                                                <p className="text-[10px] font-black uppercase tracking-[0.2em] text-[#F2A93B] mb-2">Net Allocation</p>
-                                                                <h4 className="text-4xl font-black">RM {stats?.earnings?.toLocaleString() || 0}</h4>
-                                                            </div>
-                                                            <div className="pt-6 border-t border-white/10 space-y-4">
-                                                                <div className="flex justify-between items-center">
-                                                                    <span className="text-[9px] font-bold text-white/50 uppercase tracking-widest">Base Rate</span>
-                                                                    <span className="text-xs font-black">RM 2,400.00</span>
-                                                                </div>
-                                                                <div className="flex justify-between items-center">
-                                                                    <span className="text-[9px] font-bold text-white/50 uppercase tracking-widest">Commission {staff.commission_percentage}%</span>
-                                                                    <span className="text-xs font-black text-emerald-400">+RM {stats?.earnings?.toLocaleString()}</span>
-                                                                </div>
-                                                                <div className="flex justify-between items-center">
-                                                                    <span className="text-[9px] font-bold text-white/50 uppercase tracking-widest">Tax Provision</span>
-                                                                    <span className="text-xs font-black text-rose-400">-RM 240.00</span>
-                                                                </div>
-                                                            </div>
-                                                            <Button className="w-full h-14 bg-white text-slate-900 font-black text-[10px] uppercase tracking-widest rounded-2xl hover:bg-slate-100 transition-all mt-6 shadow-xl shadow-white/5 uppercase">
-                                                                Export Settlement
-                                                            </Button>
-                                                        </CardContent>
-                                                    </Card>
-
-                                                    <Card className="rounded-[2.5rem] border-none shadow-sm bg-white overflow-hidden">
-                                                        <CardHeader className="p-10 pb-4">
-                                                            <CardTitle className="text-[10px] font-black uppercase tracking-widest text-[#F2A93B]">Payout Strategy</CardTitle>
-                                                        </CardHeader>
-                                                        <CardContent className="p-10 pt-4 space-y-4">
-                                                            <div className="p-4 rounded-2xl bg-slate-50 border border-slate-100 flex items-center gap-4">
-                                                                <div className="w-10 h-10 rounded-xl bg-white flex items-center justify-center">
-                                                                    <DollarSign className="w-5 h-5 text-emerald-500" />
+                                        {!isOwner && (
+                                            <TabsContent value="earnings" className="m-0 animate-in fade-in slide-in-from-bottom-2 duration-500">
+                                                <div className="grid grid-cols-1 lg:grid-cols-4 gap-8">
+                                                    <div className="lg:col-span-1 space-y-6">
+                                                        <Card className="rounded-[2.5rem] bg-slate-900 text-white overflow-hidden relative border-none shadow-2xl">
+                                                            <div className="absolute top-0 right-0 w-64 h-64 bg-[#F2A93B]/20 blur-[100px] rounded-full" />
+                                                            <CardContent className="p-10 relative z-10 space-y-6">
+                                                                <div className="w-14 h-14 rounded-2xl bg-white/10 flex items-center justify-center backdrop-blur-md border border-white/10">
+                                                                    <DollarSign className="w-7 h-7 text-[#F2A93B]" />
                                                                 </div>
                                                                 <div>
-                                                                    <p className="text-[9px] font-black text-slate-400 uppercase">Method</p>
-                                                                    <p className="text-[11px] font-black text-slate-900">Direct Deposit</p>
+                                                                    <p className="text-[10px] font-black uppercase tracking-[0.2em] text-[#F2A93B] mb-2">Net Allocation</p>
+                                                                    <h4 className="text-4xl font-black">RM {stats?.earnings?.toLocaleString() || 0}</h4>
                                                                 </div>
-                                                            </div>
-                                                            <div className="p-4 rounded-2xl bg-slate-50 border border-slate-100 flex items-center gap-4">
-                                                                <div className="w-10 h-10 rounded-xl bg-white flex items-center justify-center">
-                                                                    <Calendar className="w-5 h-5 text-slate-400" />
+                                                                <div className="pt-6 border-t border-white/10 space-y-4">
+                                                                    <div className="flex justify-between items-center">
+                                                                        <span className="text-[9px] font-bold text-white/50 uppercase tracking-widest">Base Rate</span>
+                                                                        <span className="text-xs font-black">RM 2,400.00</span>
+                                                                    </div>
+                                                                    <div className="flex justify-between items-center">
+                                                                        <span className="text-[9px] font-bold text-white/50 uppercase tracking-widest">Commission {staff.commission_percentage}%</span>
+                                                                        <span className="text-xs font-black text-emerald-400">+RM {stats?.earnings?.toLocaleString()}</span>
+                                                                    </div>
+                                                                    <div className="flex justify-between items-center">
+                                                                        <span className="text-[9px] font-bold text-white/50 uppercase tracking-widest">Tax Provision</span>
+                                                                        <span className="text-xs font-black text-rose-400">-RM 240.00</span>
+                                                                    </div>
                                                                 </div>
-                                                                <div>
-                                                                    <p className="text-[9px] font-black text-slate-400 uppercase">Next Date</p>
-                                                                    <p className="text-[11px] font-black text-slate-900">Feb 1, 2026</p>
-                                                                </div>
-                                                            </div>
-                                                        </CardContent>
-                                                    </Card>
-                                                </div>
+                                                                <Button className="w-full h-14 bg-white text-slate-900 font-black text-[10px] uppercase tracking-widest rounded-2xl hover:bg-slate-100 transition-all mt-6 shadow-xl shadow-white/5 uppercase">
+                                                                    Export Settlement
+                                                                </Button>
+                                                            </CardContent>
+                                                        </Card>
 
-                                                <div className="lg:col-span-3">
-                                                    <Card className="rounded-[2.5rem] border-none shadow-sm bg-white overflow-hidden">
-                                                        <div className="p-10 flex items-center justify-between border-b border-slate-50">
-                                                            <div>
-                                                                <h4 className="text-lg font-black text-slate-900 uppercase tracking-tight text-slate-900">Settlement Ledger</h4>
-                                                                <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mt-1">Detailed service rewards for {format(selectedDate, "MMM yyyy")}</p>
+                                                        <Card className="rounded-[2.5rem] border-none shadow-sm bg-white overflow-hidden">
+                                                            <CardHeader className="p-10 pb-4">
+                                                                <CardTitle className="text-[10px] font-black uppercase tracking-widest text-[#F2A93B]">Payout Strategy</CardTitle>
+                                                            </CardHeader>
+                                                            <CardContent className="p-10 pt-4 space-y-4">
+                                                                <div className="p-4 rounded-2xl bg-slate-50 border border-slate-100 flex items-center gap-4">
+                                                                    <div className="w-10 h-10 rounded-xl bg-white flex items-center justify-center">
+                                                                        <DollarSign className="w-5 h-5 text-emerald-500" />
+                                                                    </div>
+                                                                    <div>
+                                                                        <p className="text-[9px] font-black text-slate-400 uppercase">Method</p>
+                                                                        <p className="text-[11px] font-black text-slate-900">Direct Deposit</p>
+                                                                    </div>
+                                                                </div>
+                                                                <div className="p-4 rounded-2xl bg-slate-50 border border-slate-100 flex items-center gap-4">
+                                                                    <div className="w-10 h-10 rounded-xl bg-white flex items-center justify-center">
+                                                                        <Calendar className="w-5 h-5 text-slate-400" />
+                                                                    </div>
+                                                                    <div>
+                                                                        <p className="text-[9px] font-black text-slate-400 uppercase">Next Date</p>
+                                                                        <p className="text-[11px] font-black text-slate-900">Feb 1, 2026</p>
+                                                                    </div>
+                                                                </div>
+                                                            </CardContent>
+                                                        </Card>
+                                                    </div>
+
+                                                    <div className="lg:col-span-3">
+                                                        <Card className="rounded-[2.5rem] border-none shadow-sm bg-white overflow-hidden">
+                                                            <div className="p-10 flex items-center justify-between border-b border-slate-50">
+                                                                <div>
+                                                                    <h4 className="text-lg font-black text-slate-900 uppercase tracking-tight text-slate-900">Settlement Ledger</h4>
+                                                                    <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mt-1">Detailed service rewards for {format(selectedDate, "MMM yyyy")}</p>
+                                                                </div>
+                                                                <Button variant="ghost" className="h-10 px-6 rounded-xl text-[10px] font-black uppercase tracking-widest text-slate-400 hover:bg-slate-50 transition-all">
+                                                                    Filter by Service
+                                                                </Button>
                                                             </div>
-                                                            <Button variant="ghost" className="h-10 px-6 rounded-xl text-[10px] font-black uppercase tracking-widest text-slate-400 hover:bg-slate-50 transition-all">
-                                                                Filter by Service
-                                                            </Button>
-                                                        </div>
-                                                        <Table>
-                                                            <TableHeader>
-                                                                <TableRow className="bg-slate-50/50 hover:bg-slate-50/50 border-none">
-                                                                    <TableHead className="px-10 py-6 text-[10px] font-black uppercase tracking-widest text-slate-400">Operation / Client</TableHead>
-                                                                    <TableHead className="px-6 py-6 text-[10px] font-black uppercase tracking-widest text-slate-400">Resource Revenue</TableHead>
-                                                                    <TableHead className="px-6 py-6 text-[10px] font-black uppercase tracking-widest text-slate-400">Commission Share</TableHead>
-                                                                    <TableHead className="px-10 py-6 text-[10px] font-black uppercase tracking-widest text-slate-400 text-right">Settlement</TableHead>
-                                                                </TableRow>
-                                                            </TableHeader>
-                                                            <TableBody>
-                                                                {recentCustomers.map((log, i) => (
-                                                                    <TableRow key={i} className="border-b border-slate-50 hover:bg-slate-50/30 transition-all">
-                                                                        <TableCell className="px-10 py-6">
-                                                                            <span className="font-black text-slate-900 uppercase text-[11px]">{log.service_name}</span>
-                                                                            <p className="text-[10px] font-bold text-slate-400 mt-1 uppercase tracking-tighter">{log.full_name || "Unknown Identity"} • {format(new Date(log.booking_date), "MMM dd")}</p>
-                                                                        </TableCell>
-                                                                        <TableCell className="px-6 py-6 font-bold text-slate-600">RM {log.price}</TableCell>
-                                                                        <TableCell className="px-6 py-6 font-bold text-slate-400">{staff.commission_percentage}%</TableCell>
-                                                                        <TableCell className="px-10 py-6 text-right font-black text-emerald-500">
-                                                                            +RM {(log.price * (staff.commission_percentage / 100)).toFixed(2)}
-                                                                        </TableCell>
+                                                            <Table>
+                                                                <TableHeader>
+                                                                    <TableRow className="bg-slate-50/50 hover:bg-slate-50/50 border-none">
+                                                                        <TableHead className="px-10 py-6 text-[10px] font-black uppercase tracking-widest text-slate-400">Operation / Client</TableHead>
+                                                                        <TableHead className="px-6 py-6 text-[10px] font-black uppercase tracking-widest text-slate-400">Resource Revenue</TableHead>
+                                                                        <TableHead className="px-6 py-6 text-[10px] font-black uppercase tracking-widest text-slate-400">Commission Share</TableHead>
+                                                                        <TableHead className="px-10 py-6 text-[10px] font-black uppercase tracking-widest text-slate-400 text-right">Settlement</TableHead>
                                                                     </TableRow>
-                                                                ))}
-                                                            </TableBody>
-                                                        </Table>
-                                                    </Card>
+                                                                </TableHeader>
+                                                                <TableBody>
+                                                                    {recentCustomers.map((log, i) => (
+                                                                        <TableRow key={i} className="border-b border-slate-50 hover:bg-slate-50/30 transition-all">
+                                                                            <TableCell className="px-10 py-6">
+                                                                                <span className="font-black text-slate-900 uppercase text-[11px]">{log.service_name}</span>
+                                                                                <p className="text-[10px] font-bold text-slate-400 mt-1 uppercase tracking-tighter">{log.full_name || "Unknown Identity"} • {format(new Date(log.booking_date), "MMM dd")}</p>
+                                                                            </TableCell>
+                                                                            <TableCell className="px-6 py-6 font-bold text-slate-600">RM {log.effective_price}</TableCell>
+                                                                            <TableCell className="px-6 py-6 font-bold text-slate-400">{stats?.commission_rate}%</TableCell>
+                                                                            <TableCell className="px-10 py-6 text-right font-black text-emerald-500">
+                                                                                +RM {(log.effective_price * (stats?.commission_rate / 100)).toFixed(2)}
+                                                                            </TableCell>
+                                                                        </TableRow>
+                                                                    ))}
+                                                                </TableBody>
+                                                            </Table>
+                                                        </Card>
+                                                    </div>
                                                 </div>
-                                            </div>
-                                        </TabsContent>
+                                            </TabsContent>
+                                        )}
 
                                         <TabsContent value="attendance" className="m-0 animate-in fade-in slide-in-from-bottom-2 duration-500">
                                             <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
@@ -622,20 +651,25 @@ export default function StaffDetailsPage() {
                                                                 {['MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT', 'SUN'].map(day => (
                                                                     <div key={day} className="text-center text-[9px] font-black text-slate-300 uppercase tracking-widest pb-4">{day}</div>
                                                                 ))}
-                                                                {Array.from({ length: 31 }, (_, i) => i + 1).map(day => {
-                                                                    const isActive = day < 20 && day % 3 !== 2;
-                                                                    const isWeekend = (day + 1) % 7 === 0 || day % 7 === 0;
+                                                                {Array.from({ length: new Date(selectedDate.getFullYear(), selectedDate.getMonth() + 1, 0).getDate() }, (_, i) => i + 1).map(day => {
+                                                                    const dateStr = `${selectedDate.getFullYear()}-${String(selectedDate.getMonth() + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+                                                                    const logs = attendanceLogs.filter(log => log.date === dateStr);
+                                                                    const isActive = logs.length > 0;
+                                                                    const isWeekend = new Date(selectedDate.getFullYear(), selectedDate.getMonth(), day).getDay() === 0 ||
+                                                                        new Date(selectedDate.getFullYear(), selectedDate.getMonth(), day).getDay() === 6;
+
                                                                     return (
                                                                         <div key={day} className={cn(
                                                                             "aspect-square rounded-2xl border-2 flex flex-col items-center justify-center gap-2 transition-all group cursor-pointer relative",
-                                                                            isWeekend ? "bg-slate-50/50 border-slate-50 opacity-20" : "bg-white border-slate-50 hover:border-slate-900",
-                                                                            isActive && !isWeekend && "border-white bg-[#F2A93B]/5 ring-1 ring-[#F2A93B]/20"
+                                                                            isWeekend ? "bg-slate-50/50 border-slate-50" : "bg-white border-slate-50 hover:border-slate-900",
+                                                                            isActive && "border-[#F2A93B] bg-[#F2A93B]/5 ring-1 ring-[#F2A93B]/10"
                                                                         )}>
-                                                                            <span className={cn("text-xs font-black", isActive && !isWeekend ? "text-[#F2A93B]" : "text-slate-400")}>{day}</span>
-                                                                            {isActive && !isWeekend && (
+                                                                            <span className={cn("text-xs font-black", isActive ? "text-[#F2A93B]" : "text-slate-400")}>{day}</span>
+                                                                            {isActive && (
                                                                                 <div className="flex gap-1">
-                                                                                    <div className="w-1.5 h-1.5 rounded-full bg-emerald-400" />
-                                                                                    <div className="w-1.5 h-1.5 rounded-full bg-emerald-400 opacity-30" />
+                                                                                    {logs.map((_, idx) => (
+                                                                                        <div key={idx} className="w-1.5 h-1.5 rounded-full bg-emerald-500 shadow-[0_0_5px_rgba(16,185,129,0.5)]" />
+                                                                                    ))}
                                                                                 </div>
                                                                             )}
                                                                         </div>
@@ -654,9 +688,9 @@ export default function StaffDetailsPage() {
                                                     <h4 className="text-2xl font-black text-slate-900 tracking-tight uppercase">Absence Dossier</h4>
                                                     <p className="text-xs font-bold text-slate-400 uppercase tracking-widest mt-1">Registry of time-off allocations and pending requests.</p>
                                                 </div>
-                                                <Button className="h-14 px-10 bg-slate-900 hover:bg-slate-800 text-white font-black text-[10px] uppercase tracking-[0.2em] rounded-2xl shadow-2xl transition-all active:scale-95 flex items-center gap-4">
+                                                {/* <Button className="h-14 px-10 bg-slate-900 hover:bg-slate-800 text-white font-black text-[10px] uppercase tracking-[0.2em] rounded-2xl shadow-2xl transition-all active:scale-95 flex items-center gap-4">
                                                     <Plus className="w-5 h-5" /> Initialize New Lock-off
-                                                </Button>
+                                                </Button> */}
                                             </div>
 
                                             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
@@ -714,9 +748,9 @@ export default function StaffDetailsPage() {
                                                             <p className="text-lg font-black text-slate-900 uppercase tracking-tight">Zero Registry</p>
                                                             <p className="text-xs font-bold text-slate-400 uppercase tracking-widest">No absence deployments synchronized for this staff operative.</p>
                                                         </div>
-                                                        <Button variant="outline" className="h-12 px-8 border-slate-200 text-slate-600 font-black text-[10px] uppercase tracking-widest rounded-2xl hover:bg-white transition-all">
+                                                        {/* <Button variant="outline" className="h-12 px-8 border-slate-200 text-slate-600 font-black text-[10px] uppercase tracking-widest rounded-2xl hover:bg-white transition-all">
                                                             Pre-authorize Absences
-                                                        </Button>
+                                                        </Button> */}
                                                     </div>
                                                 )}
                                             </div>
@@ -749,7 +783,7 @@ export default function StaffDetailsPage() {
                                                             <TableHead className="px-10 py-8 text-[10px] font-black uppercase tracking-widest text-slate-400">Professional Deployment</TableHead>
                                                             <TableHead className="px-10 py-8 text-[10px] font-black uppercase tracking-widest text-slate-400">Operation Profile</TableHead>
                                                             <TableHead className="px-10 py-8 text-[10px] font-black uppercase tracking-widest text-slate-400">Fulfillment Status</TableHead>
-                                                            <TableHead className="px-10 py-8 text-[10px] font-black uppercase tracking-widest text-slate-400 text-right">Value Yield</TableHead>
+                                                            <TableHead className="px-10 py-8 text-[10px] font-black uppercase tracking-widest text-slate-400 text-right">Value Earned</TableHead>
                                                         </TableRow>
                                                     </TableHeader>
                                                     <TableBody>
@@ -906,7 +940,7 @@ export default function StaffDetailsPage() {
                                     </Select>
                                 </div>
                                 <div className="space-y-2">
-                                    <Label className="text-[10px] font-black uppercase tracking-widest text-slate-400 ml-1">Yield Share (%)</Label>
+                                    <Label className="text-[10px] font-black uppercase tracking-widest text-slate-400 ml-1">Commission Share (%)</Label>
                                     <Input
                                         type="number"
                                         value={editForm.commission_percentage}

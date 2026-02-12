@@ -4,7 +4,6 @@ import {
   Calendar,
   Plus,
   Search,
-  Filter,
   ChevronLeft,
   ChevronRight,
   Clock,
@@ -133,19 +132,24 @@ export default function AppointmentsPage() {
 
     setAssigningStaff(true);
     try {
-      await api.bookings.updateStatus(selectedBooking.id, selectedBooking.status, staffId);
+      // Auto-confirm the booking when staff is assigned
+      const response = await api.bookings.updateStatus(selectedBooking.id, 'confirmed', staffId);
+      const updatedBooking = response.booking || response;
 
       toast({
         title: "Staff Assigned",
-        description: "The specialist has been successfully assigned to this booking.",
+        description: "The specialist has been successfully assigned and the booking is now confirmed.",
       });
 
-      // Update local state to reflect change
+      // Update local state with the returned booking data 
       setBookings(prev => prev.map(b =>
         b.id === selectedBooking.id
-          ? { ...b, staff_id: staffId, staff_name: staffMembers.find(s => s.id === staffId)?.display_name }
+          ? { ...b, staff_id: staffId, staff_name: updatedBooking.staff_name, status: 'confirmed' }
           : b
       ));
+
+      // Refresh to ensure all data is synced
+      fetchBookings();
 
       setShowStaffAssignment(false);
     } catch (error) {
@@ -369,8 +373,21 @@ export default function AppointmentsPage() {
   };
 
   const updateBookingStatus = async (bookingId: string, status: string) => {
+    // Safety check: Cannot complete without staff assignment
+    const booking = bookings.find(b => b.id === bookingId);
+    if (status === 'completed' && !booking?.staff_id && !booking?.staff_name) {
+      setSelectedBooking(booking || null);
+      setShowStaffAssignment(true);
+      toast({
+        title: "Staff Assignment Required",
+        description: "Please assign a specialist before marking this appointment as completed.",
+        variant: "destructive"
+      });
+      return;
+    }
+
     try {
-      await api.bookings.updateStatus(bookingId, status);
+      await api.bookings.updateStatus(bookingId, status, booking?.staff_id);
 
       toast({
         title: "Success",
@@ -378,24 +395,31 @@ export default function AppointmentsPage() {
       });
 
       fetchBookings();
-    } catch (error) {
+    } catch (error: any) {
       console.error("Error updating booking:", error);
       toast({
         title: "Error",
-        description: "Failed to update appointment locally",
+        description: error.message || "Failed to update appointment locally",
         variant: "destructive",
       });
     }
   };
 
-  const getStatusBadge = (status: string) => {
+  const getStatusBadge = (status: string, hasStaff: boolean = false) => {
     switch (status) {
       case "confirmed":
         return (
-          <Badge className="bg-gradient-to-r from-emerald-100 to-emerald-200 text-emerald-700 border-0 font-medium text-xs">
-            <CheckCircle className="w-3 h-3 mr-1" />
-            Confirmed
-          </Badge>
+          <div className="flex flex-col items-end gap-1">
+            <Badge className="bg-gradient-to-r from-emerald-100 to-emerald-200 text-emerald-700 border-0 font-medium text-xs">
+              <CheckCircle className="w-3 h-3 mr-1" />
+              Confirmed
+            </Badge>
+            {hasStaff && (
+              <Badge variant="outline" className="border-amber-200 text-amber-600 bg-amber-50/50 font-black text-[8px] uppercase tracking-widest px-1.5 h-4">
+                Assigned
+              </Badge>
+            )}
+          </div>
         );
       case "completed":
         return (
@@ -541,19 +565,6 @@ export default function AppointmentsPage() {
               </p>
             </div>
             <div className="flex items-center gap-3">
-              <Button
-                variant="outline"
-                className="border-border/50 hover:bg-secondary/50 font-bold"
-                onClick={() => {
-                  toast({
-                    title: "Export Feature",
-                    description: "Exporting data from local database...",
-                  });
-                }}
-              >
-                <Filter className="w-4 h-4 mr-2" />
-                Export
-              </Button>
               <Dialog open={showNewAppointment} onOpenChange={setShowNewAppointment}>
                 <DialogTrigger asChild>
                   <Button
@@ -850,10 +861,15 @@ export default function AppointmentsPage() {
                               </span>
                             ) : null}
                             {booking.staff_name && (
-                              <span className="flex items-center gap-1.5 bg-amber-50 px-2 py-0.5 rounded-lg text-amber-700">
-                                <User className="w-3.5 h-3.5" />
-                                {booking.staff_name}
-                              </span>
+                              <div className="flex items-center gap-2">
+                                <span className="flex items-center gap-1.5 bg-amber-50 px-2 py-0.5 rounded-lg text-amber-700">
+                                  <User className="w-3.5 h-3.5" />
+                                  {booking.staff_name}
+                                </span>
+                                <Badge className="bg-[#F2A93B]/10 text-[#F2A93B] border-none font-black text-[8px] uppercase tracking-widest px-1.5 h-4">
+                                  Assigned
+                                </Badge>
+                              </div>
                             )}
                             {booking.user_phone && (
                               <span className="flex items-center gap-1.5">
@@ -881,7 +897,7 @@ export default function AppointmentsPage() {
                         </div>
 
                         <div className="flex items-center gap-2">
-                          {getStatusBadge(booking.status)}
+                          {getStatusBadge(booking.status, !!(booking.staff_id || booking.staff_name))}
 
                           <DropdownMenu>
                             <DropdownMenuTrigger asChild>
@@ -917,7 +933,7 @@ export default function AppointmentsPage() {
                                   )}
                                 </>
                               )}
-                              {(isOwner || isManager) && booking.status === "confirmed" && (
+                              {(isOwner || isManager) && (booking.status === "confirmed" || booking.status === "pending") && (
                                 <DropdownMenuItem onClick={() => updateBookingStatus(booking.id, "completed")} className="rounded-xl py-3 font-bold text-blue-600 focus:bg-blue-50 focus:text-blue-700">
                                   <Star className="w-4 h-4 mr-3" />
                                   Mark as Completed

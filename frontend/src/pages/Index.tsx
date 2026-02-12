@@ -152,7 +152,7 @@ const Index = () => {
             <Scissors className="w-6 h-6 text-accent" />
           </div>
           <div>
-            <h1 className="text-xl font-black text-slate-900 tracking-tight leading-none">StyleSync</h1>
+            {/* <h1 className="text-xl font-black text-slate-900 tracking-tight leading-none">StyleSync</h1> */}
             <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mt-1">Local Backend Active</p>
           </div>
         </div>

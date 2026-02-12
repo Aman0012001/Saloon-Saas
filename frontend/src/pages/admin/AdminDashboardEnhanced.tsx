@@ -360,7 +360,7 @@ export default function AdminDashboardEnhanced() {
             <CardHeader className="flex flex-row items-center justify-between pb-2 relative z-10 p-8">
               <div>
                 <CardTitle className="text-2xl font-black text-white">Revenue Projections</CardTitle>
-                <CardDescription className="text-slate-400 font-medium mt-1">Monthly earnings trend (Last 12 Months)</CardDescription>
+                <CardDescription className="text-slate-400 font-medium mt-1">Monthly Earnings trend (Last 12 Months)</CardDescription>
               </div>
               <Badge className="bg-blue-500/20 text-blue-300 border border-blue-500/20 font-bold px-4 py-1.5 rounded-xl">Local Host</Badge>
             </CardHeader>

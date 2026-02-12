@@ -8,7 +8,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Loader2, ArrowLeft, ShieldCheck, AlertCircle, Calendar as CalendarIcon, Save } from "lucide-react";
+import { Loader2, ArrowLeft, ShieldCheck, AlertCircle, Calendar as CalendarIcon, Save, Image as ImageIcon, Camera } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import api from "@/services/api";
@@ -28,87 +28,110 @@ export default function ClinicalProfile() {
     // Clinical Data State
     const [clinicalData, setClinicalData] = useState({
         date_of_birth: "",
-        skin_type: "",
+        skin_type: "normal",
         skin_issues: "",
-        allergy_records: ""
+        allergy_records: "",
+        medical_conditions: "",
+        notes: "",
+        concern_photo_url: "",
+        concern_photo_public_id: ""
     });
 
+    const [uploading, setUploading] = useState(false);
+
     useEffect(() => {
-        if (!authLoading && !user) {
-            navigate("/login");
-            return;
-        }
-        if (user) {
-            fetchSalons();
-        }
-    }, [user, authLoading, navigate]);
+        const loadInitialData = async () => {
+            if (!user) return;
 
-    // Fetch salons the user has visited to let them choose which profile to edit
-    const fetchSalons = async () => {
-        setLoading(true);
-        try {
-            // We get salons from the user's bookings history
-            const bookings = await api.bookings.getAll({ user_id: user!.id });
+            setLoading(true);
+            try {
+                // Fetch bookings to see which salons the user has visited
+                const bookings = await api.bookings.getAll({ user_id: user.id });
 
-            // Extract unique salons
-            const uniqueSalonsMap = new Map();
-            bookings.forEach((b: any) => {
-                if (!uniqueSalonsMap.has(b.salon_id)) {
-                    uniqueSalonsMap.set(b.salon_id, {
-                        id: b.salon_id,
-                        name: b.salon_name,
-                        city: b.salon_city,
-                        address: b.salon_address
-                    });
+                // Extract unique salons from bookings
+                const visitedSalonsMap = new Map();
+                bookings.forEach((b: any) => {
+                    if (b.salon_id && !visitedSalonsMap.has(b.salon_id)) {
+                        visitedSalonsMap.set(b.salon_id, {
+                            id: b.salon_id,
+                            name: b.salon_name || "Salon",
+                            city: b.salon_city || ""
+                        });
+                    }
+                });
+
+                const visitedSalons = Array.from(visitedSalonsMap.values());
+                setSalons(visitedSalons);
+
+                if (visitedSalons.length > 0) {
+                    const firstSalonId = visitedSalons[0].id;
+                    setSelectedSalonId(firstSalonId);
+                    await fetchClinicalProfile(firstSalonId);
                 }
-            });
-
-            const uniqueSalons = Array.from(uniqueSalonsMap.values());
-            setSalons(uniqueSalons);
-
-            if (uniqueSalons.length > 0) {
-                // Select the most recent salon by default (booking list is usually ordered date desc)
-                // Or just the first one found
-                setSelectedSalonId(uniqueSalons[0].id);
+            } catch (error) {
+                console.error("Error loading initial data:", error);
+            } finally {
+                setLoading(false);
             }
-        } catch (error) {
-            console.error("Error fetching salons:", error);
-        } finally {
-            setLoading(false);
-        }
-    };
+        };
 
-    // Fetch clinical profile when salon changes
+        loadInitialData();
+    }, [user]);
+
     useEffect(() => {
         if (selectedSalonId && user) {
             fetchClinicalProfile(selectedSalonId);
         }
-    }, [selectedSalonId]);
+    }, [selectedSalonId, user]);
 
     const fetchClinicalProfile = async (salonId: string) => {
-        // Don't set full loading here to avoid flashing the whole page, maybe just form loading?
-        // But for simplicity let's rely on fast API
         try {
             const data = await api.customerRecords.getProfile(user!.id, salonId);
             if (data && data.profile) {
                 setClinicalData({
                     date_of_birth: data.profile.date_of_birth || "",
-                    skin_type: data.profile.skin_type || "",
+                    skin_type: data.profile.skin_type || "normal",
                     skin_issues: data.profile.skin_issues || "",
-                    allergy_records: data.profile.allergy_records || ""
+                    allergy_records: data.profile.allergy_records || "",
+                    medical_conditions: data.profile.medical_conditions || "",
+                    notes: data.profile.notes || "",
+                    concern_photo_url: data.profile.concern_photo_url || "",
+                    concern_photo_public_id: data.profile.concern_photo_public_id || ""
                 });
             } else {
-                // Reset if no profile found
                 setClinicalData({
                     date_of_birth: "",
-                    skin_type: "normal", // Default
+                    skin_type: "normal",
                     skin_issues: "",
-                    allergy_records: ""
+                    allergy_records: "",
+                    medical_conditions: "",
+                    notes: "",
+                    concern_photo_url: "",
+                    concern_photo_public_id: ""
                 });
             }
         } catch (error) {
             console.error("Error fetching profile:", error);
-            // Non-critical, just means we start fresh
+        }
+    };
+
+    const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+        const file = e.target.files?.[0];
+        if (!file) return;
+
+        setUploading(true);
+        try {
+            const response = await api.uploads.upload(file);
+            setClinicalData(prev => ({
+                ...prev,
+                concern_photo_url: response.url,
+                concern_photo_public_id: response.public_id
+            }));
+            toast({ title: "Photo Uploaded", description: "Your concern photo has been added to your profile." });
+        } catch (error: any) {
+            toast({ title: "Upload Failed", description: error.message, variant: "destructive" });
+        } finally {
+            setUploading(false);
         }
     };
 
@@ -259,9 +282,20 @@ export default function ClinicalProfile() {
                                             <Textarea
                                                 id="allergies"
                                                 placeholder="List any known allergies to products, medications, or ingredients..."
-                                                className="min-h-[100px] border-rose-100 focus:border-rose-300 focus:ring-rose-200"
+                                                className="min-h-[80px] border-rose-100 focus:border-rose-300 focus:ring-rose-200"
                                                 value={clinicalData.allergy_records}
                                                 onChange={e => setClinicalData({ ...clinicalData, allergy_records: e.target.value })}
+                                            />
+                                        </div>
+
+                                        <div className="space-y-2">
+                                            <Label htmlFor="conditions" className="font-bold text-slate-700">Medical Conditions</Label>
+                                            <Textarea
+                                                id="conditions"
+                                                placeholder="Heart conditions, pregnancy, recent surgeries, medications..."
+                                                className="min-h-[80px]"
+                                                value={clinicalData.medical_conditions}
+                                                onChange={e => setClinicalData({ ...clinicalData, medical_conditions: e.target.value })}
                                             />
                                         </div>
 
@@ -270,9 +304,69 @@ export default function ClinicalProfile() {
                                             <Textarea
                                                 id="issues"
                                                 placeholder="E.g., Acne, Hyperpigmentation, Rosacea, etc..."
-                                                className="min-h-[100px]"
+                                                className="min-h-[80px]"
                                                 value={clinicalData.skin_issues}
                                                 onChange={e => setClinicalData({ ...clinicalData, skin_issues: e.target.value })}
+                                            />
+                                        </div>
+
+                                        <div className="space-y-2">
+                                            <Label className="font-bold text-slate-700 block">Current Skin Concern Photo</Label>
+                                            <div className="flex flex-col md:flex-row gap-6 items-start">
+                                                <div className="w-full md:w-48 h-48 bg-slate-50 border-2 border-dashed border-slate-200 rounded-2xl overflow-hidden flex items-center justify-center relative group hover:border-primary/50 transition-colors">
+                                                    {clinicalData.concern_photo_url ? (
+                                                        <>
+                                                            <img
+                                                                src={clinicalData.concern_photo_url}
+                                                                alt="Skin Concern"
+                                                                className="w-full h-full object-cover"
+                                                            />
+                                                            <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+                                                                <span className="text-white text-xs font-bold">Update Photo</span>
+                                                            </div>
+                                                        </>
+                                                    ) : (
+                                                        <div className="text-center p-4">
+                                                            <ImageIcon className="w-8 h-8 text-slate-300 mx-auto mb-2" />
+                                                            <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">No Photo Uploaded</p>
+                                                        </div>
+                                                    )}
+                                                    <input
+                                                        type="file"
+                                                        accept="image/*"
+                                                        className="absolute inset-0 opacity-0 cursor-pointer"
+                                                        onChange={handleImageUpload}
+                                                        disabled={uploading}
+                                                    />
+                                                </div>
+                                                <div className="flex-1 space-y-2 pt-2">
+                                                    <p className="text-sm text-slate-500 font-medium leading-relaxed">
+                                                        Uploading a clear photo of your skin concern can help your therapist better understand your needs before your appointment.
+                                                    </p>
+                                                    {uploading && (
+                                                        <div className="flex items-center gap-2 text-primary font-bold text-xs">
+                                                            <Loader2 className="w-3 h-3 animate-spin" />
+                                                            Uploading snapshot...
+                                                        </div>
+                                                    )}
+                                                    {!uploading && clinicalData.concern_photo_url && (
+                                                        <div className="flex items-center gap-2 text-emerald-600 font-bold text-xs uppercase tracking-wider">
+                                                            <ShieldCheck className="w-3 h-3" />
+                                                            Securely Uploaded
+                                                        </div>
+                                                    )}
+                                                </div>
+                                            </div>
+                                        </div>
+
+                                        <div className="space-y-2">
+                                            <Label htmlFor="notes" className="font-bold text-slate-700">Additional Notes</Label>
+                                            <Textarea
+                                                id="notes"
+                                                placeholder="Any other information that might be relevant for your treatments..."
+                                                className="min-h-[100px]"
+                                                value={clinicalData.notes}
+                                                onChange={e => setClinicalData({ ...clinicalData, notes: e.target.value })}
                                             />
                                         </div>
 

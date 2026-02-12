@@ -311,11 +311,15 @@ export default function ServicesPage() {
   };
 
   const filteredServices = services.filter((service) => {
+    const isPredefined = service.category && CATEGORIES.filter(c => c !== "Other").includes(service.category);
+
     const matchesSearch =
       service.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
       service.description?.toLowerCase().includes(searchQuery.toLowerCase());
     const matchesCategory =
-      categoryFilter === "all" || service.category === categoryFilter;
+      categoryFilter === "all" ||
+      (categoryFilter === "Other" && !isPredefined) ||
+      service.category === categoryFilter;
     return matchesSearch && matchesCategory;
   });
 
@@ -403,13 +407,13 @@ export default function ServicesPage() {
             </p>
           </div>
           <div className="flex items-center gap-3">
-            <Button
+            {/* <Button
               variant="outline"
               className="border-border/50 hover:bg-secondary/50"
             >
               <Filter className="w-4 h-4 mr-2" />
               Export Menu
-            </Button>
+            </Button> */}
             {(isOwner || isManager) && (
               <Dialog
                 open={isAddDialogOpen}
@@ -794,6 +798,17 @@ export default function ServicesPage() {
                   </SelectTrigger>
                   <SelectContent className="rounded-xl border-input/50 shadow-2xl">
                     <SelectItem value="all" className="rounded-lg">All Categories</SelectItem>
+
+                    {/* Unique Custom Categories Displayed First */}
+                    {[...new Set(services.map(s => s.category).filter(cat => cat && !CATEGORIES.includes(cat)))].map(cat => (
+                      <SelectItem key={cat} value={cat} className="rounded-lg">
+                        <div className="flex items-center gap-2">
+                          <span className="text-lg leading-none">✨</span>
+                          <span>{cat}</span>
+                        </div>
+                      </SelectItem>
+                    ))}
+
                     {CATEGORIES.map((cat) => (
                       <SelectItem key={cat} value={cat} className="rounded-lg">
                         <div className="flex items-center gap-2">
@@ -922,8 +937,8 @@ export default function ServicesPage() {
                 <CardContent className={`p-6 flex flex-col flex-1 ${viewMode === "list" ? "p-0 pl-6 flex-row items-center justify-between" : ""}`}>
                   <div className={`flex-1 space-y-4 ${viewMode === "list" ? "space-y-1 mb-0" : ""}`}>
                     <div className="flex items-start justify-between gap-2">
-                      <h3 className="text-xl font-bold text-foreground leading-tight capitalize group-hover:text-accent transition-colors">
-                        {service.name.toLowerCase()}
+                      <h3 className="text-xl font-bold text-foreground leading-tight group-hover:text-accent transition-colors">
+                        {service.name}
                       </h3>
                       {(isOwner || isManager) && viewMode === "grid" && (
                         <DropdownMenu>

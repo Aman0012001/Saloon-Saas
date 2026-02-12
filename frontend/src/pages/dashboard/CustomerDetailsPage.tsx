@@ -61,7 +61,14 @@ import { ResponsiveDashboardLayout } from "@/components/dashboard/ResponsiveDash
 import { useSalon } from "@/hooks/useSalon";
 import api from "@/services/api";
 import { useToast } from "@/hooks/use-toast";
-import { format } from "date-fns";
+import { format, isValid, parseISO } from "date-fns";
+
+const safeFormat = (dateInput: string | Date | null | undefined, fmt: string) => {
+    if (!dateInput) return "N/A";
+    const date = typeof dateInput === 'string' ? new Date(dateInput) : dateInput;
+    if (!isValid(date)) return "N/A";
+    return format(date, fmt);
+};
 
 interface Booking {
     id: string;
@@ -109,10 +116,21 @@ export default function CustomerDetailsPage() {
     const [skinType, setSkinType] = useState("");
     const [allergies, setAllergies] = useState("");
     const [skinIssues, setSkinIssues] = useState("");
+    const [medicalConditions, setMedicalConditions] = useState("");
+    const [notes, setNotes] = useState("");
+    const [concernPhotoUrl, setConcernPhotoUrl] = useState("");
     const [savingCRM, setSavingCRM] = useState(false);
     const [treatments, setTreatments] = useState<any[]>([]);
 
-    // Treatment Record States
+    const [isProfileEditDialogOpen, setIsProfileEditDialogOpen] = useState(false);
+    const [editProfileData, setEditProfileData] = useState({
+        full_name: "",
+        phone: "",
+        email: "",
+        avatar_url: ""
+    });
+
+    // ... treatment record states ...
     const [isTreatmentDialogOpen, setIsTreatmentDialogOpen] = useState(false);
     const [selectedBooking, setSelectedBooking] = useState<Booking | null>(null);
     const [treatmentData, setTreatmentData] = useState({
@@ -166,8 +184,9 @@ export default function CustomerDetailsPage() {
                     setAllergies(crmData.profile.allergy_records || "");
                     setSkinIssues(crmData.profile.skin_issues || "");
                     setDob(crmData.profile.date_of_birth || "");
-
-                    // Also use CRM data as fallback for name if still missing
+                    setMedicalConditions(crmData.profile.medical_conditions || "");
+                    setNotes(crmData.profile.notes || "");
+                    setConcernPhotoUrl(crmData.profile.concern_photo_url || "");
                 }
             } catch (err) {
                 console.warn("No CRM data found or error fetching it");
@@ -231,12 +250,16 @@ export default function CustomerDetailsPage() {
                 skin_type: skinType,
                 allergy_records: allergies,
                 skin_issues: skinIssues,
-                date_of_birth: dob
+                date_of_birth: dob,
+                medical_conditions: medicalConditions,
+                notes: notes,
+                concern_photo_url: concernPhotoUrl
             });
             toast({
                 title: "Success",
                 description: "Customer health profile updated successfully.",
             });
+            fetchData();
         } catch (error) {
             toast({
                 title: "Error",
@@ -245,6 +268,52 @@ export default function CustomerDetailsPage() {
             });
         } finally {
             setSavingCRM(false);
+        }
+    };
+
+    const handleSaveProfile = async () => {
+        if (!userId || !currentSalon) return;
+        setLoading(true);
+        try {
+            // Update Basic Profile
+            await api.profiles.updateById(userId, {
+                ...editProfileData,
+                salon_id: currentSalon.id
+            });
+
+            // Update Health Profile
+            await api.customerRecords.saveProfile({
+                user_id: userId,
+                salon_id: currentSalon.id,
+                skin_type: skinType,
+                allergy_records: allergies,
+                skin_issues: skinIssues,
+                date_of_birth: dob,
+                medical_conditions: medicalConditions,
+                notes: notes,
+                concern_photo_url: concernPhotoUrl
+            });
+
+            toast({ title: "Profile Updated", description: "Customer information has been successfully updated." });
+            setIsProfileEditDialogOpen(false);
+            fetchData();
+        } catch (error: any) {
+            toast({ title: "Update Failed", description: error.message || "Failed to save profile changes.", variant: "destructive" });
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    const handleProfileImageUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
+        const file = event.target.files?.[0];
+        if (!file) return;
+
+        try {
+            const response = await api.uploads.upload(file);
+            setEditProfileData(prev => ({ ...prev, avatar_url: response.url }));
+            toast({ title: "Success", description: "Profile photo uploaded." });
+        } catch (err) {
+            toast({ title: "Upload Failed", variant: "destructive" });
         }
     };
 
@@ -306,7 +375,7 @@ export default function CustomerDetailsPage() {
                     before_photo_url: data.record.before_photo_url || "",
                     after_photo_url: data.record.after_photo_url || "",
                     service_name_manual: data.record.service_name_manual || "",
-                    record_date: data.record.record_date || (booking.booking_date ? format(new Date(booking.booking_date), 'yyyy-MM-dd') : format(new Date(), 'yyyy-MM-dd'))
+                    record_date: data.record.record_date || (booking.booking_date ? safeFormat(booking.booking_date, 'yyyy-MM-dd') : safeFormat(new Date(), 'yyyy-MM-dd'))
                 });
             } else {
                 setTreatmentData({
@@ -321,7 +390,7 @@ export default function CustomerDetailsPage() {
                     before_photo_url: "",
                     after_photo_url: "",
                     service_name_manual: "",
-                    record_date: booking.booking_date ? format(new Date(booking.booking_date), 'yyyy-MM-dd') : format(new Date(), 'yyyy-MM-dd')
+                    record_date: booking.booking_date ? safeFormat(booking.booking_date, 'yyyy-MM-dd') : safeFormat(new Date(), 'yyyy-MM-dd')
                 });
             }
         } catch (error) {
@@ -379,10 +448,11 @@ export default function CustomerDetailsPage() {
             // Refresh treatments
             const treatmentsData = await api.customerRecords.getUserTreatments(userId, currentSalon.id);
             setTreatments(treatmentsData?.treatments || []);
-        } catch (error) {
+        } catch (error: any) {
+            console.error("Save failed:", error);
             toast({
                 title: "Error",
-                description: "Failed to save treatment record.",
+                description: error.message || "Failed to save treatment record.",
                 variant: "destructive"
             });
         } finally {
@@ -489,7 +559,7 @@ export default function CustomerDetailsPage() {
                                             </Avatar>
                                         </div>
                                         <div className="flex-1 space-y-3">
-                                            <div>
+                                            <div className="flex items-center justify-between">
                                                 <div className="flex items-center gap-2 justify-center md:justify-start">
                                                     <h2 className="text-2xl font-bold text-slate-900">{profile.full_name || "Unknown Guest"}</h2>
                                                     {bookings.length > 5 && (
@@ -498,6 +568,22 @@ export default function CustomerDetailsPage() {
                                                         </span>
                                                     )}
                                                 </div>
+                                                <Button
+                                                    variant="outline"
+                                                    size="sm"
+                                                    className="border-[#1e3a8a] text-[#1e3a8a] font-bold"
+                                                    onClick={() => {
+                                                        setEditProfileData({
+                                                            full_name: profile.full_name || "",
+                                                            phone: profile.phone || "",
+                                                            email: profile.email || "",
+                                                            avatar_url: profile.avatar_url || ""
+                                                        });
+                                                        setIsProfileEditDialogOpen(true);
+                                                    }}
+                                                >
+                                                    <Settings className="w-4 h-4 mr-2" /> Edit Profile
+                                                </Button>
                                             </div>
 
                                             <div className="space-y-2 pt-2 border-t border-slate-200 text-sm">
@@ -511,7 +597,7 @@ export default function CustomerDetailsPage() {
                                                 </div>
                                                 <div className="flex items-center gap-3">
                                                     <Calendar className="w-4 h-4 text-[#1e3a8a]" />
-                                                    <span className="font-semibold">DOB: {dob ? format(new Date(dob), 'MM/dd/yyyy') : 'Not Set'} {dob && `(Age: ${new Date().getFullYear() - new Date(dob).getFullYear()})`}</span>
+                                                    <span className="font-semibold">DOB: {dob ? safeFormat(dob, 'MM/dd/yyyy') : 'Not Set'} {dob && isValid(new Date(dob)) && `(Age: ${new Date().getFullYear() - new Date(dob).getFullYear()})`}</span>
                                                 </div>
                                                 <div className="flex items-center gap-3">
                                                     <ShieldCheck className="w-4 h-4 text-[#1e3a8a]" />
@@ -524,7 +610,7 @@ export default function CustomerDetailsPage() {
                                     <div className="mt-6 pt-6 border-t border-slate-300 grid grid-cols-3 gap-4 text-center">
                                         <div>
                                             <p className="text-xs font-bold text-slate-500 uppercase tracking-wide">Last Visit</p>
-                                            <p className="text-lg font-bold text-slate-900 mt-1">{lastVisit !== "N/A" ? format(new Date(lastVisit), 'MM/dd/yyyy') : "N/A"}</p>
+                                            <p className="text-lg font-bold text-slate-900 mt-1">{lastVisit !== "N/A" ? safeFormat(lastVisit, 'MM/dd/yyyy') : "N/A"}</p>
                                         </div>
                                         <div className="border-l border-slate-300">
                                             <p className="text-xs font-bold text-slate-500 uppercase tracking-wide">Total Visits</p>
@@ -559,7 +645,7 @@ export default function CustomerDetailsPage() {
                                                     <tbody className="divide-y divide-slate-200">
                                                         {bookings.map((b) => (
                                                             <tr key={b.id} className="hover:bg-slate-100 transition-colors cursor-pointer" onClick={() => handleOpenTreatmentRecord(b)}>
-                                                                <td className="py-3 px-4 font-medium text-slate-600">{format(new Date(b.booking_date), 'MM/dd/yyyy')}</td>
+                                                                <td className="py-3 px-4 font-medium text-slate-600">{safeFormat(b.booking_date, 'MM/dd/yyyy')}</td>
                                                                 <td className="py-3 px-4 text-slate-900 font-semibold truncate max-w-[120px]">{b.service_name || "Service"}</td>
                                                                 <td className="py-3 px-4 text-right font-bold text-slate-700">${b.price}</td>
                                                             </tr>
@@ -573,7 +659,7 @@ export default function CustomerDetailsPage() {
                                     <TabsContent value="clinical" className="p-4 m-0 space-y-6">
                                         {/* Simplified Health Summary info in tab */}
                                         <div className="flex flex-wrap gap-2 mb-4">
-                                            {dob && <Badge variant="outline" className="bg-white">Age: {new Date().getFullYear() - new Date(dob).getFullYear()}</Badge>}
+                                            {dob && isValid(new Date(dob)) && <Badge variant="outline" className="bg-white">Age: {new Date().getFullYear() - new Date(dob).getFullYear()}</Badge>}
                                             {skinType && <Badge variant="outline" className="bg-white">Skin: {skinType}</Badge>}
                                             {allergies && <Badge variant="destructive" className="bg-rose-50 text-rose-700 border-rose-100">Allergy: {allergies.split(',')[0]}</Badge>}
                                         </div>
@@ -595,7 +681,7 @@ export default function CustomerDetailsPage() {
                                                         before_photo_url: "",
                                                         after_photo_url: "",
                                                         service_name_manual: "",
-                                                        record_date: format(new Date(), 'yyyy-MM-dd')
+                                                        record_date: safeFormat(new Date(), 'yyyy-MM-dd')
                                                     });
                                                     setIsTreatmentDialogOpen(true);
                                                 }}>
@@ -612,7 +698,7 @@ export default function CustomerDetailsPage() {
                                                             <div className="absolute -left-[9px] top-2 w-4 h-4 rounded-full bg-slate-200 border-2 border-white" />
                                                             <div className="bg-white p-3 rounded-xl border border-slate-200 shadow-sm hover:shadow-md transition-shadow cursor-pointer" onClick={() => handleOpenTreatmentRecord({ id: tr.booking_id, service_name: tr.service_name || tr.service_name_manual, booking_date: tr.booking_date || tr.record_date || tr.created_at } as any)}>
                                                                 <div className="flex justify-between items-start mb-1">
-                                                                    <span className="text-[10px] font-bold text-slate-400 uppercase">{format(new Date(tr.booking_date || tr.record_date || tr.created_at), 'MMM dd, yyyy')}</span>
+                                                                    <span className="text-[10px] font-bold text-slate-400 uppercase">{safeFormat(tr.booking_date || tr.record_date || tr.created_at, 'MMM dd, yyyy')}</span>
                                                                     {tr.before_photo_url && tr.after_photo_url && <Sparkles className="w-3 h-3 text-emerald-500" />}
                                                                 </div>
                                                                 <h4 className="font-bold text-slate-900 text-sm">{tr.service_name || tr.service_name_manual || "General Record"}</h4>
@@ -768,7 +854,7 @@ export default function CustomerDetailsPage() {
                         </DialogTitle>
                         <DialogDescription>
                             {selectedBooking
-                                ? `Details for ${selectedBooking.service_name} on ${format(new Date(selectedBooking.booking_date), 'MM/dd/yyyy')}`
+                                ? `Details for ${selectedBooking.service_name} on ${safeFormat(selectedBooking.booking_date, 'MM/dd/yyyy')}`
                                 : "Add notes or a procedure that wasn't tied to a specific appointment."}
                         </DialogDescription>
                     </DialogHeader>
@@ -970,6 +1056,167 @@ export default function CustomerDetailsPage() {
                             className="bg-[#1e3a8a] hover:bg-blue-900"
                         >
                             {savingPurchase ? "Saving..." : "Record Sale"}
+                        </Button>
+                    </DialogFooter>
+                </DialogContent>
+            </Dialog>
+
+            {/* Edit Profile Dialog */}
+            <Dialog open={isProfileEditDialogOpen} onOpenChange={setIsProfileEditDialogOpen}>
+                <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
+                    <DialogHeader>
+                        <DialogTitle className="text-2xl font-bold text-[#1e3a8a]">Edit Customer Profile</DialogTitle>
+                        <DialogDescription>Update identity and clinical health records for {profile.full_name}</DialogDescription>
+                    </DialogHeader>
+
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-8 py-6">
+                        {/* Basic Info Column */}
+                        <div className="space-y-6">
+                            <h3 className="text-sm font-bold text-slate-500 uppercase tracking-wider border-b pb-2">Basic Information</h3>
+
+                            <div className="flex flex-col items-center gap-4 p-4 bg-slate-50 rounded-xl border border-slate-200">
+                                <Avatar className="w-24 h-24 rounded-lg border-2 border-white shadow-sm">
+                                    <AvatarImage src={editProfileData.avatar_url} />
+                                    <AvatarFallback className="bg-slate-200 text-slate-400 text-2xl">
+                                        {editProfileData.full_name?.charAt(0)}
+                                    </AvatarFallback>
+                                </Avatar>
+                                <div className="relative text-center">
+                                    <Button variant="outline" size="sm" className="bg-white">
+                                        <ImageIcon className="w-4 h-4 mr-2" /> Change Photo
+                                    </Button>
+                                    <Input
+                                        type="file"
+                                        accept="image/*"
+                                        className="absolute inset-0 opacity-0 cursor-pointer"
+                                        onChange={handleProfileImageUpload}
+                                    />
+                                </div>
+                            </div>
+
+                            <div className="space-y-4">
+                                <div className="space-y-2">
+                                    <Label htmlFor="edit-name">Full Name</Label>
+                                    <Input
+                                        id="edit-name"
+                                        value={editProfileData.full_name}
+                                        onChange={e => setEditProfileData({ ...editProfileData, full_name: e.target.value })}
+                                    />
+                                </div>
+                                <div className="space-y-2">
+                                    <Label htmlFor="edit-phone">Phone Number</Label>
+                                    <Input
+                                        id="edit-phone"
+                                        value={editProfileData.phone}
+                                        onChange={e => setEditProfileData({ ...editProfileData, phone: e.target.value })}
+                                    />
+                                </div>
+                                <div className="space-y-2">
+                                    <Label htmlFor="edit-email">Email Address</Label>
+                                    <Input
+                                        id="edit-email"
+                                        value={editProfileData.email}
+                                        onChange={e => setEditProfileData({ ...editProfileData, email: e.target.value })}
+                                    />
+                                </div>
+                            </div>
+                        </div>
+
+                        {/* Health Info Column */}
+                        <div className="space-y-6">
+                            <h3 className="text-sm font-bold text-slate-500 uppercase tracking-wider border-b pb-2">Clinical Health Profile</h3>
+
+                            <div className="grid grid-cols-2 gap-4">
+                                <div className="space-y-2">
+                                    <Label>Date of Birth</Label>
+                                    <Input type="date" value={dob} onChange={e => setDob(e.target.value)} />
+                                </div>
+                                <div className="space-y-2">
+                                    <Label>Skin Type</Label>
+                                    <Input value={skinType} onChange={e => setSkinType(e.target.value)} placeholder="e.g. Dry, Oily" />
+                                </div>
+                            </div>
+
+                            <div className="space-y-4">
+                                <div className="space-y-2">
+                                    <Label className="text-rose-600 font-bold">Allergies</Label>
+                                    <Textarea
+                                        value={allergies}
+                                        onChange={e => setAllergies(e.target.value)}
+                                        placeholder="List allergies..."
+                                        className="min-h-[60px] border-rose-100"
+                                    />
+                                </div>
+                                <div className="space-y-2">
+                                    <Label>Medical Conditions</Label>
+                                    <Textarea
+                                        value={medicalConditions}
+                                        onChange={e => setMedicalConditions(e.target.value)}
+                                        placeholder="Heart issues, pregnancy, etc..."
+                                        className="min-h-[60px]"
+                                    />
+                                </div>
+                                <div className="space-y-2">
+                                    <Label>Skin Issues / Concerns</Label>
+                                    <Textarea
+                                        value={skinIssues}
+                                        onChange={e => setSkinIssues(e.target.value)}
+                                        placeholder="Acne, Rosacea, etc..."
+                                        className="min-h-[60px]"
+                                    />
+                                </div>
+                                <div className="space-y-2">
+                                    <Label>Additional Private Notes</Label>
+                                    <Textarea
+                                        value={notes}
+                                        onChange={e => setNotes(e.target.value)}
+                                        placeholder="Internal notes for staff..."
+                                        className="min-h-[80px]"
+                                    />
+                                </div>
+
+                                <div className="space-y-4 pt-2 border-t">
+                                    <Label className="font-bold flex items-center gap-2">
+                                        <ImageIcon className="w-4 h-4" /> Skin Concern Photo
+                                    </Label>
+                                    <div className="flex items-start gap-4">
+                                        <div className="w-24 h-24 bg-slate-100 rounded-lg overflow-hidden flex items-center justify-center relative border-2 border-dashed border-slate-300">
+                                            {concernPhotoUrl ? (
+                                                <img src={concernPhotoUrl} alt="Concern" className="w-full h-full object-cover" />
+                                            ) : (
+                                                <ImageIcon className="w-6 h-6 text-slate-300" />
+                                            )}
+                                            <input
+                                                type="file"
+                                                accept="image/*"
+                                                className="absolute inset-0 opacity-0 cursor-pointer"
+                                                onChange={async (e) => {
+                                                    const file = e.target.files?.[0];
+                                                    if (file) {
+                                                        try {
+                                                            const res = await api.uploads.upload(file);
+                                                            setConcernPhotoUrl(res.url);
+                                                        } catch (err) {
+                                                            toast({ title: "Upload Failed", variant: "destructive" });
+                                                        }
+                                                    }
+                                                }}
+                                            />
+                                        </div>
+                                        <div className="flex-1 text-xs text-slate-500 italic pt-2">
+                                            Upload a clear photo of the customer's skin concern for clinical review.
+                                            This photo is visible to therapists during treatment planning.
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <DialogFooter className="border-t pt-6">
+                        <Button variant="outline" onClick={() => setIsProfileEditDialogOpen(false)}>Cancel</Button>
+                        <Button onClick={handleSaveProfile} className="bg-[#1e3a8a] hover:bg-blue-900 text-white font-bold px-8">
+                            Save Complete Dossier
                         </Button>
                     </DialogFooter>
                 </DialogContent>

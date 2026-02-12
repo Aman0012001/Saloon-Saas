@@ -18,6 +18,7 @@ DROP TABLE IF EXISTS salons;
 DROP TABLE IF EXISTS profiles;
 DROP TABLE IF EXISTS users;
 DROP TABLE IF EXISTS platform_orders;
+DROP TABLE IF EXISTS newsletter_subscribers;
 
 -- Users table (authentication)
 CREATE TABLE users (
@@ -141,19 +142,27 @@ CREATE TABLE bookings (
     user_id VARCHAR(36) NOT NULL,
     salon_id VARCHAR(36) NOT NULL,
     service_id VARCHAR(36) NOT NULL,
+    staff_id VARCHAR(36),
     booking_date DATE NOT NULL,
     booking_time TIME NOT NULL,
-    status ENUM('pending', 'confirmed', 'completed', 'cancelled') DEFAULT 'confirmed',
+    status ENUM('pending', 'confirmed', 'completed', 'cancelled') DEFAULT 'pending',
+    price_paid DECIMAL(10,2),
+    coins_used INT DEFAULT 0,
+    coin_currency_value DECIMAL(10,2) DEFAULT 0,
+    discount_amount DECIMAL(10,2) DEFAULT 0,
+    coupon_code VARCHAR(50),
     notes TEXT,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
     FOREIGN KEY (salon_id) REFERENCES salons(id) ON DELETE CASCADE,
     FOREIGN KEY (service_id) REFERENCES services(id) ON DELETE CASCADE,
+    FOREIGN KEY (staff_id) REFERENCES staff_profiles(id) ON DELETE SET NULL,
     INDEX idx_user_id (user_id),
     INDEX idx_salon_id (salon_id),
     INDEX idx_booking_date (booking_date),
-    INDEX idx_status (status)
+    INDEX idx_status (status),
+    INDEX idx_staff_id (staff_id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- Platform Admins table
@@ -303,6 +312,122 @@ CREATE TABLE platform_orders (
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     INDEX idx_user_id (user_id),
     INDEX idx_status (status)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- Newsletter Subscribers table
+CREATE TABLE newsletter_subscribers (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    email VARCHAR(255) NOT NULL UNIQUE,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    INDEX idx_email (email)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- Customer Salon Profiles (Clinical/Health Profile)
+CREATE TABLE customer_salon_profiles (
+    id VARCHAR(36) PRIMARY KEY DEFAULT (UUID()),
+    user_id VARCHAR(36) NOT NULL,
+    salon_id VARCHAR(36) NOT NULL,
+    date_of_birth DATE,
+    skin_type VARCHAR(50),
+    skin_issues TEXT, -- Stored as comma-separated or JSON string
+    allergy_records TEXT,
+    medical_conditions TEXT,
+    notes TEXT,
+    concern_photo_url VARCHAR(255),
+    concern_photo_public_id VARCHAR(255),
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+    FOREIGN KEY (salon_id) REFERENCES salons(id) ON DELETE CASCADE,
+    UNIQUE KEY unique_user_salon_profile (user_id, salon_id),
+    INDEX idx_user_salon (user_id, salon_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- Add loyalty_points to customer_salon_profiles
+ALTER TABLE customer_salon_profiles ADD COLUMN loyalty_points INT DEFAULT 0 AFTER concern_photo_public_id;
+
+-- loyalty_programs table
+CREATE TABLE loyalty_programs (
+    id VARCHAR(36) NOT NULL PRIMARY KEY,
+    salon_id VARCHAR(36) NOT NULL,
+    program_name VARCHAR(255) DEFAULT 'Loyalty Program',
+    is_active TINYINT(1) DEFAULT 0,
+    points_per_currency_unit DECIMAL(10, 2) DEFAULT 1.00,
+    min_points_redemption INT DEFAULT 100,
+    signup_bonus_points INT DEFAULT 0,
+    description TEXT,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    UNIQUE KEY unique_salon (salon_id),
+    FOREIGN KEY (salon_id) REFERENCES salons(id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- loyalty_rewards table
+CREATE TABLE loyalty_rewards (
+    id VARCHAR(36) NOT NULL PRIMARY KEY,
+    salon_id VARCHAR(36) NOT NULL,
+    name VARCHAR(255) NOT NULL,
+    description TEXT,
+    points_required INT NOT NULL,
+    discount_amount DECIMAL(10, 2) DEFAULT 0.00,
+    is_active TINYINT(1) DEFAULT 1,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (salon_id) REFERENCES salons(id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- loyalty_transactions table
+CREATE TABLE loyalty_transactions (
+    id VARCHAR(36) NOT NULL PRIMARY KEY,
+    salon_id VARCHAR(36) NOT NULL,
+    user_id VARCHAR(36) NOT NULL,
+    points INT NOT NULL,
+    transaction_type ENUM('earned', 'redeemed', 'adjusted', 'bonus', 'refunded') NOT NULL,
+    reference_id VARCHAR(36),
+    description VARCHAR(255),
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (salon_id) REFERENCES salons(id) ON DELETE CASCADE,
+    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- coin_transactions table
+CREATE TABLE coin_transactions (
+    id VARCHAR(36) PRIMARY KEY,
+    user_id VARCHAR(36) NOT NULL,
+    amount DECIMAL(15,2) NOT NULL,
+    transaction_type ENUM('earned', 'spent', 'refunded', 'admin_adjustment') NOT NULL,
+    description TEXT,
+    reference_id VARCHAR(36),
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- Treatment Records (Clinical Session Notes)
+CREATE TABLE treatment_records (
+    id VARCHAR(36) PRIMARY KEY DEFAULT (UUID()),
+    booking_id VARCHAR(36),
+    user_id VARCHAR(36) NOT NULL,
+    salon_id VARCHAR(36) NOT NULL,
+    service_name_manual VARCHAR(255),
+    record_date DATE,
+    treatment_details TEXT,
+    products_used TEXT,
+    skin_reaction TEXT,
+    improvement_notes TEXT,
+    recommended_next_treatment TEXT,
+    post_treatment_instructions TEXT,
+    follow_up_reminder_date DATE,
+    marketing_notes TEXT,
+    before_photo_url TEXT,
+    before_photo_public_id VARCHAR(255),
+    after_photo_url TEXT,
+    after_photo_public_id VARCHAR(255),
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    FOREIGN KEY (booking_id) REFERENCES bookings(id) ON DELETE SET NULL,
+    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+    FOREIGN KEY (salon_id) REFERENCES salons(id) ON DELETE CASCADE,
+    INDEX idx_booking_id (booking_id),
+    INDEX idx_user_salon_records (user_id, salon_id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- Insert default subscription plans

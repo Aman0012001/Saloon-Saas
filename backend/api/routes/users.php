@@ -31,12 +31,13 @@ if ($method === 'PUT' && $uriParts[1] === 'me') {
 
     $stmt = $db->prepare("
         UPDATE profiles SET
-            full_name = ?, phone = ?, avatar_url = ?, avatar_public_id = ?
+            full_name = ?, phone = ?, address = ?, avatar_url = ?, avatar_public_id = ?
         WHERE user_id = ?
     ");
     $stmt->execute([
         $data['full_name'] ?? null,
         $data['phone'] ?? null,
+        $data['address'] ?? null,
         $data['avatar_url'] ?? null,
         $data['avatar_public_id'] ?? null,
         $userData['user_id']
@@ -97,6 +98,48 @@ if ($method === 'GET' && count($uriParts) === 2) {
     }
 
     sendResponse(['user' => $user]);
+}
+
+// PUT /api/users/:userId - Update user profile by ID (Staff/Owner capability)
+if ($method === 'PUT' && count($uriParts) === 2 && $uriParts[1] !== 'me') {
+    $userData = Auth::getUserFromToken();
+    if (!$userData) {
+        sendResponse(['error' => 'Unauthorized'], 401);
+    }
+
+    $targetUserId = $uriParts[1];
+    $data = getRequestBody();
+    $salonId = $data['salon_id'] ?? null;
+
+    if (!$salonId) {
+        sendResponse(['error' => 'Salon ID is required to verify permissions'], 400);
+    }
+
+    // Verify requesting user is staff/owner/admin at the specified salon
+    $stmt = $db->prepare("SELECT role FROM user_roles WHERE user_id = ? AND salon_id = ?");
+    $stmt->execute([$userData['user_id'], $salonId]);
+    $role = $stmt->fetch();
+
+    if (!$role) {
+        sendResponse(['error' => 'Forbidden: You do not have permission in this salon'], 403);
+    }
+
+    // Update the profile
+    $stmt = $db->prepare("
+        UPDATE profiles SET
+            full_name = ?, phone = ?, address = ?, avatar_url = ?, avatar_public_id = ?
+        WHERE user_id = ?
+    ");
+    $stmt->execute([
+        $data['full_name'] ?? null,
+        $data['phone'] ?? null,
+        $data['address'] ?? null,
+        $data['avatar_url'] ?? null,
+        $data['avatar_public_id'] ?? null,
+        $targetUserId
+    ]);
+
+    sendResponse(['success' => true, 'message' => 'User profile updated successfully']);
 }
 
 sendResponse(['error' => 'User route not found'], 404);

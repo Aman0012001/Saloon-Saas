@@ -13,7 +13,8 @@ $origin = $_SERVER['HTTP_ORIGIN'] ?? '';
 if (!empty($origin)) {
     header("Access-Control-Allow-Origin: $origin");
     header('Access-Control-Allow-Credentials: true');
-} else {
+}
+else {
     header("Access-Control-Allow-Origin: *");
 }
 
@@ -32,7 +33,28 @@ if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
 // ==========================================
 
 ob_start(); // Prevent accidental output
-ini_set('display_errors', 1);
+
+// Bulletproof Error Handling
+function handleFatalError()
+{
+    $error = error_get_last();
+    if ($error && ($error['type'] === E_ERROR || $error['type'] === E_PARSE || $error['type'] === E_CORE_ERROR || $error['type'] === E_COMPILE_ERROR)) {
+        if (ob_get_level() > 0)
+            ob_end_clean();
+        http_response_code(500);
+        header('Content-Type: application/json');
+        echo json_encode([
+            'error' => 'Fatal Error in Local Backend',
+            'message' => $error['message'],
+            'file' => $error['file'],
+            'line' => $error['line']
+        ]);
+        exit();
+    }
+}
+register_shutdown_function('handleFatalError');
+
+ini_set('display_errors', 0);
 error_reporting(E_ALL);
 
 header('Content-Type: application/json; charset=UTF-8');
@@ -40,15 +62,37 @@ header('X-Backend-Server: Salon-PHP-API');
 
 function sendResponse($data, $statusCode = 200)
 {
-    ob_end_clean(); // Clear any accidental output before sending JSON
+    if (ob_get_level() > 0) {
+        ob_end_clean(); // Clear any accidental output before sending JSON
+    }
     http_response_code($statusCode);
-    echo json_encode(['data' => $data]);
+    header('Content-Type: application/json; charset=UTF-8');
+
+    $payload = ['data' => $data];
+    if (isset($data['error'])) {
+        $payload = $data; // Don't wrap if it's already an error structure
+    }
+
+    $json = json_encode($payload);
+    if ($json === false) {
+        echo json_encode([
+            'error' => 'JSON Encode Error',
+            'message' => json_last_error_msg()
+        ]);
+    }
+    else {
+        echo $json;
+    }
     exit();
 }
 
 function getRequestBody()
 {
-    return json_decode(file_get_contents('php://input'), true);
+    $input = file_get_contents('php://input');
+    if (empty($input))
+        return [];
+    $data = json_decode($input, true);
+    return is_array($data) ? $data : [];
 }
 
 // 3. ==========================================
@@ -105,8 +149,9 @@ try {
                 if ($stmt->fetchColumn()) {
                     $effectiveRole = 'admin';
                 }
-            } catch (Exception $e) {
-                // Ignore DB errors here, fall back to token role
+            }
+            catch (Exception $e) {
+            // Ignore DB errors here, fall back to token role
             }
 
             if ($effectiveRole === 'salon_owner')
@@ -118,7 +163,7 @@ try {
 
             // If specific roles are required
             if (!empty($allowedRoles)) {
-                $isAllowed = in_array($effectiveRole, (array) $allowedRoles);
+                $isAllowed = in_array($effectiveRole, (array)$allowedRoles);
 
                 // Also allow super_admin to everything
                 if ($effectiveRole === 'super_admin')
@@ -131,6 +176,11 @@ try {
 
             // If a specific permission is required
             if ($requiredPermission) {
+                // BYPASS: Super Admin has all permissions
+                if ($effectiveRole === 'super_admin') {
+                    return $userData;
+                }
+
                 $salonId = $explicitSalonId ?: ($_GET['salon_id'] ?? $_POST['salon_id'] ?? null);
 
                 // If not in GET/POST, check request body
@@ -145,18 +195,27 @@ try {
                         $db = Database::getInstance()->getConnection();
                         $stmt = $db->prepare("SELECT role FROM user_roles WHERE user_id = ? AND salon_id = ?");
                         $stmt->execute([$userData['user_id'], $salonId]);
-                        $actualRole = $stmt->fetchColumn();
+                        $allRoles = $stmt->fetchAll(PDO::FETCH_COLUMN);
 
-                        if ($actualRole !== 'owner' && $actualRole !== 'super_admin') {
-                            sendResponse(['error' => "Forbidden - Missing required permission: $requiredPermission"], 403);
+                        // Prioritize the most powerful role
+                        $actualRole = null;
+                        if (in_array('super_admin', $allRoles))
+                            $actualRole = 'super_admin';
+                        elseif (in_array('owner', $allRoles))
+                            $actualRole = 'owner';
+                        elseif (in_array('manager', $allRoles))
+                            $actualRole = 'manager';
+                        elseif (in_array('staff', $allRoles))
+                            $actualRole = 'staff';
+
+                        // Allow owners, super_admins, and managers to bypass granular checks
+                        // Also allow 'staff' to bypass 'manage_bookings' and 'view_bookings' as they are core functions
+                        $isBypassRole = in_array($actualRole, ['owner', 'super_admin', 'manager']);
+                        $isStaffBypass = ($actualRole === 'staff' && in_array($requiredPermission, ['manage_bookings', 'view_bookings']));
+
+                        if (!$isBypassRole && !$isStaffBypass) {
+                            sendResponse(['error' => "Forbidden - Missing required permission: $requiredPermission (Role in salon: " . ($actualRole ?: 'none') . ")"], 403);
                         }
-                    }
-                } else {
-                    // If permission is required but no salon_id found, we might want to fail safe
-                    // unless it's a global permission (not implemented yet).
-                    // For now, let's just log it or allow it if it's super_admin.
-                    if ($userData['role'] !== 'super_admin') {
-                        // sendResponse(['error' => 'Forbidden - Salon context missing for permission check'], 403);
                     }
                 }
             }
@@ -327,6 +386,7 @@ try {
             break;
     }
 
-} catch (Exception $e) {
+}
+catch (Exception $e) {
     sendResponse(['error' => 'System error: ' . $e->getMessage()], 500);
 }

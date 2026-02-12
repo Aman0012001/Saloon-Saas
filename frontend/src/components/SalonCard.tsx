@@ -27,7 +27,7 @@ const SalonCard = ({
       className="group cursor-pointer space-y-5"
     >
       {/* Cover Image with Badge */}
-      <div className="relative h-[300px] md:h-[350px] rounded-[2.5rem] overflow-hidden shadow-xl transition-all duration-700 hover:shadow-2xl active:scale-95">
+      <div className="relative h-[200px] md:h-[250px] rounded-[2.5rem] overflow-hidden shadow-xl transition-all duration-700 hover:shadow-2xl active:scale-95">
         <img
           src={coverImage}
           alt={name}

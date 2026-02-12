@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useAuth } from "@/hooks/useAuth";
 import { useSalon } from "@/hooks/useSalon";
 import { Button } from "@/components/ui/button";
@@ -9,7 +9,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/hooks/use-toast";
 import api from "@/services/api";
-import { Calendar, Heart, AlertCircle, Pill, FileText, Save, Loader2 } from "lucide-react";
+import { Calendar, Heart, AlertCircle, Pill, FileText, Save, Loader2, Image as ImageIcon, Camera } from "lucide-react";
 import {
     Select,
     SelectContent,
@@ -37,7 +37,11 @@ export default function CustomerHealthProfile({ userId, userName, onClose }: Cus
         allergies: [] as string[],
         medical_conditions: [] as string[],
         notes: "",
+        concern_photo_url: "",
+        concern_photo_public_id: "",
     });
+
+    const [uploading, setUploading] = useState(false);
 
     const [newSkinIssue, setNewSkinIssue] = useState("");
     const [newAllergy, setNewAllergy] = useState("");
@@ -49,20 +53,49 @@ export default function CustomerHealthProfile({ userId, userName, onClose }: Cus
         setLoading(true);
         try {
             const data = await api.customerRecords.getProfile(userId, currentSalon.id);
-            if (data) {
+            if (data && data.profile) {
+                const profileData = data.profile;
                 setProfile({
-                    date_of_birth: data.date_of_birth || "",
-                    skin_type: data.skin_type || "",
-                    skin_issues: data.skin_issues || [],
-                    allergies: data.allergies || [],
-                    medical_conditions: data.medical_conditions || [],
-                    notes: data.notes || "",
+                    date_of_birth: profileData.date_of_birth || "",
+                    skin_type: profileData.skin_type || "",
+                    skin_issues: typeof profileData.skin_issues === 'string'
+                        ? profileData.skin_issues.split(',').map((s: string) => s.trim()).filter(Boolean)
+                        : profileData.skin_issues || [],
+                    allergies: typeof profileData.allergy_records === 'string'
+                        ? profileData.allergy_records.split(',').map((s: string) => s.trim()).filter(Boolean)
+                        : profileData.allergy_records || [],
+                    medical_conditions: typeof profileData.medical_conditions === 'string'
+                        ? profileData.medical_conditions.split(',').map((s: string) => s.trim()).filter(Boolean)
+                        : profileData.medical_conditions || [],
+                    notes: profileData.notes || "",
+                    concern_photo_url: profileData.concern_photo_url || "",
+                    concern_photo_public_id: profileData.concern_photo_public_id || "",
                 });
             }
         } catch (error: any) {
             console.error("Error loading profile:", error);
         } finally {
             setLoading(false);
+        }
+    };
+
+    const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+        const file = e.target.files?.[0];
+        if (!file) return;
+
+        setUploading(true);
+        try {
+            const response = await api.uploads.upload(file);
+            setProfile(prev => ({
+                ...prev,
+                concern_photo_url: response.url,
+                concern_photo_public_id: response.public_id
+            }));
+            toast({ title: "Photo Uploaded", description: "Concern photo added to profile." });
+        } catch (error: any) {
+            toast({ title: "Upload Failed", description: error.message, variant: "destructive" });
+        } finally {
+            setUploading(false);
         }
     };
 
@@ -112,6 +145,10 @@ export default function CustomerHealthProfile({ userId, userName, onClose }: Cus
         }));
     };
 
+    useEffect(() => {
+        loadProfile();
+    }, []);
+
     return (
         <div className="space-y-6">
             <div className="flex items-center justify-between">
@@ -123,6 +160,55 @@ export default function CustomerHealthProfile({ userId, userName, onClose }: Cus
                     {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : "Load Profile"}
                 </Button>
             </div>
+
+            {/* Concern Photo Section */}
+            <Card className="border-none shadow-sm rounded-2xl overflow-hidden">
+                <CardHeader className="pb-3 px-6">
+                    <CardTitle className="text-lg font-bold flex items-center gap-2">
+                        <ImageIcon className="w-5 h-5 text-primary" />
+                        Skin Concern Photo
+                    </CardTitle>
+                </CardHeader>
+                <CardContent className="px-6 pb-6">
+                    <div className="flex flex-col md:flex-row gap-6 items-center">
+                        <div className="w-32 h-32 bg-secondary/30 rounded-2xl overflow-hidden flex items-center justify-center relative group hover:bg-secondary/50 transition-colors border-2 border-dashed border-slate-200">
+                            {profile.concern_photo_url ? (
+                                <img src={profile.concern_photo_url} alt="Skin concern" className="w-full h-full object-cover" />
+                            ) : (
+                                <ImageIcon className="w-8 h-8 text-slate-400" />
+                            )}
+                            <input
+                                type="file"
+                                accept="image/*"
+                                className="absolute inset-0 opacity-0 cursor-pointer"
+                                onChange={handleImageUpload}
+                                disabled={uploading}
+                            />
+                            {uploading && (
+                                <div className="absolute inset-0 bg-white/60 flex items-center justify-center">
+                                    <Loader2 className="w-6 h-6 animate-spin text-primary" />
+                                </div>
+                            )}
+                        </div>
+                        <div className="flex-1 text-center md:text-left">
+                            <p className="text-sm text-muted-foreground font-medium mb-2">
+                                {profile.concern_photo_url ? "Click image to change or update your concern photo." : "Upload a photo of your skin concern for clinical review."}
+                            </p>
+                            <Button variant="outline" size="sm" className="rounded-xl relative">
+                                <ImageIcon className="w-4 h-4 mr-2" />
+                                {profile.concern_photo_url ? "Change Photo" : "Upload Photo"}
+                                <input
+                                    type="file"
+                                    accept="image/*"
+                                    className="absolute inset-0 opacity-0 cursor-pointer"
+                                    onChange={handleImageUpload}
+                                    disabled={uploading}
+                                />
+                            </Button>
+                        </div>
+                    </div>
+                </CardContent>
+            </Card>
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 {/* Basic Info */}
@@ -284,6 +370,6 @@ export default function CustomerHealthProfile({ userId, userName, onClose }: Cus
                     Save Profile
                 </Button>
             </div>
-        </div>
+        </div >
     );
 }

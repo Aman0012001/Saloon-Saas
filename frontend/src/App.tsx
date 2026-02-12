@@ -218,11 +218,6 @@ const App = () => {
                         <StaffPage />
                       </RoleProtectedRoute>
                     } />
-                    <Route path="/salon/staff/messages" element={
-                      <RoleProtectedRoute allowedRole="SALON_OWNER">
-                        <StaffMessagesPage />
-                      </RoleProtectedRoute>
-                    } />
                     <Route path="/salon/staff/:id" element={
                       <RoleProtectedRoute allowedRole="SALON_OWNER">
                         <StaffDetailsPage />
@@ -295,11 +290,11 @@ const App = () => {
                         <StaffLeavesPage />
                       </RoleProtectedRoute>
                     } />
-                    <Route path="/staff/messages" element={
+                    {/* <Route path="/staff/messages" element={
                       <RoleProtectedRoute allowedRole="STAFF">
                         <StaffMessagesPage />
                       </RoleProtectedRoute>
-                    } />
+                    } /> */}
                     <Route path="/staff/customers" element={
                       <RoleProtectedRoute allowedRole="STAFF">
                         <CustomersPage />

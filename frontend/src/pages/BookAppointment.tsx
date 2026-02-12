@@ -10,6 +10,7 @@ import {
   Phone,
   Star,
   CheckCircle,
+  CheckCircle2,
   MessageSquare,
   Coins,
   Sparkles,
@@ -233,7 +234,7 @@ const BookAppointment = () => {
           setSelectedServices([preselected]);
           setActiveCategory(preselected.category);
           setBookingType('service');
-          setStep(3); // Jump to Add-ons
+          setStep(2); // Jump to Add-ons
         }
       }
     } catch (error) {
@@ -263,7 +264,7 @@ const BookAppointment = () => {
   }, [user]);
 
   const handleBooking = async () => {
-    if ((selectedServices.length === 0 && bookingType === 'service') || !selectedDate || !selectedTime || !salonId || !policyAccepted) {
+    if (!selectedDate || !selectedTime || !salonId || !policyAccepted) {
       toast({ title: "Incomplete Ritual", description: "Please complete all steps to reserve your session.", variant: "destructive" });
       return;
     }
@@ -285,17 +286,18 @@ const BookAppointment = () => {
         discount_amount: 0
       };
 
-      if (bookingType === 'decide_later') {
+      if (bookingType === 'decide_later' || (selectedServices.length === 0 && selectedAddOns.length === 0)) {
         await api.bookings.create({
           ...bookingPayload,
-          service_id: null
+          service_id: selectedServices[0]?.id || null, // Default to first service if available, else null
+          price_paid: subtotal || 0
         });
       } else {
         for (const service of [...selectedServices, ...selectedAddOns]) {
           await api.bookings.create({
             ...bookingPayload,
             service_id: service.id,
-            price_paid: service.price // Logic for multiple services might need refinement later
+            price_paid: service.price
           });
         }
       }
@@ -304,11 +306,47 @@ const BookAppointment = () => {
         title: "Booking Ritual Initiated!",
         description: "Your session is being prepared by our stylists."
       });
-      setStep(8);
+      setStep(6);
     } catch (error: any) {
       toast({ title: "Ritual Interrupted", description: error.message, variant: "destructive" });
     } finally {
       setBooking(false);
+    }
+  };
+
+  const applyCoupon = async () => {
+    if (!couponCode.trim()) {
+      setCouponError("Please enter a coupon code");
+      return;
+    }
+
+    try {
+      // Call API to validate coupon
+      const response = await api.get(`/coupons/validate/${couponCode}`);
+      const coupon = response.data;
+
+      if (coupon && coupon.is_active) {
+        setAppliedCoupon({
+          code: coupon.code,
+          discount: coupon.discount_type === 'percentage'
+            ? (calculateTotal() * coupon.discount_value / 100)
+            : coupon.discount_value,
+          type: coupon.discount_type
+        });
+        setCouponError("");
+        toast({
+          title: "Coupon Applied!",
+          description: `You saved RM ${coupon.discount_type === 'percentage'
+            ? (calculateTotal() * coupon.discount_value / 100).toFixed(2)
+            : coupon.discount_value.toFixed(2)}`,
+        });
+      } else {
+        setCouponError("Invalid or expired coupon code");
+        toast({ title: "Invalid Coupon", description: "This coupon code is not valid.", variant: "destructive" });
+      }
+    } catch (error) {
+      setCouponError("Invalid coupon code");
+      toast({ title: "Invalid Coupon", description: "This coupon code is not valid.", variant: "destructive" });
     }
   };
 
@@ -338,13 +376,11 @@ const BookAppointment = () => {
   const getStepTitle = (s: number) => {
     switch (s) {
       case 1: return "Welcome to Noam Skin";
-      case 2: return "Choose Your Ritual";
-      case 3: return "Personalize Your Glow";
-      case 4: return "Select Your Stylist";
-      case 5: return "Registry Calendar";
-      case 6: return "Member Details";
-      case 7: return "Policy Review";
-      case 8: return "Session Reserved";
+      case 2: return "Select Your Stylist";
+      case 3: return "Registry Calendar";
+      case 4: return "Member Details";
+      case 5: return "Policy Review";
+      case 6: return "Session Reserved";
       default: return "";
     }
   };
@@ -365,7 +401,7 @@ const BookAppointment = () => {
         <div className="max-w-4xl mx-auto space-y-12">
 
           {/* Progress Header */}
-          {step < 8 && (
+          {step < 6 && (
             <div className="space-y-8">
               <div className="flex items-center gap-6">
                 <Button
@@ -377,13 +413,13 @@ const BookAppointment = () => {
                   <ArrowLeft className="h-5 w-5" />
                 </Button>
                 <div>
-                  <span className="text-[10px] font-black text-slate-400 uppercase tracking-[0.3em] block mb-1">Step 0{step} of 07</span>
+                  <span className="text-[10px] font-black text-slate-400 uppercase tracking-[0.3em] block mb-1">Step 0{step} of 05</span>
                   <h1 className="text-3xl md:text-4xl font-black text-slate-900 tracking-tight uppercase">{getStepTitle(step)}</h1>
                 </div>
               </div>
 
               <div className="flex gap-2 h-1.5 px-1">
-                {[1, 2, 3, 4, 5, 6, 7].map((s) => (
+                {[1, 2, 3, 4, 5].map((s) => (
                   <div key={s} className={`flex-1 rounded-full transition-all duration-500 ${step >= s ? (step === s ? 'bg-accent w-2/3' : 'bg-slate-900') : 'bg-slate-100'}`} />
                 ))}
               </div>
@@ -420,217 +456,10 @@ const BookAppointment = () => {
               </motion.div>
             )}
 
-            {/* STEP 2: CHOOSE SERVICE CATEGORY & SPECIAL OPTIONS */}
+            {/* STEP 2: SELECT THERAPIST (was Step 3) */}
             {step === 2 && (
               <motion.div
                 key="step2"
-                initial={{ opacity: 0, x: 20 }}
-                animate={{ opacity: 1, x: 0 }}
-                exit={{ opacity: 0, x: -20 }}
-                className="space-y-12"
-              >
-                {/* Main Categories */}
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                  {mainCategories.map((cat) => (
-                    <Card
-                      key={cat.id}
-                      onClick={() => !cat.disabled && setActiveCategory(cat.id)}
-                      className={cn(
-                        "relative overflow-hidden cursor-pointer transition-all duration-500 p-8 rounded-[2.5rem] border-none shadow-sm hover:shadow-xl",
-                        activeCategory === cat.id ? "bg-slate-900 text-white translate-y-[-8px]" : "bg-white text-slate-900 hover:bg-slate-50",
-                        cat.disabled && "opacity-40 cursor-not-allowed hidden md:flex flex-col grayscale"
-                      )}
-                    >
-                      <div className="space-y-4">
-                        <div className={cn("w-12 h-12 rounded-2xl flex items-center justify-center", activeCategory === cat.id ? "bg-accent/20" : "bg-slate-50")}>
-                          <cat.icon className={cn("w-6 h-6", activeCategory === cat.id ? "text-accent" : "text-slate-400")} />
-                        </div>
-                        <h3 className="text-2xl font-black uppercase tracking-tight">{cat.label}</h3>
-                      </div>
-                      <ChevronRight className={cn("absolute bottom-8 right-8 w-6 h-6 transition-transform", activeCategory === cat.id ? "text-accent translate-x-2" : "text-slate-100")} />
-                    </Card>
-                  ))}
-                </div>
-
-                {/* Sub-Selection for Facial */}
-                {activeCategory === 'Facial' && (
-                  <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="space-y-8 pt-6">
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                      {[
-                        { id: 'custom', label: 'Custom Facial', desc: 'Bespoke treatment based on your skin condition.' },
-                        { id: 'advanced', label: 'Advanced Treatments', desc: 'Medical-grade solutions for targeted results.' }
-                      ].map((type) => (
-                        <button
-                          key={type.id}
-                          onClick={() => setFacialType(type.id as any)}
-                          className={cn(
-                            "p-10 rounded-[2.5rem] text-left transition-all duration-500 border-2",
-                            facialType === type.id ? "border-accent bg-accent/5 ring-4 ring-accent/10" : "border-slate-100 bg-white hover:border-slate-200"
-                          )}
-                        >
-                          <h4 className="text-2xl font-black text-slate-900 uppercase tracking-tighter mb-2">{type.label}</h4>
-                          <p className="text-slate-500 font-medium text-sm leading-relaxed">{type.desc}</p>
-                        </button>
-                      ))}
-                    </div>
-
-                    {/* Skin Concerns Selection */}
-                    {facialType && (
-                      <div className="space-y-6 animate-in fade-in slide-in-from-top-4 duration-500">
-                        <Label className="text-xs font-black uppercase tracking-widest text-slate-400 ml-2">What is your main skin concern?</Label>
-                        <div className="flex flex-wrap gap-3">
-                          {skinConcerns.map((concern) => (
-                            <button
-                              key={concern}
-                              onClick={() => setSelectedConcern(concern)}
-                              className={cn(
-                                "px-8 py-4 rounded-full font-black text-[11px] uppercase tracking-widest transition-all",
-                                selectedConcern === concern ? "bg-slate-900 text-white shadow-xl" : "bg-white text-slate-400 border border-slate-100 hover:border-slate-200"
-                              )}
-                            >
-                              {concern}
-                            </button>
-                          ))}
-                        </div>
-                      </div>
-                    )}
-                  </motion.div>
-                )}
-
-                {/* Additional Options */}
-                <div className="space-y-6 pt-12 border-t border-slate-100">
-                  <Label className="text-xs font-black uppercase tracking-widest text-slate-400 ml-2">Additional Options</Label>
-                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                    {[
-                      { id: 'decide_later', label: 'Decide with Beautician', desc: 'RM100 Deposit required', icon: ShieldCheck, accent: true },
-                      { id: 'package', label: 'Buy a Package', desc: 'Save on multiple sessions', icon: Gift },
-                      { id: 'membership', label: 'Start a Membership', desc: 'Exclusive year-long rewards', icon: Gem }
-                    ].map((opt) => (
-                      <button
-                        key={opt.id}
-                        onClick={() => {
-                          setBookingType(opt.id as any);
-                          if (opt.id === 'decide_later') setStep(4); // Go to Therapist selection
-                        }}
-                        className={cn(
-                          "flex items-start gap-4 p-6 rounded-3xl text-left transition-all group",
-                          opt.accent ? "bg-amber-50 border border-amber-100 hover:bg-amber-100" : "bg-white border border-slate-50 hover:border-slate-200"
-                        )}
-                      >
-                        <div className={cn("w-10 h-10 rounded-xl flex items-center justify-center shrink-0", opt.accent ? "bg-amber-200" : "bg-slate-50 group-hover:bg-slate-100")}>
-                          <opt.icon className={cn("w-5 h-5", opt.accent ? "text-amber-700" : "text-slate-400")} />
-                        </div>
-                        <div>
-                          <h5 className="font-black text-slate-900 text-sm uppercase tracking-tight">{opt.label}</h5>
-                          <p className="text-[10px] text-slate-500 font-bold uppercase tracking-tighter opacity-70 mt-1">{opt.desc}</p>
-                        </div>
-                      </button>
-                    ))}
-                  </div>
-                </div>
-
-                {/* Services List (Based on Selection) */}
-                {activeCategory && bookingType === 'service' && (
-                  <div className="space-y-4 pt-12">
-                    <Label className="text-xs font-black uppercase tracking-widest text-slate-400 ml-2">Available Rituals</Label>
-                    <div className="grid grid-cols-1 gap-4">
-                      {services.filter(s => s.category === activeCategory).map(service => {
-                        const isSelected = selectedServices.some(s => s.id === service.id);
-                        return (
-                          <button
-                            key={service.id}
-                            onClick={() => isSelected ? setSelectedServices([]) : setSelectedServices([service])}
-                            className={cn(
-                              "flex items-center justify-between p-8 rounded-[2rem] text-left transition-all border-2",
-                              isSelected ? "border-accent bg-accent/5" : "border-slate-50 bg-white hover:border-slate-200"
-                            )}
-                          >
-                            <div className="space-y-1">
-                              <h4 className="text-xl font-black text-slate-900 uppercase tracking-tight">{service.name}</h4>
-                              <p className="text-sm text-slate-500 font-medium italic">{service.description}</p>
-                              <div className="flex gap-4 mt-4">
-                                <span className="flex items-center gap-1.5 text-[10px] font-black text-slate-400 uppercase tracking-widest"><Clock className="w-3 h-3" /> {service.duration_minutes}m</span>
-                                <span className="flex items-center gap-1.5 text-[10px] font-black text-accent uppercase tracking-widest"><Star className="w-3 h-3 fill-accent" /> TOP RATED</span>
-                              </div>
-                            </div>
-                            <div className="text-right">
-                              <p className="text-2xl font-black text-slate-900">RM {Number(service.price).toFixed(2)}</p>
-                            </div>
-                          </button>
-                        );
-                      })}
-                    </div>
-                  </div>
-                )}
-
-                <Button
-                  onClick={() => setStep(3)}
-                  disabled={selectedServices.length === 0 && bookingType === 'service'}
-                  className="w-full h-20 rounded-[2.5rem] bg-slate-900 text-white font-black text-lg shadow-xl mt-12"
-                >
-                  Continue to Add-Ons
-                </Button>
-              </motion.div>
-            )}
-
-            {/* STEP 3: ADD-ONS */}
-            {step === 3 && (
-              <motion.div
-                key="step3"
-                initial={{ opacity: 0, x: 20 }}
-                animate={{ opacity: 1, x: 0 }}
-                className="space-y-12"
-              >
-                <div className="space-y-6">
-                  <p className="text-base text-slate-500 font-medium italic">Enhance your main ritual with our curated add-on treatments.</p>
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                    {/* Assuming some services are marked as Add-ons or we just show a few */}
-                    {services.filter(s => s.category?.toLowerCase().includes('add')).map((addon) => {
-                      const isSelected = selectedAddOns.some(a => a.id === addon.id);
-                      return (
-                        <button
-                          key={addon.id}
-                          onClick={() => isSelected ? setSelectedAddOns(selectedAddOns.filter(a => a.id !== addon.id)) : setSelectedAddOns([...selectedAddOns, addon])}
-                          className={cn(
-                            "p-8 rounded-[2rem] text-left transition-all border-2 flex justify-between items-center",
-                            isSelected ? "border-accent bg-accent/5" : "border-slate-50 bg-white hover:border-slate-100"
-                          )}
-                        >
-                          <div>
-                            <h4 className="font-black text-slate-900 uppercase tracking-tight">{addon.name}</h4>
-                            <p className="text-xs text-slate-400 font-bold uppercase mt-1">+ RM {addon.price}</p>
-                          </div>
-                          <PlusCircle className={cn("w-6 h-6", isSelected ? "text-accent" : "text-slate-200")} />
-                        </button>
-                      );
-                    })}
-                    {/* Static placeholders if no dynamic ones found */}
-                    {services.filter(s => s.category?.toLowerCase().includes('add')).length === 0 && (
-                      <>
-                        <div className="p-8 rounded-[2.5rem] bg-slate-50/50 border border-dashed border-slate-200 flex flex-col items-center justify-center text-center space-y-2 opacity-50">
-                          <div className="w-10 h-10 rounded-full bg-slate-100 flex items-center justify-center"><AlertCircle className="w-5 h-5 text-slate-300" /></div>
-                          <p className="text-[10px] font-black uppercase text-slate-400 tracking-widest">No add-ons available</p>
-                        </div>
-                        <div className="p-8 rounded-[2.5rem] bg-slate-50/50 border border-dashed border-slate-200 flex flex-col items-center justify-center text-center space-y-2 opacity-30">
-                          <div className="w-10 h-10 rounded-full bg-slate-100 flex items-center justify-center"><AlertCircle className="w-5 h-5 text-slate-300" /></div>
-                          <p className="text-[10px] font-black uppercase text-slate-400 tracking-widest">Coming Soon</p>
-                        </div>
-                      </>
-                    )}
-                  </div>
-                </div>
-
-                <div className="flex gap-4">
-                  <Button onClick={() => setStep(2)} variant="outline" className="h-20 rounded-[2.5rem] px-12 font-black uppercase tracking-widest">Back</Button>
-                  <Button onClick={() => setStep(4)} className="flex-1 h-20 rounded-[2.5rem] bg-slate-900 text-white font-black text-lg shadow-xl">Choose Therapist</Button>
-                </div>
-              </motion.div>
-            )}
-
-            {/* STEP 4: SELECT THERAPIST */}
-            {step === 4 && (
-              <motion.div
-                key="step4"
                 initial={{ opacity: 0, x: 20 }}
                 animate={{ opacity: 1, x: 0 }}
                 className="space-y-12"
@@ -674,14 +503,15 @@ const BookAppointment = () => {
                 </div>
 
                 <div className="flex gap-4">
-                  <Button onClick={() => setStep(3)} variant="outline" className="h-20 rounded-[2.5rem] px-12 font-black uppercase tracking-widest">Back</Button>
-                  <Button onClick={() => setStep(5)} className="flex-1 h-20 rounded-[2.5rem] bg-slate-900 text-white font-black text-lg shadow-xl">Select Time & Date</Button>
+                  <Button onClick={() => setStep(1)} variant="outline" className="h-20 rounded-[2.5rem] px-12 font-black uppercase tracking-widest">Back</Button>
+                  <Button onClick={() => setStep(3)} className="flex-1 h-20 rounded-[2.5rem] bg-slate-900 text-white font-black text-lg shadow-xl">Select Time & Date</Button>
                 </div>
               </motion.div>
             )}
 
-            {/* STEP 5: CHOOSE DATE & TIME */}
-            {step === 5 && (
+
+            {/* STEP 3: REGISTRY CALENDAR - DATE & TIME */}
+            {step === 3 && (
               <motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} className="space-y-12">
                 <div className="grid grid-cols-1 lg:grid-cols-2 gap-12">
                   <Card className="border-none shadow-sm bg-white rounded-[3rem] p-10">
@@ -689,7 +519,13 @@ const BookAppointment = () => {
                       mode="single"
                       selected={selectedDate}
                       onSelect={setSelectedDate}
-                      disabled={(date) => date < new Date() || date.getDay() === 0}
+                      disabled={(date) => {
+                        const today = new Date();
+                        today.setHours(0, 0, 0, 0);
+                        const compareDate = new Date(date);
+                        compareDate.setHours(0, 0, 0, 0);
+                        return compareDate < today || date.getDay() === 0;
+                      }}
                       className="mx-auto"
                     />
                   </Card>
@@ -729,14 +565,14 @@ const BookAppointment = () => {
                 </div>
 
                 <div className="flex gap-4">
-                  <Button onClick={() => setStep(4)} variant="outline" className="h-20 rounded-[2.5rem] px-12 font-black uppercase tracking-widest">Back</Button>
-                  <Button onClick={() => setStep(6)} disabled={!selectedDate || !selectedTime} className="flex-1 h-20 rounded-[2.5rem] bg-slate-900 text-white font-black text-lg shadow-xl">Complete Details</Button>
+                  <Button onClick={() => setStep(2)} variant="outline" className="h-20 rounded-[2.5rem] px-12 font-black uppercase tracking-widest">Back</Button>
+                  <Button onClick={() => setStep(4)} disabled={!selectedDate || !selectedTime} className="flex-1 h-20 rounded-[2.5rem] bg-slate-900 text-white font-black text-lg shadow-xl">Complete Details</Button>
                 </div>
               </motion.div>
             )}
 
-            {/* STEP 6: PERSONAL DETAILS */}
-            {step === 6 && (
+            {/* STEP 4: PERSONAL DETAILS (was Step 5) */}
+            {step === 4 && (
               <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="space-y-12">
                 <Card className="border-none shadow-sm bg-white rounded-[3rem] p-12 overflow-hidden relative">
                   <div className="absolute top-0 right-0 w-32 h-32 bg-accent/5 rounded-bl-[5rem]" />
@@ -783,14 +619,14 @@ const BookAppointment = () => {
                 </Card>
 
                 <div className="flex gap-4">
-                  <Button onClick={() => setStep(5)} variant="outline" className="h-20 rounded-[2.5rem] px-12 font-black uppercase tracking-widest">Back</Button>
-                  <Button onClick={() => validateMemberDetails() && setStep(7)} className="flex-1 h-20 rounded-[2.5rem] bg-slate-900 text-white font-black text-lg shadow-xl">Review & Policy</Button>
+                  <Button onClick={() => setStep(3)} variant="outline" className="h-20 rounded-[2.5rem] px-12 font-black uppercase tracking-widest">Back</Button>
+                  <Button onClick={() => setStep(5)} className="flex-1 h-20 rounded-[2.5rem] bg-slate-900 text-white font-black text-lg shadow-xl">Review & Policy</Button>
                 </div>
               </motion.div>
             )}
 
-            {/* STEP 7: POLICY REVIEW */}
-            {step === 7 && (
+            {/* STEP 5: POLICY REVIEW (was Step 6) */}
+            {step === 5 && (
               <motion.div initial={{ opacity: 0, scale: 0.9 }} animate={{ opacity: 1, scale: 1 }} className="space-y-12">
                 <Card className="border-none shadow-sm bg-slate-900 text-white rounded-[3rem] p-12 space-y-12">
                   <div className="space-y-6">
@@ -834,6 +670,32 @@ const BookAppointment = () => {
                     </Label>
                   </div>
 
+                  {/* Offer/Coupon Code Section */}
+                  <div className="space-y-4">
+                    <Label className="text-xs font-black uppercase tracking-widest text-slate-400">Have an Offer Code?</Label>
+                    <div className="flex gap-4">
+                      <Input
+                        value={couponCode}
+                        onChange={(e) => setCouponCode(e.target.value.toUpperCase())}
+                        placeholder="Enter promo code"
+                        className="h-16 rounded-2xl bg-white/5 border-2 border-white/10 focus:border-accent px-6 font-bold text-white placeholder:text-slate-500"
+                      />
+                      <Button
+                        onClick={applyCoupon}
+                        disabled={!couponCode || !!appliedCoupon}
+                        className="h-16 px-8 rounded-2xl bg-accent hover:bg-accent/80 text-black font-black uppercase tracking-widest"
+                      >
+                        {appliedCoupon ? "Applied" : "Apply"}
+                      </Button>
+                    </div>
+                    {appliedCoupon && appliedCoupon.discount > 0 && (
+                      <div className="flex items-center gap-2 text-accent animate-in fade-in slide-in-from-top-2">
+                        <CheckCircle2 className="w-4 h-4" />
+                        <span className="text-sm font-bold">Discount of RM {appliedCoupon.discount.toFixed(2)} applied!</span>
+                      </div>
+                    )}
+                  </div>
+
                   {/* Summary Review */}
                   <div className="pt-12 border-t border-white/10 flex flex-col md:flex-row justify-between items-center gap-8">
                     <div className="text-center md:text-left">
@@ -852,8 +714,8 @@ const BookAppointment = () => {
               </motion.div>
             )}
 
-            {/* STEP 8: SUCCESS */}
-            {step === 8 && (
+            {/* STEP 6: SUCCESS (was Step 7) */}
+            {step === 6 && (
               <motion.div initial={{ opacity: 0, scale: 0.9 }} animate={{ opacity: 1, scale: 1 }} className="text-center space-y-12 py-12">
                 <div className="space-y-8">
                   <div className="w-32 h-32 bg-accent/10 rounded-[3rem] flex items-center justify-center mx-auto">
