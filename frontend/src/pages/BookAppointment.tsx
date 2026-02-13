@@ -272,8 +272,9 @@ const BookAppointment = () => {
     setBooking(true);
     try {
       const subtotal = calculateSubtotal();
-      const discount = appliedCoupon ? appliedCoupon.discount : 0;
-      const finalPrice = Math.max(0, subtotal - discount);
+      const couponDiscount = appliedCoupon ? appliedCoupon.discount : 0;
+      const coinDiscount = calculateCoinDiscount();
+      const finalPrice = Math.max(0, subtotal - couponDiscount - coinDiscount);
 
       const bookingPayload = {
         user_id: user?.id,
@@ -283,9 +284,9 @@ const BookAppointment = () => {
         booking_time: selectedTime,
         notes: `[GUEST: ${memberDetails.fullName} | ${memberDetails.phone}] ${notes}`.trim(),
         status: "pending",
-        use_coins: bookingType === 'decide_later' ? false : useCoins,
+        use_coins: useCoins,
         price_paid: finalPrice,
-        discount_amount: discount,
+        discount_amount: couponDiscount,
         coupon_code: appliedCoupon?.code
       };
 
@@ -300,11 +301,12 @@ const BookAppointment = () => {
         const totalItems = [...selectedServices, ...selectedAddOns];
         for (let i = 0; i < totalItems.length; i++) {
           const service = totalItems[i];
-          const serviceDiscount = i === 0 ? discount : 0;
+          const serviceDiscount = i === 0 ? couponDiscount : 0;
+          const serviceCoinDiscount = i === 0 ? coinDiscount : 0;
           await api.bookings.create({
             ...bookingPayload,
             service_id: service.id,
-            price_paid: Math.max(0, Number(service.price) - serviceDiscount),
+            price_paid: Math.max(0, Number(service.price) - serviceDiscount - serviceCoinDiscount),
             discount_amount: serviceDiscount
           });
         }
@@ -364,10 +366,29 @@ const BookAppointment = () => {
     return subtotal;
   };
 
+  const calculateCoinDiscount = () => {
+    if (!useCoins || userCoins < coinSettings.min_redemption) return 0;
+
+    const subtotal = calculateSubtotal();
+    const couponDiscount = appliedCoupon ? appliedCoupon.discount : 0;
+    const remainingTotal = Math.max(0, subtotal - couponDiscount);
+
+    // Calculate potential value of coins
+    let potentialDiscount = userCoins * coinPrice;
+
+    // Respect max_discount_percent
+    const maxAllowedDiscount = (subtotal * coinSettings.max_discount_percent) / 100;
+    potentialDiscount = Math.min(potentialDiscount, maxAllowedDiscount);
+
+    // Cannot exceed remaining total
+    return Math.min(potentialDiscount, remainingTotal);
+  };
+
   const calculateTotal = () => {
     const subtotal = calculateSubtotal();
     const discount = appliedCoupon ? appliedCoupon.discount : 0;
-    return Math.max(0, subtotal - discount);
+    const coinDiscount = calculateCoinDiscount();
+    return Math.max(0, subtotal - discount - coinDiscount);
   };
 
   const validateMemberDetails = () => {
@@ -685,29 +706,75 @@ const BookAppointment = () => {
                   </div>
 
                   {/* Offer/Coupon Code Section */}
-                  <div className="space-y-4">
-                    <Label className="text-xs font-black uppercase tracking-widest text-slate-400">Have an Offer Code?</Label>
-                    <div className="flex gap-4">
-                      <Input
-                        value={couponCode}
-                        onChange={(e) => setCouponCode(e.target.value.toUpperCase())}
-                        placeholder="Enter promo code"
-                        className="h-16 rounded-2xl bg-white/5 border-2 border-white/10 focus:border-accent px-6 font-bold text-white placeholder:text-slate-500"
-                      />
-                      <Button
-                        onClick={applyCoupon}
-                        disabled={!couponCode || !!appliedCoupon}
-                        className="h-16 px-8 rounded-2xl bg-accent hover:bg-accent/80 text-black font-black uppercase tracking-widest"
-                      >
-                        {appliedCoupon ? "Applied" : "Apply"}
-                      </Button>
-                    </div>
-                    {appliedCoupon && appliedCoupon.discount > 0 && (
-                      <div className="flex items-center gap-2 text-accent animate-in fade-in slide-in-from-top-2">
-                        <CheckCircle2 className="w-4 h-4" />
-                        <span className="text-sm font-bold">Discount of RM {appliedCoupon.discount.toFixed(2)} applied!</span>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+                    <div className="space-y-4">
+                      <Label className="text-xs font-black uppercase tracking-widest text-slate-400">Have an Offer Code?</Label>
+                      <div className="flex gap-4">
+                        <Input
+                          value={couponCode}
+                          onChange={(e) => setCouponCode(e.target.value.toUpperCase())}
+                          placeholder="PROMO CODE"
+                          className="h-16 rounded-2xl bg-white/5 border-2 border-white/10 focus:border-accent px-6 font-bold text-white placeholder:text-slate-500"
+                        />
+                        <Button
+                          onClick={applyCoupon}
+                          disabled={!couponCode || !!appliedCoupon}
+                          className="h-16 px-8 rounded-2xl bg-accent hover:bg-accent/80 text-black font-black uppercase tracking-widest"
+                        >
+                          {appliedCoupon ? "OK" : "Apply"}
+                        </Button>
                       </div>
-                    )}
+                      {appliedCoupon && appliedCoupon.discount > 0 && (
+                        <div className="flex items-center gap-2 text-accent animate-in fade-in slide-in-from-top-1">
+                          <CheckCircle2 className="w-4 h-4" />
+                          <span className="text-[10px] font-black uppercase">RM {appliedCoupon.discount.toFixed(2)} Savings applied</span>
+                        </div>
+                      )}
+                    </div>
+
+                    <div className="space-y-4">
+                      <div className="flex justify-between items-center">
+                        <Label className="text-xs font-black uppercase tracking-widest text-slate-400">Use Loyalty points</Label>
+                        <Badge variant="outline" className="border-accent/30 text-accent bg-accent/5 font-black text-[10px] px-3 py-1 rounded-full">
+                          {userCoins} POINTS (RM {(userCoins * coinPrice).toFixed(2)})
+                        </Badge>
+                      </div>
+
+                      <button
+                        onClick={() => setUseCoins(!useCoins)}
+                        disabled={userCoins < coinSettings.min_redemption}
+                        className={cn(
+                          "w-full h-16 rounded-2xl border-2 transition-all flex items-center justify-between px-6",
+                          useCoins
+                            ? "bg-accent/10 border-accent text-accent"
+                            : "bg-white/5 border-white/10 text-white hover:border-white/20",
+                          userCoins < coinSettings.min_redemption && "opacity-50 cursor-not-allowed"
+                        )}
+                      >
+                        <div className="flex items-center gap-3">
+                          <Coins className={cn("w-5 h-5", useCoins ? "text-accent" : "text-white/40")} />
+                          <span className="font-black uppercase text-xs tracking-widest">
+                            {useCoins ? "Redeeming Balance" : "Redeem Points"}
+                          </span>
+                        </div>
+                        <Switch
+                          checked={useCoins}
+                          disabled={userCoins < coinSettings.min_redemption}
+                          className="data-[state=checked]:bg-accent"
+                        />
+                      </button>
+
+                      {userCoins < coinSettings.min_redemption ? (
+                        <p className="text-[10px] font-bold text-red-400 uppercase tracking-tight italic ml-1">
+                          Min. {coinSettings.min_redemption} points required to redeem
+                        </p>
+                      ) : useCoins && (
+                        <div className="flex items-center gap-2 text-accent animate-in fade-in slide-in-from-top-1">
+                          <Gem className="w-4 h-4" />
+                          <span className="text-[10px] font-black uppercase">RM {calculateCoinDiscount().toFixed(2)} Point Discount Applied</span>
+                        </div>
+                      )}
+                    </div>
                   </div>
 
                   {/* Summary Review */}

@@ -377,7 +377,27 @@ try {
             require_once __DIR__ . '/routes/coins.php';
             break;
         case 'coupons':
-            require_once __DIR__ . '/routes/coupons.php';
+            if ($method === 'GET' && ($uriParts[1] ?? '') === 'validate') {
+                $code = strtoupper($uriParts[2] ?? '');
+                $coupons = [
+                    'SAVE10' => 10,
+                    'SAVE20' => 20,
+                    'WELCOME' => 15,
+                    'FIRST50' => 50
+                ];
+                if (isset($coupons[$code])) {
+                    sendResponse([
+                        'code' => $code,
+                        'discount_type' => 'percentage',
+                        'discount_value' => $coupons[$code],
+                        'is_active' => true
+                    ]);
+                }
+                else {
+                    sendResponse(['error' => 'Invalid coupon'], 404);
+                }
+            }
+            sendResponse(['error' => 'Coupon route not found'], 404);
             break;
         default:
             sendResponse([
